@@ -1,0 +1,18 @@
+patches:
+  jenkins.yaml:
+  - op: remove
+    path: /credentials2
+
+credentials:
+  items.yaml:
+  - id: other-test-folder-cred
+    password: ${MY_FOLDER_TOKEN}
+
+splits:
+  jcasc:
+    jenkins.yaml:
+    - target: bundleManagement.yaml
+      paths:
+      - unclassified/bundleUpdateTiming
+      - unclassified/cascItemsConfiguration
+
