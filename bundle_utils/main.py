@@ -44,7 +44,7 @@ def cli(ctx, log_level):
 @click.command()
 @common_options
 @click.option('-P', '--path', 'path', default=os.environ.get('BUNDLE_UTILS_PATH'), help='The path to fetch YAML from (or use BUNDLE_UTILS_PATH).')
-@click.option('-U', '--url', 'url', default=os.environ.get('BUNDLE_UTILS_URL'), help='The URL to fetch YAML from (or use BUNDLE_UTILS_URL).')
+@click.option('-U', '--url', 'url', default=os.environ.get('BUNDLE_UTILS_URL'), help='The controller URL to fetch YAML from (or use BUNDLE_UTILS_URL).')
 @click.option('-u', '--username', 'username', default=os.environ.get('BUNDLE_UTILS_USERNAME'), help='Username for basic authentication (or use BUNDLE_UTILS_USERNAME).')
 @click.option('-p', '--password', 'password', default=os.environ.get('BUNDLE_UTILS_PASSWORD'), help='Password for basic authentication (or use BUNDLE_UTILS_PASSWORD).')
 @click.option('-t', '--target-dir', 'target_dir', default=os.environ.get('BUNDLE_UTILS_TARGET_DIR', 'target/docs'), help='The target directory for the YAML documents (or use BUNDLE_UTILS_TARGET_DIR).')
