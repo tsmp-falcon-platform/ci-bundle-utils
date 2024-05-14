@@ -83,7 +83,7 @@ def fetch_yaml_docs(url, path, username, password, target_dir):
             with open(path, 'r') as f:
                 yaml_docs = list(yaml.load_all(f))
                 write_all_yaml_docs_from_comments(yaml_docs, target_dir)
-    else:
+    elif url:
         # fetch the YAML from the URL
         headers = {}
         if username and password:
@@ -92,6 +92,8 @@ def fetch_yaml_docs(url, path, username, password, target_dir):
         # logging.debug(f'Fetched YAML from {url}:\n{response.text}')
         yaml_docs = list(yaml.load_all(response.text))
         write_all_yaml_docs_from_comments(yaml_docs, target_dir)
+    else:
+        raise Exception('No path or URL provided')
 
 def write_all_yaml_docs_from_comments(yaml_docs, target_dir):
     # create a new file for each YAML document
@@ -331,6 +333,7 @@ def update_bundle(target_dir):
     with open(os.path.join(target_dir, 'bundle.yaml'), 'r') as file:
         data = yaml.load(file)
 
+    all_files = []
     # Iterate over the keys
     for key in keys:
         # Special case for 'jcasc'
@@ -350,23 +353,25 @@ def update_bundle(target_dir):
         if os.path.exists(exact_match):
             files.insert(0, f'{prefix}.yaml')
 
+        # if no files found, remove the key from the data if it exists
+        if not files:
+            if key in data:
+                del data[key]
+            continue
 
         # Update the key in the data
         data[key] = files
+
+        # Add the files to the all_files list
+        all_files.extend(files)
+
+    # update the version key with the md5sum of the content of all files
+    data['version'] = os.popen(f'cat {" ".join([os.path.join(target_dir, file) for file in all_files])} | md5sum').read().split()[0]
 
     # Save the YAML file
     logging.info(f'Writing bundle to {target_dir}/bundle.yaml')
     with open(os.path.join(target_dir, 'bundle.yaml'), 'w') as file:
         yaml.dump(data, file)
-
-@click.command()
-def test_me():
-    logging.info('Loading YAML object')
-    # with open('target/docs-backup/items.yaml', 'r') as inp:
-    with open('target/docs-backup/jenkins.yaml', 'r') as inp:
-        obj = yaml.load(inp)
-        # Print JSON Patch paths for all elements of 'credentials'
-        traverse_credentials(obj, {})
 
 def get_nested(data, path):
     """Get a nested item from a dictionary."""
@@ -499,7 +504,6 @@ def split_items(target_dir, filename, configs):
 
 cli.add_command(fetch)
 cli.add_command(transform)
-cli.add_command(test_me)
 
 if __name__ == '__main__':
     cli()
