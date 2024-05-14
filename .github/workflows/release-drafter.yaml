@@ -4,7 +4,6 @@ on:
   push:
     # branches to consider in the event; optional, defaults to all
     branches:
-      - master
       - main
   # pull_request event is required only for autolabeler
   pull_request:
@@ -39,6 +38,6 @@ jobs:
         #   config-name: my-config.yml
         #   disable-autolabeler: true
         with:
-          commitish: master
+          commitish: main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
