@@ -1,4 +1,4 @@
-# ci-bundle_utils
+# bundleutils
 
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
@@ -8,6 +8,8 @@
 - [Fetch](#fetch)
 - [Transform](#transform)
 - [Example](#example)
+  - [Non-Interactive Standard Workflow](#non-interactive-standard-workflow)
+  - [Interactive Custom Transformation](#interactive-custom-transformation)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -15,30 +17,44 @@
 
 Initial project to provide some nice bundle utility features.
 
-Contains two main commands:
+Main commands:
 
-- `fetch` to fetch the exported bundle from a given controller URL, zip file, or text file.
-- `transform` to transform the exported bundle according to one or more transformation configurations.
+- `fetch` to fetch the exported bundle from a given controller URL, zip file, or text file
+  - defaults to the `core-casc-export-*.zip` in the current directory
+- `transform` to transform the exported bundle
+  - takes one or more transformation configurations
+
+Special transformational commands:
+
+- `normalize` used to help compare bundles by normalizing the values
+  - a transformation based on the [normalize.yaml](./bundleutilspkg/configs/normalize.yaml)
+  - can be overridden file of the same name in the current directory.
+- `operationalize` used to make a bundle which is consumable by a controller or operation center
+  - a transformation based on the [operationalize.yaml](./bundleutilspkg/configs/operationalize.yaml)
+  - can be overridden file of the same name in the current directory.
 
 ## Fetch
 
 The `fetch` command can fetch an exported bundle and split it up into the appropriate bundle structure.
 
 ```sh
-❯ bundle_utils fetch --help
-Usage: bundle_utils fetch [OPTIONS]
+❯ bundleutils fetch --help
+Usage: bundleutils fetch [OPTIONS]
+
+  Fetch YAML documents from a URL or path.
 
 Options:
-  -l, --log-level TEXT   The log level (or use BUNDLE_UTILS_LOG_LEVEL).
+  -l, --log-level TEXT   The log level (or use BUNDLEUTILS_LOG_LEVEL).
   -P, --path TEXT        The path to fetch YAML from (or use
-                         BUNDLE_UTILS_PATH).
-  -U, --url TEXT         The URL to fetch YAML from (or use BUNDLE_UTILS_URL).
+                         BUNDLEUTILS_PATH).
+  -U, --url TEXT         The controller URL to fetch YAML from (or use
+                         BUNDLEUTILS_URL).
   -u, --username TEXT    Username for basic authentication (or use
-                         BUNDLE_UTILS_USERNAME).
+                         BUNDLEUTILS_USERNAME).
   -p, --password TEXT    Password for basic authentication (or use
-                         BUNDLE_UTILS_PASSWORD).
+                         BUNDLEUTILS_PASSWORD).
   -t, --target-dir TEXT  The target directory for the YAML documents (or use
-                         BUNDLE_UTILS_TARGET_DIR).
+                         BUNDLEUTILS_TARGET_DIR).
   --help                 Show this message and exit.
 ```
 
@@ -53,18 +69,20 @@ The `transform` command can transform a fetched bundle according to a configurat
 It can take multiple transformation files which it merges together before applying.
 
 ```sh
-❯ bundle_utils transform --help
-Usage: bundle_utils transform [OPTIONS]
+❯ bundleutils transform --help
+Usage: bundleutils transform [OPTIONS]
+
+  Transform using a custom transformation config.
 
 Options:
-  -l, --log-level TEXT   The log level (or use BUNDLE_UTILS_LOG_LEVEL).
-  -c, --config TEXT      The transformation config(s) (or use
-                         BUNDLE_UTILS_TRANSFORMATION).  [required]
-  -s, --source-dir TEXT  The source directory for the YAML documents (or use
-                         BUNDLE_UTILS_TARGET_DIR).
+  -l, --log-level TEXT   The log level (or use BUNDLEUTILS_LOG_LEVEL).
   -t, --target-dir TEXT  The target directory for the YAML documents (or use
-                         BUNDLE_UTILS_TARGET_DIR). Defaults to the source
+                         BUNDLEUTILS_TARGET_DIR). Defaults to the source
                          directory suffixed with -transformed.
+  -s, --source-dir TEXT  The source directory for the YAML documents (or use
+                         BUNDLEUTILS_TARGET_DIR).
+  -c, --config TEXT      The transformation config(s) (or use
+                         BUNDLEUTILS_TRANSFORMATION).
   --help                 Show this message and exit.
 ```
 
@@ -76,16 +94,89 @@ Create a docker image:
 docker buildx build -t bundle-utils:dev .
 ```
 
+### Non-Interactive Standard Workflow
+
+This example will analyse a downloaded zip file.
+
+Create a temporary directory and navigate into it:
+
+```sh
+cd $(mktemp -d)
+```
+
+Download CasC export zip file:
+
+```sh
+❯ ls -1
+core-casc-export-admin-controller.zip
+```
+
+Run `fetch` command with mounted `pwd`:
+
+```sh
+❯ docker run -v $(pwd):/work -w /work -u $(id -u):$(id -g) --rm bundle-utils:dev fetch
+INFO:root:Found core-casc-export-*.zip file: core-casc-export-admin-controller.zip
+INFO:root:Wrote target/docs/bundle.yaml
+INFO:root:Wrote target/docs/items.yaml
+INFO:root:Wrote target/docs/jenkins.yaml
+INFO:root:Wrote target/docs/plugin-catalog.yaml
+INFO:root:Wrote target/docs/plugins.yaml
+INFO:root:Wrote target/docs/rbac.yaml
+```
+
+Run `normalize` command with mounted `pwd`:
+
+```sh
+❯ docker run -v $(pwd):/work -w /work -u $(id -u):$(id -g) --rm bundle-utils:dev normalize
+INFO:root:Processing config: /usr/local/lib/python3.12/site-packages/bundleutilspkg/configs/normalize.yaml
+INFO:root:Transforming target/docs to target/docs-normalized
+INFO:root:Applying patch to target/docs-normalized/jenkins.yaml
+INFO:root:Applying JSON patch to target/docs-normalized/jenkins.yaml
+INFO:root:Applying cred replacements to target/docs-normalized/jenkins.yaml
+INFO:root:Applying JSON patch to target/docs-normalized/jenkins.yaml
+INFO:root:Applying JSON patch to target/docs-normalized/jenkins.yaml
+INFO:root:Applying JSON patch to target/docs-normalized/jenkins.yaml
+WARNING:root:Found a non-credential string (no id found) that needs to be replaced at path: /unclassified/mailer/authentication/password
+INFO:root:Applying JSON patch to target/docs-normalized/jenkins.yaml
+INFO:root:Applying cred replacements to target/docs-normalized/items.yaml
+INFO:root:Writing bundle to target/docs-normalized/bundle.yaml
+```
+
+Run `operationalize` command with mounted `pwd`:
+
+```sh
+❯ docker run -v $(pwd):/work -w /work -u $(id -u):$(id -g) --rm bundle-utils:dev operationalize
+INFO:root:Processing config: /usr/local/lib/python3.12/site-packages/bundleutilspkg/configs/operationalize.yaml
+INFO:root:Transforming target/docs-normalized to target/docs-operationalized
+INFO:root:Applying patch to target/docs-operationalized/jenkins.yaml
+INFO:root:Applying JSON patch to target/docs-operationalized/jenkins.yaml
+INFO:root:Applying JSON patch to target/docs-operationalized/jenkins.yaml
+INFO:root:Applying cred replacements to target/docs-operationalized/jenkins.yaml
+INFO:root:Applying cred replacements to target/docs-operationalized/items.yaml
+INFO:root:Writing bundle to target/docs-operationalized/bundle.yaml
+```
+
+Check the differences between the various target directories:
+
+```sh
+❯ ls -1 target
+docs
+docs-normalized
+docs-operationalized
+```
+
+### Interactive Custom Transformation
+
 Create a temporary container:
 
 ```sh
-docker run -u $(id -u):$(id -g) --rm -it bundle-utils:dev bash
+docker run -u $(id -u):$(id -g) --entrypoint bash --rm -it bundle-utils:dev
 ```
 
 Fetch an exported bundle:
 
 ```sh
-bundle-user@89f38e7b7f8c:/app$ bundle_utils fetch --path examples/bundlecontent.yaml
+bundle-user@89f38e7b7f8c:/app$ bundleutils fetch --path examples/bundlecontent.yaml
 INFO:root:Wrote target/docs/bundle.yaml
 INFO:root:Wrote target/docs/jenkins.yaml
 INFO:root:Wrote target/docs/plugins.yaml
@@ -96,7 +187,7 @@ INFO:root:Wrote target/docs/items.yaml
 Transform the bundle:
 
 ```sh
-bundle-user@89f38e7b7f8c:/app$ bundle_utils transform -c examples/transformations.yaml -s target/docs
+bundle-user@89f38e7b7f8c:/app$ bundleutils transform -c examples/transformations.yaml -s target/docs
 INFO:root:Processing config: examples/transformations.yaml
 INFO:root:Applying patch to target/docs-transformed/jenkins.yaml
 INFO:root:Applying JSON patch to target/docs-transformed/jenkins.yaml
@@ -137,7 +228,7 @@ target/docs-transformed/jenkins.kubernetes.yaml
 The `bundle.yaml` has been updated to reflect the new structure and the version is based on the md5sum of all files.
 
 ```sh
-bundle-user@89f38e7b7f8c:/app$ cat target/docs-transformed/bundle.yaml 
+bundle-user@89f38e7b7f8c:/app$ cat target/docs-transformed/bundle.yaml
 apiVersion: '1'
 id: base
 description: This is an autogenerated bundle from the base transformation

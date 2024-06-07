@@ -1,0 +1,12 @@
+patches:
+  jenkins.yaml:
+  - op: remove
+    path: /license
+
+credentials:
+  jenkins.yaml: {}
+  items.yaml: {}
+
+splits:
+  items: {}
+  jcasc: {}

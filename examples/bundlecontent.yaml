@@ -22,31 +22,31 @@ credentials:
       - usernamePassword:
           description: "Github Token for reading bundles"
           id: "github-token-ro"
-          password: "{AQAAABAAAABgI1/kjoID6uzs9eREPTdCMgh7XD8dugVRC7Li4O2Ic08X9ii4ORwVyW0jUmdjZoAhlLoYejAvudfjO+Jri9o7tOdGpsOc4d+ndWKnNTTKNc8vLqflk8QrdKl9Oyxibz0xWe3p0KuVkKdTOjWrWBDdRg==}"
+          password: "{AQAAABAAAABgI1/kjoID6uzs9eREPTdCMgh7...}"
           scope: GLOBAL
           username: "sboardwell"
       - usernamePassword:
           description: "Github Token for autocorrecting bundles"
           id: "github-token-rw"
-          password: "{AQAAABAAAABgVeKUUi2dIKI4F4uHrWQP8rysz1AGcVUi58187pFmRXtYT3BVTtx+myMg993dJVQDdU/JoRydAtrN7DHxXGzs1wbdg3wiDk6F5IylHZ9HWg4lASAMDyf3UbQEK+B/nQn622eViXJ+/i8wANntRumy7A==}"
+          password: "{AQAAABAAAABgVeKUUi2dIKI4F4uHrWQP8rysz1A...}"
           scope: GLOBAL
           username: "sboardwell"
       - string:
           id: "github-org-hooks"
           scope: GLOBAL
-          secret: "{AQAAABAAAABgrM6JGPRNBEwg+IaSB+qIVlmPDmd1ox1Od4en72JE/izJN4nvOEUJWWxy62/NRsUK6aNFHFjfA45337ZmA3mtJ5dHTRcbnCKCFYdGWd7Q3m6eLNMv0mb17mG9bfqOoucStEExbeRsQrkzBNwdUZ+ScA==}"
+          secret: "{AQAAABAAAABgrM6JGPRNBEwg+IaSB...}"
       - string:
           id: "github-org-hooks-shared-secret"
           scope: GLOBAL
-          secret: "{AQAAABAAAAAgUAJS+Xp2FMaVb9iTj6ceOMWrI3DTrNr8wbpaR3V0qXo5SI425/ROyW1z+vuDdpCi}"
+          secret: "{AQAAABAAAAAgUAJS...}"
       - string:
           id: "casc-validation-key"
           scope: GLOBAL
-          secret: "{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}"
+          secret: "{AQAAABAAAAaQK6/DYjh...}"
       - string:
           id: "casc-validation-cert"
           scope: GLOBAL
-          secret: "{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}"
+          secret: "{AQAAABAAAAkA+...}"
 jenkins:
   agentProtocols:
   - "Diagnostic-Ping"

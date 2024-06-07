@@ -9,19 +9,35 @@ import glob
 import io
 import os
 import click
+import locale
 import logging
 import re
+import importlib.resources as pkg_resources
+from deepdiff import DeepDiff
+from deepdiff.helper import CannotCompare
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap
 from ruamel.yaml.comments import CommentedSeq
-import locale
 
 locale.setlocale(locale.LC_ALL, "C")
 
 yaml = YAML(typ='rt')
 
+script_name = os.path.basename(__file__).replace('.py', '')
+script_name_upper = script_name.upper()
+
+default_target = 'target/docs'
+default_normalized = default_target + '-normalized'
+default_operationalized = default_target + '-operationalized'
+
 def common_options(func):
-    func = click.option('-l', '--log-level', default=os.environ.get('BUNDLE_UTILS_LOG_LEVEL', ''), help='The log level (or use BUNDLE_UTILS_LOG_LEVEL).')(func)
+    func = click.option('-l', '--log-level', default=os.environ.get('BUNDLEUTILS_LOG_LEVEL', ''), help='The log level (or use BUNDLEUTILS_LOG_LEVEL).')(func)
+    return func
+
+def transform_options(func):
+    func = click.option('-c', '--config', 'configs', multiple=True, default=os.environ.get('BUNDLEUTILS_TRANSFORMATIONS'), help='The transformation config(s) (or use BUNDLEUTILS_TRANSFORMATION).')(func)
+    func = click.option('-s', '--source-dir', 'source_dir', default=os.environ.get('BUNDLEUTILS_SOURCE_DIR', ''), help='The source directory for the YAML documents (or use BUNDLEUTILS_TARGET_DIR).')(func)
+    func = click.option('-t', '--target-dir', 'target_dir', default=os.environ.get('BUNDLEUTILS_TARGET_DIR', ''), help='The target directory for the YAML documents (or use BUNDLEUTILS_TARGET_DIR). Defaults to the source directory suffixed with -transformed.')(func)
     return func
 
 def set_logging(ctx, log_level, default=''):
@@ -35,22 +51,100 @@ def set_logging(ctx, log_level, default=''):
 @common_options
 @click.pass_context
 def cli(ctx, log_level):
+    """A tool to fetch and transform YAML documents."""
     ctx.ensure_object(dict)
     set_logging(ctx, log_level, 'INFO')
-    shell = os.environ.get('SHELL')
     if ctx.invoked_subcommand is None:
         click.echo(ctx.get_help())
 
-@click.command()
+
+def yaml2dict(yamlFile):
+    dict_res = {}
+    with open(yamlFile, 'r') as fp:
+        datax = yaml.load_all(fp)
+        for data in datax:
+            for key, value in data.items():
+                dict_res[key] = value
+    return dict_res
+
+
+def compare_func(x, y, level=None):
+    try:
+        return x['id'] == y['id']
+    except Exception:
+        raise CannotCompare() from None
+
+# add a diff command to diff two directories by calling the diff command on each file
+@cli.command()
 @common_options
-@click.option('-P', '--path', 'path', default=os.environ.get('BUNDLE_UTILS_PATH'), help='The path to fetch YAML from (or use BUNDLE_UTILS_PATH).')
-@click.option('-U', '--url', 'url', default=os.environ.get('BUNDLE_UTILS_URL'), help='The controller URL to fetch YAML from (or use BUNDLE_UTILS_URL).')
-@click.option('-u', '--username', 'username', default=os.environ.get('BUNDLE_UTILS_USERNAME'), help='Username for basic authentication (or use BUNDLE_UTILS_USERNAME).')
-@click.option('-p', '--password', 'password', default=os.environ.get('BUNDLE_UTILS_PASSWORD'), help='Password for basic authentication (or use BUNDLE_UTILS_PASSWORD).')
-@click.option('-t', '--target-dir', 'target_dir', default=os.environ.get('BUNDLE_UTILS_TARGET_DIR', 'target/docs'), help='The target directory for the YAML documents (or use BUNDLE_UTILS_TARGET_DIR).')
+@click.option('-1', '--src1', 'src1', type=click.Path(exists=True))
+@click.option('-2', '--src2', 'src2', type=click.Path(exists=True))
+@click.pass_context
+def diff(ctx, log_level, src1, src2):
+    """Diff two YAML directories or files."""
+    set_logging(ctx, log_level)
+    # if src1 is a directory, ensure src2 is also directory
+    if os.path.isdir(src1) and os.path.isdir(src2):
+        files1 = os.listdir(src1)
+        files2 = os.listdir(src2)
+        for file1 in files1:
+            if file1 in files2:
+                file1_path = os.path.join(src1, file1)
+                file2_path = os.path.join(src2, file1)
+                # Compare the two files
+                logging.info(f"Comparing {file1} in {src1} and {src2}")
+                diff2(file1_path, file2_path)
+            else:
+                logging.warning(f"File {file1} does not exist in {src2}")
+        for file2 in files2:
+            if file2 not in files1:
+                logging.warning(f"File {file2} does not exist in {src1}")
+    elif os.path.isfile(src1) and os.path.isfile(src2):
+        # Compare the two files
+        logging.info(f"Comparing {src1} and {src2}")
+        diff2(src1, src2)
+    else:
+        raise ValueError("src1 and src2 must both be either directories or files")
+
+def diff2(file1, file2):
+    dict1 = yaml2dict(file1)
+    dict2 = yaml2dict(file2)
+    diff = DeepDiff(dict1, dict2, ignore_order=True)
+    click.echo(json.dumps(diff, indent=2))
+
+# add completion command which takes the shell as an argument
+# shell can only be bash, fish, or zsh
+@cli.command()
+@click.option('-s', '--shell', 'shell', required=True, type=click.Choice(['bash', 'fish', 'zsh']), help='The shell to generate completion script for.')
+@click.pass_context
+def completion(ctx, shell):
+    """Print the shell completion script"""
+    ctx.ensure_object(dict)
+    # run process 'echo "$(_BUNDLEUTILS_COMPLETE=bash_source bundleutils)"'
+    click.echo("Run either of the following commands to enable completion:")
+    click.echo(f'  1. eval "$(_{script_name_upper}_COMPLETE={shell}_source {script_name})"')
+    click.echo(f'  2. echo "$(_{script_name_upper}_COMPLETE={shell}_source {script_name})" > {script_name}-complete.{shell}')
+    click.echo(f'     source {script_name}-complete.{shell}')
+
+@cli.command()
+@common_options
+@click.option('-P', '--path', 'path', default=os.environ.get('BUNDLEUTILS_PATH'), help='The path to fetch YAML from (or use BUNDLEUTILS_PATH).')
+@click.option('-U', '--url', 'url', default=os.environ.get('BUNDLEUTILS_URL'), help='The controller URL to fetch YAML from (or use BUNDLEUTILS_URL).')
+@click.option('-u', '--username', 'username', default=os.environ.get('BUNDLEUTILS_USERNAME'), help='Username for basic authentication (or use BUNDLEUTILS_USERNAME).')
+@click.option('-p', '--password', 'password', default=os.environ.get('BUNDLEUTILS_PASSWORD'), help='Password for basic authentication (or use BUNDLEUTILS_PASSWORD).')
+@click.option('-t', '--target-dir', 'target_dir', default=os.environ.get('BUNDLEUTILS_TARGET_DIR', default_target), help='The target directory for the YAML documents (or use BUNDLEUTILS_TARGET_DIR).')
 @click.pass_context
 def fetch(ctx, log_level, url, path, username, password, target_dir):
+    """Fetch YAML documents from a URL or path."""
     set_logging(ctx, log_level)
+    # if path or url is not provided, look for a zip file in the current directory matching the pattern core-casc-export-*.zip
+    if not path and not url:
+        zip_files = glob.glob('core-casc-export-*.zip')
+        if len(zip_files) == 1:
+            logging.info(f'Found core-casc-export-*.zip file: {zip_files[0]}')
+            path = zip_files[0]
+        elif len(zip_files) > 1:
+            raise ValueError('Multiple core-casc-export-*.zip files found in the current directory')
     try:
         fetch_yaml_docs(url, path, username, password, target_dir)
     except Exception as e:
@@ -107,7 +201,7 @@ def write_all_yaml_docs_from_comments(yaml_docs, target_dir):
 def write_yaml_doc(doc, target_dir, filename):
     filename = os.path.join(target_dir, filename)
     # normalize the YAML doc
-    doc = normalize(doc)
+    doc = normalize_yaml(doc)
 
     # create a new file for each YAML document
     logging.debug(f'Creating {filename}')
@@ -123,12 +217,12 @@ def write_yaml_doc(doc, target_dir, filename):
     with open(filename, 'w') as f:
         f.writelines(lines)
 
-def normalize(data):
+def normalize_yaml(data):
     """Normalize a nested dictionary."""
     if isinstance(data, dict):
-        return {k: normalize(v) for k, v in data.items()}
+        return {k: normalize_yaml(v) for k, v in data.items()}
     elif isinstance(data, list):
-        return [normalize(v) for v in data]
+        return [normalize_yaml(v) for v in data]
     elif isinstance(data, str):
         # Normalize strings that contain newline characters
         if '\\n' in data:
@@ -168,7 +262,13 @@ def traverse_credentials(filename, obj, custom_replacements={}, path=""):
             traverse_credentials(filename, v, custom_replacements, new_path)
     else:
         if isinstance(obj, str) and re.match(r'{.*}', obj):
-            raise Exception(f"Found a strange string (no id found) that needs to be replaced: {obj}")
+            # if the string is a replacement string, raise an exception
+            logging.warning(f"Found a non-credential string (no id found) that needs to be replaced at path: {path}")
+            # the replacement string should be in the format ${ID_KEY}
+            replacement = "${" + re.sub(r'\W', '_', path.removeprefix('/')).upper() + "}"
+            # print the JSON Patch operation for the replacement
+            patch = {"op": "replace", "path": f'{path}', "value": f'{replacement}'}
+            apply_patch(filename, [patch])
 
 def apply_patch(filename, patch_list):
     with open(filename, 'r') as inp:
@@ -180,15 +280,17 @@ def apply_patch(filename, patch_list):
 
     # for each patch, apply the patch to the object
     for patch in patch_list:
-        # Check if the path exists
-        try:
-            patch_path = patch['path']
-            logging.debug(f'Checking if path exists for patch path: {patch_path}')
-            jsonpointer.resolve_pointer(obj, patch_path)
-        except jsonpointer.JsonPointerException:
-            # If the path does not exist, skip the patch
-            logging.debug(f'Ignoring non-existent path {patch["path"]} in {filename}')
-            continue
+        # if not an add operation
+        if patch['op'] != 'add':
+            # Check if the path exists
+            try:
+                patch_path = patch['path']
+                logging.debug(f'Checking if path exists for patch path: {patch_path}')
+                jsonpointer.resolve_pointer(obj, patch_path)
+            except jsonpointer.JsonPointerException:
+                # If the path does not exist, skip the patch
+                logging.debug(f'Ignoring non-existent path {patch["path"]} in {filename}')
+                continue
         # Apply the patch
         patch = jsonpatch.JsonPatch([patch])
         try:
@@ -286,15 +388,61 @@ def recursive_merge(obj1, obj2):
         logging.debug(f'Unkown type: {type(obj2)}')
     return obj1
 
-@click.command()
+
+@cli.command()
 @common_options
-@click.option('-c', '--config', 'configs', required=True, multiple=True, default=os.environ.get('BUNDLE_UTILS_TRANSFORMATIONS'), help='The transformation config(s) (or use BUNDLE_UTILS_TRANSFORMATION).')
-@click.option('-s', '--source-dir', 'source_dir', default=os.environ.get('BUNDLE_UTILS_SOURCE_DIR', 'target/docs'), help='The source directory for the YAML documents (or use BUNDLE_UTILS_TARGET_DIR).')
-@click.option('-t', '--target-dir', 'target_dir', default=os.environ.get('BUNDLE_UTILS_TARGET_DIR', ''), help='The target directory for the YAML documents (or use BUNDLE_UTILS_TARGET_DIR). Defaults to the source directory suffixed with -transformed.')
+@transform_options
+@click.pass_context
+def normalize(ctx, log_level, configs, source_dir, target_dir):
+    """Transform using the normalize.yaml for better comparison."""
+    set_logging(ctx, log_level)
+    if not source_dir:
+        source_dir = default_target
+    if not target_dir:
+        target_dir = default_normalized
+    if not configs:
+        # if a normalize.yaml file is found in the current directory, use it
+        if os.path.exists('normalize.yaml'):
+            logging.info('Using normalize.yaml in the current directory')
+            configs = ['normalize.yaml']
+        else:
+            path = pkg_resources.files('bundleutilspkg.configs') / 'normalize.yaml'
+            configs = [path]
+    _transform(configs, source_dir, target_dir)
+
+@cli.command()
+@common_options
+@transform_options
+@click.pass_context
+def operationalize(ctx, log_level, configs, source_dir, target_dir):
+    """Transform using the operationalize.yaml (run normalise first)."""
+    set_logging(ctx, log_level)
+    if not source_dir:
+        source_dir = default_normalized
+    if not target_dir:
+        target_dir = default_operationalized
+    if not configs:
+        # if a normalize.yaml file is found in the current directory, use it
+        if os.path.exists('operationalize.yaml'):
+            logging.info('Using operationalize.yaml in the current directory')
+            configs = ['operationalize.yaml']
+        else:
+            path = pkg_resources.files('bundleutilspkg.configs') / 'operationalize.yaml'
+            configs = [path]
+    _transform(configs, source_dir, target_dir)
+
+@cli.command()
+@common_options
+@transform_options
 @click.pass_context
 def transform(ctx, log_level, configs, source_dir, target_dir):
+    """Transform using a custom transformation config."""
     set_logging(ctx, log_level)
+    _transform(configs, source_dir, target_dir)
 
+
+def _transform(configs, source_dir, target_dir):
+    """Transform using a custom transformation config."""
     # add the transformation configs recursively into the merged config
     merged_config = {}
     for config in configs:
@@ -307,6 +455,7 @@ def transform(ctx, log_level, configs, source_dir, target_dir):
     # if the target directory is not set, use the source directory suffixed with -transformed
     if not target_dir:
         target_dir = source_dir + '-transformed'
+    logging.info(f'Transforming {source_dir} to {target_dir}')
     # create the target directory if it does not exist, delete all files in it
     os.makedirs(target_dir, exist_ok=True)
     for filename in os.listdir(target_dir):
@@ -327,7 +476,7 @@ def transform(ctx, log_level, configs, source_dir, target_dir):
     update_bundle(target_dir)
 
 def update_bundle(target_dir):
-    keys = ['jcasc', 'items', 'plugins', 'rbac', 'variables']
+    keys = ['jcasc', 'items', 'plugins', 'rbac']
 
     # Load the YAML file
     with open(os.path.join(target_dir, 'bundle.yaml'), 'r') as file:
@@ -501,9 +650,3 @@ def split_items(target_dir, filename, configs):
         logging.info(f'Writing {new_file_path}')
         with open(new_file_path, 'w') as f:
             yaml.dump({'removeStrategy': data['removeStrategy'], 'items': items}, f)
-
-cli.add_command(fetch)
-cli.add_command(transform)
-
-if __name__ == '__main__':
-    cli()
