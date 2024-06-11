@@ -1,12 +1,46 @@
+# Patches based upon https://jsonpatch.com/
 patches:
   jenkins.yaml:
   - op: remove
     path: /license
 
+# Replace credentials with references to variables
+# Autosetting:
+# - github-token-ro/password -> GITHUB_TOKEN_RO_PASSWORD
+# - github-token-rw/password -> GITHUB_TOKEN_RW_PASSWORD
+# Explicit:
+# - id: github-token-ro
+#   password: ${MY_READ_TOKEN}
 credentials:
+  # jenkins.yaml:
+  # - id: github-token-ro
+  #   password: "${MY_READ_TOKEN}"
+  # - id: github-token-rw
+  #   password: "${MY_WRITE_TOKEN}"
+  # items.yaml:
+  # - id: test-folder-cred
+  #   password: "${MY_FOLDER_TOKEN}"
   jenkins.yaml: {}
   items.yaml: {}
 
+
 splits:
+  # Split by name on regex (auto takes each item separately)
+  # items:
+  #   items.yaml:
+  #   - target: auto
+  #     patterns: ['casc-test-.*']
+  #   - target: controllers.yaml
+  #     patterns: ['controller-.*']
   items: {}
+  # Split by path (auto takes each item separately, replacing '/' with '.')
+  # jcasc:
+  #   jenkins.yaml:
+  #   - target: auto
+  #     paths:
+  #     - credentials
+  #   - target: kubernetes.yaml
+  #     paths:
+  #     - masterprovisioning
+  #     - kube
   jcasc: {}
