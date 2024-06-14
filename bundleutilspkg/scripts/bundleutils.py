@@ -12,6 +12,7 @@ import click
 import locale
 import logging
 import re
+import sys
 import importlib.resources as pkg_resources
 from deepdiff import DeepDiff
 from deepdiff.helper import CannotCompare
@@ -29,14 +30,20 @@ script_name_upper = script_name.upper()
 default_target = 'target/docs'
 default_normalized = default_target + '-normalized'
 default_operationalized = default_target + '-operationalized'
+default_fetch_url = ''
+default_validate_url = ''
+if 'JENKINS_URL' in os.environ:
+    default_fetch_url = os.environ['JENKINS_URL'] + '/core-casc-export'
+    default_validate_url = os.environ['JENKINS_URL'] + '/casc-bundle-mgnt/casc-bundle-validate'
 
 def common_options(func):
     func = click.option('-l', '--log-level', default=os.environ.get('BUNDLEUTILS_LOG_LEVEL', ''), help='The log level (or use BUNDLEUTILS_LOG_LEVEL).')(func)
     return func
 
 def transform_options(func):
+    func = click.option('-S', '--strict', default=False, is_flag=True, help='Fail when refrencing non-existent files. Warn otherwise.')(func)
     func = click.option('-c', '--config', 'configs', multiple=True, default=os.environ.get('BUNDLEUTILS_TRANSFORMATIONS'), help='The transformation config(s) (or use BUNDLEUTILS_TRANSFORMATION).')(func)
-    func = click.option('-s', '--source-dir', 'source_dir', default=os.environ.get('BUNDLEUTILS_SOURCE_DIR', ''), help='The source directory for the YAML documents (or use BUNDLEUTILS_TARGET_DIR).')(func)
+    func = click.option('-s', '--source-dir', 'source_dir', default=os.environ.get('BUNDLEUTILS_SOURCE_DIR', ''), help='The source directory for the YAML documents (or use BUNDLEUTILS_SOURCE_DIR).')(func)
     func = click.option('-t', '--target-dir', 'target_dir', default=os.environ.get('BUNDLEUTILS_TARGET_DIR', ''), help='The target directory for the YAML documents (or use BUNDLEUTILS_TARGET_DIR). Defaults to the source directory suffixed with -transformed.')(func)
     return func
 
@@ -76,13 +83,14 @@ def compare_func(x, y, level=None):
 
 # add a diff command to diff two directories by calling the diff command on each file
 @cli.command()
+@click.argument('src1', type=click.Path(exists=True))
+@click.argument('src2', type=click.Path(exists=True))
 @common_options
-@click.option('-1', '--src1', 'src1', type=click.Path(exists=True))
-@click.option('-2', '--src2', 'src2', type=click.Path(exists=True))
 @click.pass_context
 def diff(ctx, log_level, src1, src2):
     """Diff two YAML directories or files."""
     set_logging(ctx, log_level)
+    diff_detected = False
     # if src1 is a directory, ensure src2 is also directory
     if os.path.isdir(src1) and os.path.isdir(src2):
         files1 = os.listdir(src1)
@@ -91,26 +99,34 @@ def diff(ctx, log_level, src1, src2):
             if file1 in files2:
                 file1_path = os.path.join(src1, file1)
                 file2_path = os.path.join(src2, file1)
-                # Compare the two files
-                logging.info(f"Comparing {file1} in {src1} and {src2}")
-                diff2(file1_path, file2_path)
+                if diff2(file1_path, file2_path):
+                    diff_detected = True
             else:
                 logging.warning(f"File {file1} does not exist in {src2}")
+                diff_detected = True
         for file2 in files2:
             if file2 not in files1:
                 logging.warning(f"File {file2} does not exist in {src1}")
+                diff_detected = True
     elif os.path.isfile(src1) and os.path.isfile(src2):
-        # Compare the two files
-        logging.info(f"Comparing {src1} and {src2}")
-        diff2(src1, src2)
+        if diff2(src1, src2):
+            diff_detected = True
     else:
-        raise ValueError("src1 and src2 must both be either directories or files")
+        sys.exit("src1 and src2 must both be either directories or files")
+    if diff_detected:
+        sys.exit("Differences detected")
 
 def diff2(file1, file2):
     dict1 = yaml2dict(file1)
     dict2 = yaml2dict(file2)
     diff = DeepDiff(dict1, dict2, ignore_order=True)
-    click.echo(json.dumps(diff, indent=2))
+    if diff:
+        logging.warning(f"Detected diff between {file1} and {file2}")
+        click.echo(json.dumps(json.loads(diff.to_json()), indent=2))
+        return True
+    else:
+        logging.info(f"No diff between {file1} and {file2}")
+        return False
 
 # add completion command which takes the shell as an argument
 # shell can only be bash, fish, or zsh
@@ -128,8 +144,48 @@ def completion(ctx, shell):
 
 @cli.command()
 @common_options
+@click.option('-U', '--url', 'url', default=default_validate_url, help='The controller URL to fetch YAML from (or use BUNDLEUTILS_URL).')
+@click.option('-u', '--username', 'username', default=os.environ.get('BUNDLEUTILS_USERNAME'), help='Username for basic authentication (or use BUNDLEUTILS_USERNAME).')
+@click.option('-p', '--password', 'password', default=os.environ.get('BUNDLEUTILS_PASSWORD'), help='Password for basic authentication (or use BUNDLEUTILS_PASSWORD).')
+@click.option('-s', '--source-dir', 'source_dir', required=True, default=os.environ.get('BUNDLEUTILS_SOURCE_DIR', ''), help='The source directory for the YAML documents (or use BUNDLEUTILS_TARGET_DIR).')
+@click.option('-w', '--ignore-warnings', default=False, is_flag=True, help='Do not fail if warnings are found.')
+@click.pass_context
+def validate(ctx, log_level, url, username, password, source_dir, ignore_warnings):
+    """Validate bundle in source dir against URL."""
+    set_logging(ctx, log_level)
+    # fetch the YAML from the URL
+    headers = { 'Content-Type': 'application/zip' }
+    if username and password:
+        headers['Authorization'] = 'Basic ' + base64.b64encode(f'{username}:{password}'.encode('utf-8')).decode('utf-8')
+    # zip and post the YAML to the URL
+    with zipfile.ZipFile('bundle.zip', 'w') as zip_ref:
+        for filename in os.listdir(source_dir):
+            zip_ref.write(os.path.join(source_dir, filename), filename)
+    with open('bundle.zip', 'rb') as f:
+        # post as binary file
+        response = requests.post(url, headers=headers, data=f)
+    response.raise_for_status()
+    # delete the zip file
+    os.remove('bundle.zip')
+    # print the response as pretty JSON
+    response_json = response.json()
+    click.echo(json.dumps(response_json, indent=2))
+    # Filter out non-info messages
+    non_info_messages = [message for message in response_json["validation-messages"] if not message.startswith("INFO -")]
+    if non_info_messages:
+        # if non info messages only include warnings...
+        if all("WARNING -" in message for message in non_info_messages):
+            if not ignore_warnings:
+                sys.exit('Validation failed with warnings')
+            else:
+                logging.warning('Validation failed with warnings. Ignoring due to --ignore-warnings flag')
+        else:
+            sys.exit('Validation failed with errors or critical messages')
+
+@cli.command()
+@common_options
 @click.option('-P', '--path', 'path', default=os.environ.get('BUNDLEUTILS_PATH'), help='The path to fetch YAML from (or use BUNDLEUTILS_PATH).')
-@click.option('-U', '--url', 'url', default=os.environ.get('BUNDLEUTILS_URL'), help='The controller URL to fetch YAML from (or use BUNDLEUTILS_URL).')
+@click.option('-U', '--url', 'url', default=default_fetch_url, help='The controller URL to fetch YAML from (or use BUNDLEUTILS_URL).')
 @click.option('-u', '--username', 'username', default=os.environ.get('BUNDLEUTILS_USERNAME'), help='Username for basic authentication (or use BUNDLEUTILS_USERNAME).')
 @click.option('-p', '--password', 'password', default=os.environ.get('BUNDLEUTILS_PASSWORD'), help='Password for basic authentication (or use BUNDLEUTILS_PASSWORD).')
 @click.option('-t', '--target-dir', 'target_dir', default=os.environ.get('BUNDLEUTILS_TARGET_DIR', default_target), help='The target directory for the YAML documents (or use BUNDLEUTILS_TARGET_DIR).')
@@ -144,7 +200,7 @@ def fetch(ctx, log_level, url, path, username, password, target_dir):
             logging.info(f'Found core-casc-export-*.zip file: {zip_files[0]}')
             path = zip_files[0]
         elif len(zip_files) > 1:
-            raise ValueError('Multiple core-casc-export-*.zip files found in the current directory')
+            sys.exit('Multiple core-casc-export-*.zip files found in the current directory')
     try:
         fetch_yaml_docs(url, path, username, password, target_dir)
     except Exception as e:
@@ -183,11 +239,13 @@ def fetch_yaml_docs(url, path, username, password, target_dir):
         if username and password:
             headers['Authorization'] = 'Basic ' + base64.b64encode(f'{username}:{password}'.encode('utf-8')).decode('utf-8')
         response = requests.get(url, headers=headers)
+        response.raise_for_status()
+
         # logging.debug(f'Fetched YAML from {url}:\n{response.text}')
         yaml_docs = list(yaml.load_all(response.text))
         write_all_yaml_docs_from_comments(yaml_docs, target_dir)
     else:
-        raise Exception('No path or URL provided')
+        sys.exit('No path or URL provided')
 
 def write_all_yaml_docs_from_comments(yaml_docs, target_dir):
     # create a new file for each YAML document
@@ -320,19 +378,33 @@ def apply_replacements(filename, custom_replacements):
             return
         traverse_credentials(filename, obj, custom_replacements)
 
-def apply_split(filename, split):
-    with open(filename, 'r') as inp:
-        obj = yaml.load(inp)
-        if obj is None:
-            logging.error(f'Failed to load YAML object from file {filename}')
-            return
-
 def handle_credentials(credentials, target_dir):
     # for each key in the patches, open the file and apply the patch
     for filename, replacements in credentials.items():
         filename = os.path.join(target_dir, filename)
+        if not _file_check(filename):
+            continue
         logging.info(f'Applying cred replacements to {filename}')
         apply_replacements(filename, replacements)
+
+def handle_substitutions(substitutions, target_dir):
+    # for each key in the patches, open the file and apply the patch
+    for filename, replacements in substitutions.items():
+        filename = os.path.join(target_dir, filename)
+        if not _file_check(filename):
+            continue
+        logging.info(f'Applying substitutions to {filename}')
+        with open(filename, 'r') as inp:
+            # use pattern as a regex to replace the text in the file
+            text = inp.read()
+            for replacement in replacements:
+                pattern = replacement['pattern']
+                value = replacement['value']
+                logging.debug(f'Applying substitution: {pattern} -> {value}')
+                text = re.sub(pattern, value, text)
+            with open(filename, 'w') as out:
+                out.write(text)
+            logging.info(f'Wrote {filename}')
 
 def handle_splits(splits, target_dir):
     # for type in items, jcasc, if the key exists, process
@@ -393,7 +465,7 @@ def recursive_merge(obj1, obj2):
 @common_options
 @transform_options
 @click.pass_context
-def normalize(ctx, log_level, configs, source_dir, target_dir):
+def normalize(ctx, log_level, strict, configs, source_dir, target_dir):
     """Transform using the normalize.yaml for better comparison."""
     set_logging(ctx, log_level)
     if not source_dir:
@@ -414,7 +486,7 @@ def normalize(ctx, log_level, configs, source_dir, target_dir):
 @common_options
 @transform_options
 @click.pass_context
-def operationalize(ctx, log_level, configs, source_dir, target_dir):
+def operationalize(ctx, log_level, strict, configs, source_dir, target_dir):
     """Transform using the operationalize.yaml (run normalise first)."""
     set_logging(ctx, log_level)
     if not source_dir:
@@ -435,17 +507,29 @@ def operationalize(ctx, log_level, configs, source_dir, target_dir):
 @common_options
 @transform_options
 @click.pass_context
-def transform(ctx, log_level, configs, source_dir, target_dir):
+def transform(ctx, log_level, strict, configs, source_dir, target_dir):
     """Transform using a custom transformation config."""
     set_logging(ctx, log_level)
     _transform(configs, source_dir, target_dir)
 
+@click.pass_context
+def _file_check(ctx, file):
+    # if file does not exist, skip
+    if not os.path.exists(file):
+        # if default_fail_on_missing is set, raise an exception
+        if ctx.params["strict"]:
+            sys.exit(f'File {file} does not exist')
+        logging.warning(f'File {file} does not exist. Skipping.')
+        return False
+    return True
 
 def _transform(configs, source_dir, target_dir):
     """Transform using a custom transformation config."""
     # add the transformation configs recursively into the merged config
     merged_config = {}
     for config in configs:
+        if not _file_check(config):
+            continue
         with open(config, 'r') as inp:
             logging.info(f'Processing config: {config}')
             obj = yaml.load(inp)
@@ -472,11 +556,21 @@ def _transform(configs, source_dir, target_dir):
 
     handle_patches(merged_config.get('patches', {}), target_dir)
     handle_credentials(merged_config.get('credentials', []), target_dir)
+    handle_substitutions(merged_config.get('substitutions', {}), target_dir)
     handle_splits(merged_config.get('splits', {}), target_dir)
-    update_bundle(target_dir)
+    _update_bundle(target_dir)
 
-def update_bundle(target_dir):
-    keys = ['jcasc', 'items', 'plugins', 'rbac']
+@cli.command()
+@common_options
+@click.option('-t', '--target-dir', 'target_dir')
+@click.pass_context
+def update_bundle(ctx, log_level, target_dir):
+    """Update the bundle.yaml file in the target directory."""
+    set_logging(ctx, log_level)
+    _update_bundle(target_dir)
+
+def _update_bundle(target_dir):
+    keys = ['jcasc', 'items', 'plugins', 'rbac', 'variables']
 
     # Load the YAML file
     with open(os.path.join(target_dir, 'bundle.yaml'), 'r') as file:
@@ -485,22 +579,49 @@ def update_bundle(target_dir):
     all_files = []
     # Iterate over the keys
     for key in keys:
+        files = []
         # Special case for 'jcasc'
         if key == 'jcasc':
             prefix = 'jenkins'
         else:
             prefix = key
 
-        # Get the list of YAML files starting with the prefix
-        files = glob.glob(os.path.join(target_dir, f'{prefix}.*.yaml'))
+        # if prefix.yaml exists, add
+        exact_match = os.path.join(target_dir, f'{prefix}.yaml')
+        if os.path.exists(exact_match):
+            files = [exact_match]
+
+        # Add list of YAML files starting with the prefix
+        files += glob.glob(os.path.join(target_dir, f'{prefix}.*.yaml'))
+
+        # special case for 'items'. If any of the files does not contain the yaml key 'items', remove the key from the data
+        if key == 'items':
+            for file in files:
+                if not _file_check(file):
+                    continue
+                with open(file, 'r') as f:
+                    items_file = yaml.load(f)
+                    # if no items key or items is empty, remove the file from the list
+                    if 'items' not in items_file or not items_file['items']:
+                        logging.info(f'Removing {file} from the list due to missing or empty items')
+                        files.remove(file)
+                        os.remove(file)
+
+        # special case for 'rbac'. If any of the files does not contain the yaml key 'roles' and 'groups', remove the key from the data
+        if key == 'rbac':
+            for file in files:
+                if not _file_check(file):
+                    continue
+                with open(file, 'r') as f:
+                    rbac_file = yaml.load(f)
+                    # if no roles key or roles is empty, remove the file from the list
+                    if ('roles' not in rbac_file or not rbac_file['roles']) and ('groups' not in rbac_file or not rbac_file['groups']):
+                        logging.info(f'Removing {file} from the list due to missing or empty roles and groups')
+                        files.remove(file)
+                        os.remove(file)
 
         # Remove the target_dir path and sort the files, ensuring exact match come first
         files = sorted([os.path.basename(file) for file in files])
-
-        # if file matches f'{prefix}.yaml', then add it to the front of the list
-        exact_match = os.path.join(target_dir, f'{prefix}.yaml')
-        if os.path.exists(exact_match):
-            files.insert(0, f'{prefix}.yaml')
 
         # if no files found, remove the key from the data if it exists
         if not files:
@@ -552,6 +673,8 @@ def split_jcasc(target_dir, filename, configs):
     logging.info('Loading YAML object')
 
     full_filename = os.path.join(target_dir, filename)
+    if not _file_check(full_filename):
+        return
     with open(full_filename, 'r') as f:
         source_data = yaml.load(f)
 
@@ -604,6 +727,8 @@ def split_items(target_dir, filename, configs):
     logging.info('Loading YAML object')
 
     full_filename = os.path.join(target_dir, filename)
+    if not _file_check(full_filename):
+        return
     with open(full_filename, 'r') as f:
         data = yaml.load(f)
 
@@ -626,17 +751,26 @@ def split_items(target_dir, filename, configs):
                         target_file = item_name + '.yaml'
                     else:
                         target_file = target
-                    if target_file not in new_data:
-                        new_data[target_file] = []
-                    new_data[target_file].append(item)
-                    logging.info(f' - > moving {item_name} to {target_file}')
                     removed_items.append(item)
+                    if target_file == 'delete':
+                        logging.info(f' - > ignoring {item_name} to {target_file}')
+                    else:
+                        if target_file not in new_data:
+                            new_data[target_file] = []
+                        new_data[target_file].append(item)
+                        logging.info(f' - > moving {item_name} to {target_file}')
 
     # Remove the items that were moved
     for item in removed_items:
         items.remove(item)
-    with open(full_filename, 'w') as f:
-        yaml.dump(data, f)
+    # if there are no items left, remove the file instead of dumping it
+    if not items:
+        logging.info(f'No items left in file. Removing {full_filename}')
+        os.remove(full_filename)
+    else:
+        # Save the modified source file
+        with open(full_filename, 'w') as f:
+            yaml.dump(data, f)
 
     # rename the source files base name to "'items.' + filename" if not already done
     if not filename.startswith('items.'):
