@@ -34,8 +34,12 @@ splits:
   #     patterns: ['casc-test-.*']
   #   - target: controllers.yaml
   #     patterns: ['controller-.*']
+  #   - target: delete
+  #     patterns: ['test-fs']
   items: {}
-  # Split by path (auto takes each item separately, replacing '/' with '.')
+  # Split by path whereby target can take 'auto', 'delete', or the specific file name:
+  #   'auto' takes each item separately, replacing '/' with '.'
+  #   'delete' deletes the file completely
   # jcasc:
   #   jenkins.yaml:
   #   - target: auto
@@ -46,3 +50,9 @@ splits:
   #     - masterprovisioning
   #     - kube
   jcasc: {}
+
+  # Replace all instances of 'pattern' with 'value' in the yaml files
+substitutions: {}
+  # jenkins.yaml:
+  # - pattern: cloudbees/cloudbees-core-agent:[0-9\.]+
+  #   value: cloudbees/cloudbees-core-agent:${readFile:/var/jenkins_home/jenkins.install.InstallUtil.lastExecVersion}

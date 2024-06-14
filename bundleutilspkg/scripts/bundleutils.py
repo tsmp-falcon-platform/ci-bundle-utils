@@ -43,7 +43,7 @@ def common_options(func):
 def transform_options(func):
     func = click.option('-S', '--strict', default=False, is_flag=True, help='Fail when refrencing non-existent files. Warn otherwise.')(func)
     func = click.option('-c', '--config', 'configs', multiple=True, default=os.environ.get('BUNDLEUTILS_TRANSFORMATIONS'), help='The transformation config(s) (or use BUNDLEUTILS_TRANSFORMATION).')(func)
-    func = click.option('-s', '--source-dir', 'source_dir', default=os.environ.get('BUNDLEUTILS_SOURCE_DIR', ''), help='The source directory for the YAML documents (or use BUNDLEUTILS_TARGET_DIR).')(func)
+    func = click.option('-s', '--source-dir', 'source_dir', default=os.environ.get('BUNDLEUTILS_SOURCE_DIR', ''), help='The source directory for the YAML documents (or use BUNDLEUTILS_SOURCE_DIR).')(func)
     func = click.option('-t', '--target-dir', 'target_dir', default=os.environ.get('BUNDLEUTILS_TARGET_DIR', ''), help='The target directory for the YAML documents (or use BUNDLEUTILS_TARGET_DIR). Defaults to the source directory suffixed with -transformed.')(func)
     return func
 
@@ -378,13 +378,6 @@ def apply_replacements(filename, custom_replacements):
             return
         traverse_credentials(filename, obj, custom_replacements)
 
-def apply_split(filename, split):
-    with open(filename, 'r') as inp:
-        obj = yaml.load(inp)
-        if obj is None:
-            logging.error(f'Failed to load YAML object from file {filename}')
-            return
-
 def handle_credentials(credentials, target_dir):
     # for each key in the patches, open the file and apply the patch
     for filename, replacements in credentials.items():
@@ -393,6 +386,25 @@ def handle_credentials(credentials, target_dir):
             continue
         logging.info(f'Applying cred replacements to {filename}')
         apply_replacements(filename, replacements)
+
+def handle_substitutions(substitutions, target_dir):
+    # for each key in the patches, open the file and apply the patch
+    for filename, replacements in substitutions.items():
+        filename = os.path.join(target_dir, filename)
+        if not _file_check(filename):
+            continue
+        logging.info(f'Applying substitutions to {filename}')
+        with open(filename, 'r') as inp:
+            # use pattern as a regex to replace the text in the file
+            text = inp.read()
+            for replacement in replacements:
+                pattern = replacement['pattern']
+                value = replacement['value']
+                logging.debug(f'Applying substitution: {pattern} -> {value}')
+                text = re.sub(pattern, value, text)
+            with open(filename, 'w') as out:
+                out.write(text)
+            logging.info(f'Wrote {filename}')
 
 def handle_splits(splits, target_dir):
     # for type in items, jcasc, if the key exists, process
@@ -544,11 +556,21 @@ def _transform(configs, source_dir, target_dir):
 
     handle_patches(merged_config.get('patches', {}), target_dir)
     handle_credentials(merged_config.get('credentials', []), target_dir)
+    handle_substitutions(merged_config.get('substitutions', {}), target_dir)
     handle_splits(merged_config.get('splits', {}), target_dir)
-    update_bundle(target_dir)
+    _update_bundle(target_dir)
 
-def update_bundle(target_dir):
-    keys = ['jcasc', 'items', 'plugins', 'rbac']
+@cli.command()
+@common_options
+@click.option('-t', '--target-dir', 'target_dir')
+@click.pass_context
+def _update_bundle(ctx, log_level, target_dir):
+    """Update the bundle.yaml file in the target directory."""
+    set_logging(ctx, log_level)
+    _update_bundle(target_dir)
+
+def _update_bundle(target_dir):
+    keys = ['jcasc', 'items', 'plugins', 'rbac', 'variables']
 
     # Load the YAML file
     with open(os.path.join(target_dir, 'bundle.yaml'), 'r') as file:
@@ -729,11 +751,14 @@ def split_items(target_dir, filename, configs):
                         target_file = item_name + '.yaml'
                     else:
                         target_file = target
-                    if target_file not in new_data:
-                        new_data[target_file] = []
-                    new_data[target_file].append(item)
-                    logging.info(f' - > moving {item_name} to {target_file}')
                     removed_items.append(item)
+                    if target_file == 'delete':
+                        logging.info(f' - > ignoring {item_name} to {target_file}')
+                    else:
+                        if target_file not in new_data:
+                            new_data[target_file] = []
+                        new_data[target_file].append(item)
+                        logging.info(f' - > moving {item_name} to {target_file}')
 
     # Remove the items that were moved
     for item in removed_items:
