@@ -2,7 +2,9 @@
 patches:
   jenkins.yaml:
   - op: remove
-    path: /license
+    path: /license # you may want to keep this if you have a license file
+  - op: remove
+    path: /jenkins/labelAtoms # these labels are dynamic based on the agents available
 
 # Replace credentials with references to variables
 # Autosetting:
