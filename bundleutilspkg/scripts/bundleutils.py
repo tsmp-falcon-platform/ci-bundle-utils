@@ -564,7 +564,7 @@ def _transform(configs, source_dir, target_dir):
 @common_options
 @click.option('-t', '--target-dir', 'target_dir')
 @click.pass_context
-def _update_bundle(ctx, log_level, target_dir):
+def update_bundle(ctx, log_level, target_dir):
     """Update the bundle.yaml file in the target directory."""
     set_logging(ctx, log_level)
     _update_bundle(target_dir)
