@@ -32,9 +32,9 @@ default_normalized = default_target + '-normalized'
 default_operationalized = default_target + '-operationalized'
 default_fetch_url = ''
 default_validate_url = ''
-if 'JENKINS_URL' in os.environ:
-    default_fetch_url = os.environ['JENKINS_URL'] + '/core-casc-export'
-    default_validate_url = os.environ['JENKINS_URL'] + '/casc-bundle-mgnt/casc-bundle-validate'
+if 'BUNDLEUTILS_JENKINS_URL' in os.environ:
+    default_fetch_url = os.environ['BUNDLEUTILS_JENKINS_URL'] + '/core-casc-export'
+    default_validate_url = os.environ['BUNDLEUTILS_JENKINS_URL'] + '/casc-bundle-mgnt/casc-bundle-validate'
 
 def common_options(func):
     func = click.option('-l', '--log-level', default=os.environ.get('BUNDLEUTILS_LOG_LEVEL', ''), help='The log level (or use BUNDLEUTILS_LOG_LEVEL).')(func)
