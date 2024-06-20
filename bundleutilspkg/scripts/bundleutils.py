@@ -30,9 +30,11 @@ script_name_upper = script_name.upper()
 default_target = 'target/docs'
 default_normalized = default_target + '-normalized'
 default_operationalized = default_target + '-operationalized'
+default_plugin_json_url = ''
 default_fetch_url = ''
 default_validate_url = ''
 if 'BUNDLEUTILS_JENKINS_URL' in os.environ:
+    default_plugin_json_url = os.environ['BUNDLEUTILS_JENKINS_URL'] + '/manage/pluginManager/api/json?pretty&depth=1'
     default_fetch_url = os.environ['BUNDLEUTILS_JENKINS_URL'] + '/core-casc-export'
     default_validate_url = os.environ['BUNDLEUTILS_JENKINS_URL'] + '/casc-bundle-mgnt/casc-bundle-validate'
 
@@ -182,15 +184,32 @@ def validate(ctx, log_level, url, username, password, source_dir, ignore_warning
         else:
             sys.exit('Validation failed with errors or critical messages')
 
+def filter_plugins(data):
+    """
+    Filters out plugins where enabled is False or deleted is True.
+    """
+    filtered_plugins = []
+    plugins = data.get("plugins", [])
+    for plugin in plugins:
+        if plugin.get("deleted", True):
+            logging.debug(f"Plugins: removing deleted plugin: {plugin['shortName']}")
+            filtered_plugins.append(plugin['shortName'])
+        elif not plugin.get("enabled", True):
+            logging.debug(f"Plugins: removing disabled plugin: {plugin['shortName']}")
+            filtered_plugins.append(plugin['shortName'])
+    return filtered_plugins
+
 @cli.command()
 @common_options
+@click.option('-m', '--pluginJsonUrl', 'plugin_json_url', default=default_plugin_json_url, help='The URL to fetch plugins info (or use BUNDLEUTILS_JENKINS_URL).')
+@click.option('-M', '--pluginJsonPath', 'plugin_json_path', default=os.environ.get('BUNDLEUTILS_PATH'), help='The path to fetch JSON file from (found at /manage/pluginManager/api/json?pretty&depth=1).')
 @click.option('-P', '--path', 'path', default=os.environ.get('BUNDLEUTILS_PATH'), help='The path to fetch YAML from (or use BUNDLEUTILS_PATH).')
-@click.option('-U', '--url', 'url', default=default_fetch_url, help='The controller URL to fetch YAML from (or use BUNDLEUTILS_URL).')
+@click.option('-U', '--url', 'url', default=default_fetch_url, help='The URL to fetch YAML from (or use BUNDLEUTILS_JENKINS_URL).')
 @click.option('-u', '--username', 'username', default=os.environ.get('BUNDLEUTILS_USERNAME'), help='Username for basic authentication (or use BUNDLEUTILS_USERNAME).')
 @click.option('-p', '--password', 'password', default=os.environ.get('BUNDLEUTILS_PASSWORD'), help='Password for basic authentication (or use BUNDLEUTILS_PASSWORD).')
 @click.option('-t', '--target-dir', 'target_dir', default=os.environ.get('BUNDLEUTILS_TARGET_DIR', default_target), help='The target directory for the YAML documents (or use BUNDLEUTILS_TARGET_DIR).')
 @click.pass_context
-def fetch(ctx, log_level, url, path, username, password, target_dir):
+def fetch(ctx, log_level, url, path, username, password, target_dir, plugin_json_url, plugin_json_path):
     """Fetch YAML documents from a URL or path."""
     set_logging(ctx, log_level)
     # if path or url is not provided, look for a zip file in the current directory matching the pattern core-casc-export-*.zip
@@ -201,10 +220,73 @@ def fetch(ctx, log_level, url, path, username, password, target_dir):
             path = zip_files[0]
         elif len(zip_files) > 1:
             sys.exit('Multiple core-casc-export-*.zip files found in the current directory')
+    if not plugin_json_path and not plugin_json_url:
+        plugin_json_files = glob.glob('plugins*.json')
+        if len(plugin_json_files) == 1:
+            logging.info(f'Found plugins*.json file: {plugin_json_files[0]}')
+            plugin_json_path = plugin_json_files[0]
+        elif len(plugin_json_files) > 1:
+            sys.exit('Multiple plugins*.json files found in the current directory')
     try:
         fetch_yaml_docs(url, path, username, password, target_dir)
     except Exception as e:
-        logging.error(f'Failed to fetch and write YAML documents: {e}')
+        sys.exit(f'Failed to fetch and write YAML documents: {e}')
+    try:
+        update_plugins(plugin_json_url, plugin_json_path, username, password, target_dir)
+    except Exception as e:
+        sys.exit(f'Failed to fetch and update plugin data: {e}')
+
+
+def update_plugins(plugin_json_url, plugin_json_path, username, password, target_dir):
+    # if the plugin_json_url is set, fetch the plugins JSON from the URL
+    if plugin_json_url:
+        response_text = call_jenkins_api(plugin_json_url, username, password)
+        # parse text as JSON
+        data = json.loads(response_text)
+        filtered_plugins = filter_plugins(data)
+        # if the plugins.yaml file exists in the target directory, remove the filtered plugins from the file
+    elif plugin_json_path:
+        with open(plugin_json_path, 'r') as f:
+            data = json.load(f)
+        filtered_plugins = filter_plugins(data)
+
+    # removing from the plugins.yaml file
+    plugins_file = os.path.join(target_dir, 'plugins.yaml')
+    if os.path.exists(plugins_file):
+        with open(plugins_file, 'r') as f:
+            plugins_data = yaml.load(f)  # Load the existing data
+
+        logging.info(f"Removing disabled/deleted plugins from plugins.yaml")
+        # Check if 'plugins' key exists and it's a list
+        if 'plugins' in plugins_data and isinstance(plugins_data['plugins'], list):
+            updated_plugins = []
+            for plugin in plugins_data['plugins']:
+                if plugin['id'] in filtered_plugins:
+                    logging.info(f" -> removing: {plugin['id']}")
+                else:
+                    updated_plugins.append(plugin)
+
+            plugins_data['plugins'] = updated_plugins
+        with open(plugins_file, 'w') as f:
+            yaml.dump(plugins_data, f)  # Write the updated data back to the file
+
+    # removing from the plugin-catalog.yaml file
+    plugin_catalog = os.path.join(target_dir, 'plugin-catalog.yaml')
+    if os.path.exists(plugin_catalog):
+        with open(plugin_catalog, 'r') as f:
+            catalog_data = yaml.load(f)  # Load the existing data
+
+        logging.info(f"Removing disabled/deleted plugins from plugin-catalog.yaml")
+        # Check and remove plugins listed in filtered_plugins from includePlugins
+        for configuration in catalog_data.get('configurations', []):
+            if 'includePlugins' in configuration:
+                for plugin_id in list(configuration['includePlugins']):
+                    if plugin_id in filtered_plugins:
+                        del configuration['includePlugins'][plugin_id]
+                        logging.info(f" -> removing: {plugin_id}")
+
+        with open(plugin_catalog, 'w') as file:
+            yaml.dump(catalog_data, file) # Write the updated data back to the file
 
 def fetch_yaml_docs(url, path, username, password, target_dir):
     # place each document in a separate file under a target directory
@@ -240,18 +322,21 @@ def fetch_yaml_docs(url, path, username, password, target_dir):
                 yaml_docs = list(yaml.load_all(f))
                 write_all_yaml_docs_from_comments(yaml_docs, target_dir)
     elif url:
-        # fetch the YAML from the URL
-        headers = {}
-        if username and password:
-            headers['Authorization'] = 'Basic ' + base64.b64encode(f'{username}:{password}'.encode('utf-8')).decode('utf-8')
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
-
+        response_text = call_jenkins_api(url, username, password)
         # logging.debug(f'Fetched YAML from {url}:\n{response.text}')
-        yaml_docs = list(yaml.load_all(response.text))
+        yaml_docs = list(yaml.load_all(response_text))
         write_all_yaml_docs_from_comments(yaml_docs, target_dir)
     else:
         sys.exit('No path or URL provided')
+
+def call_jenkins_api(url, username, password):
+    logging.debug(f'Fetching response from URL: {url}')
+    headers = {}
+    if username and password:
+        headers['Authorization'] = 'Basic ' + base64.b64encode(f'{username}:{password}'.encode('utf-8')).decode('utf-8')
+    response = requests.get(url, headers=headers)
+    response.raise_for_status()
+    return response.text
 
 def write_all_yaml_docs_from_comments(yaml_docs, target_dir):
     # create a new file for each YAML document
