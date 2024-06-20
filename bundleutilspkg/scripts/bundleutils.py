@@ -226,8 +226,14 @@ def fetch_yaml_docs(url, path, username, password, target_dir):
                 for filename in zip_ref.namelist():
                     # read the YAML from the file
                     with zip_ref.open(filename) as f:
-                        doc = yaml.load(f)
-                        write_yaml_doc(doc, target_dir, filename)
+                        # if file is empty, skip
+                        if f.read(1):
+                            f.seek(0)
+                            logging.debug(f'Read YAML from file: {filename}')
+                            doc = yaml.load(f)
+                            write_yaml_doc(doc, target_dir, filename)
+                        else:
+                            logging.warning(f'Skipping empty file: {filename}')
         else:
             logging.debug(f'Read YAML from path: {path}')
             with open(path, 'r') as f:
@@ -260,6 +266,7 @@ def write_yaml_doc(doc, target_dir, filename):
     filename = os.path.join(target_dir, filename)
     # normalize the YAML doc
     doc = normalize_yaml(doc)
+    doc = remove_empty_keys(doc)
 
     # create a new file for each YAML document
     logging.debug(f'Creating {filename}')
@@ -514,8 +521,9 @@ def transform(ctx, log_level, strict, configs, source_dir, target_dir):
 
 @click.pass_context
 def _file_check(ctx, file):
-    # if file does not exist, skip
-    if not os.path.exists(file):
+    # if file does not exist, or is empty, skip
+    logging.debug(f'Checking file: {file}')
+    if not os.path.exists(file) or os.path.getsize(file) == 0:
         # if default_fail_on_missing is set, raise an exception
         if ctx.params["strict"]:
             sys.exit(f'File {file} does not exist')
@@ -560,6 +568,26 @@ def _transform(configs, source_dir, target_dir):
     handle_splits(merged_config.get('splits', {}), target_dir)
     _update_bundle(target_dir)
 
+def remove_empty_keys(data):
+    if isinstance(data, dict):  # If the data is a dictionary
+        # Create a new dictionary, skipping entries with empty keys
+        ret = {k: remove_empty_keys(v) for k, v in data.items() if k != ""}
+        logging.debug(f'Removing empty keys from DICT {data}')
+        logging.debug(f'Result: {ret}')
+        return ret
+    elif isinstance(data, list):  # If the data is a list
+        logging.debug(f'Removing empty keys from LIST {data}')
+        newdata = []
+        for v in data:
+            ret = remove_empty_keys(v)
+            if ret:
+                newdata.append(ret)
+        logging.debug(f'Result: {newdata}')
+        return newdata
+    else:
+        # Return the item itself if it's not a dictionary or list
+        return data
+
 @cli.command()
 @common_options
 @click.option('-t', '--target-dir', 'target_dir')
@@ -570,8 +598,9 @@ def update_bundle(ctx, log_level, target_dir):
     _update_bundle(target_dir)
 
 def _update_bundle(target_dir):
-    keys = ['jcasc', 'items', 'plugins', 'rbac', 'variables']
+    keys = ['jcasc', 'items', 'plugins', 'rbac', 'catalog', 'variables']
 
+    logging.info(f'Updating bundle in {target_dir}')
     # Load the YAML file
     with open(os.path.join(target_dir, 'bundle.yaml'), 'r') as file:
         data = yaml.load(file)
@@ -583,6 +612,8 @@ def _update_bundle(target_dir):
         # Special case for 'jcasc'
         if key == 'jcasc':
             prefix = 'jenkins'
+        elif key == 'catalog':
+            prefix = 'plugin-catalog'
         else:
             prefix = key
 
@@ -592,13 +623,13 @@ def _update_bundle(target_dir):
             files = [exact_match]
 
         # Add list of YAML files starting with the prefix
-        files += glob.glob(os.path.join(target_dir, f'{prefix}.*.yaml'))
+        files += sorted(glob.glob(os.path.join(target_dir, f'{prefix}.*.yaml')))
+        # remove any empty files
+        files = [file for file in files if _file_check(file)]
 
         # special case for 'items'. If any of the files does not contain the yaml key 'items', remove the key from the data
         if key == 'items':
             for file in files:
-                if not _file_check(file):
-                    continue
                 with open(file, 'r') as f:
                     items_file = yaml.load(f)
                     # if no items key or items is empty, remove the file from the list
@@ -610,8 +641,6 @@ def _update_bundle(target_dir):
         # special case for 'rbac'. If any of the files does not contain the yaml key 'roles' and 'groups', remove the key from the data
         if key == 'rbac':
             for file in files:
-                if not _file_check(file):
-                    continue
                 with open(file, 'r') as f:
                     rbac_file = yaml.load(f)
                     # if no roles key or roles is empty, remove the file from the list
@@ -621,11 +650,12 @@ def _update_bundle(target_dir):
                         os.remove(file)
 
         # Remove the target_dir path and sort the files, ensuring exact match come first
-        files = sorted([os.path.basename(file) for file in files])
+        files = [os.path.basename(file) for file in files]
 
         # if no files found, remove the key from the data if it exists
         if not files:
             if key in data:
+                logging.info(f'Removing key {key} from the bundle as no files were found')
                 del data[key]
             continue
 
