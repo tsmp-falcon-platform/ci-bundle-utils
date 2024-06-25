@@ -1,4 +1,3 @@
-import ast
 import json
 import jsonpatch
 import jsonpointer
@@ -19,6 +18,7 @@ from deepdiff.helper import CannotCompare
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap
 from ruamel.yaml.comments import CommentedSeq
+from server_management.server_manager import JenkinsServerManager
 
 locale.setlocale(locale.LC_ALL, "C")
 
@@ -42,11 +42,17 @@ def common_options(func):
     func = click.option('-l', '--log-level', default=os.environ.get('BUNDLEUTILS_LOG_LEVEL', ''), help='The log level (or use BUNDLEUTILS_LOG_LEVEL).')(func)
     return func
 
+def server_options(func):
+    func = click.option('-v', '--ci-version', 'ci_version', default=os.environ.get('BUNDLEUTILS_CI_VERSION', ''), help='The version of the CloudBees WAR file.')(func)
+    func = click.option('-t', '--ci-type', 'ci_type', default=os.environ.get('BUNDLEUTILS_CI_TYPE', 'mm'), required=False, type=click.STRING, help='The type of the CloudBees server.')(func)
+    func = click.option('-H', '--ci-server-home', 'ci_server_home', required=False, help='Defaults to /tmp/ci_server_home/<ci_type>/<ci_version>.')(func)
+    return func
+
 def transform_options(func):
     func = click.option('-S', '--strict', default=False, is_flag=True, help='Fail when refrencing non-existent files. Warn otherwise.')(func)
     func = click.option('-c', '--config', 'configs', multiple=True, default=os.environ.get('BUNDLEUTILS_TRANSFORMATIONS'), help='The transformation config(s) (or use BUNDLEUTILS_TRANSFORMATION).')(func)
-    func = click.option('-s', '--source-dir', 'source_dir', default=os.environ.get('BUNDLEUTILS_SOURCE_DIR', ''), help='The source directory for the YAML documents (or use BUNDLEUTILS_SOURCE_DIR).')(func)
-    func = click.option('-t', '--target-dir', 'target_dir', default=os.environ.get('BUNDLEUTILS_TARGET_DIR', ''), help='The target directory for the YAML documents (or use BUNDLEUTILS_TARGET_DIR). Defaults to the source directory suffixed with -transformed.')(func)
+    func = click.option('-s', '--source-dir', 'source_dir', default=os.environ.get('BUNDLEUTILS_SOURCE_DIR', ''), type=click.Path(file_okay=False, dir_okay=True), help='The source directory for the YAML documents (or use BUNDLEUTILS_SOURCE_DIR).')(func)
+    func = click.option('-t', '--target-dir', 'target_dir', default=os.environ.get('BUNDLEUTILS_TARGET_DIR', ''), type=click.Path(file_okay=False, dir_okay=True), help='The target directory for the YAML documents (or use BUNDLEUTILS_TARGET_DIR). Defaults to the source directory suffixed with -transformed.')(func)
     return func
 
 def set_logging(ctx, log_level, default=''):
@@ -76,12 +82,56 @@ def yaml2dict(yamlFile):
                 dict_res[key] = value
     return dict_res
 
-
 def compare_func(x, y, level=None):
     try:
         return x['id'] == y['id']
     except Exception:
         raise CannotCompare() from None
+
+# click command to download war file
+@cli.command()
+@server_options
+@click.option('-s', '--source-dir', 'source_dir',  required=True, type=click.Path(file_okay=False, dir_okay=True), help='The bundle to be validated (startup will use the plugins from here).')
+@click.option('-T', '--ci-bundle-template', 'bundle_template', type=click.Path(file_okay=False, dir_okay=True), required=False, help='Path to a template bundle used to start the test server (defaults to in-built tempalte).')
+@common_options
+@click.pass_context
+def ci_setup(ctx, log_level, ci_version, ci_type, ci_server_home, source_dir, bundle_template):
+    """Download CloudBees WAR file"""
+    if not os.path.exists(source_dir):
+        sys.exit(f"Source directory '{source_dir}' does not exist")
+    # parse the source directory bundle.yaml file and copy the files under the plugins and catalog keys to the target_jenkins_home_casc_startup_bundle directory
+    plugin_files = []
+    with open(os.path.join(source_dir, 'bundle.yaml'), 'r') as file:
+        bundle_yaml = yaml.load(file)
+        for key in ['plugins', 'catalog']:
+            # list paths to all entries under bundle_yaml.plugins
+            if key in bundle_yaml and isinstance(bundle_yaml[key], list):
+                for plugin_file in bundle_yaml[key]:
+                    plugin_files.append(os.path.join(source_dir, plugin_file))
+    jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
+    jenkins_manager.get_war()
+    jenkins_manager.create_startup_bundle(plugin_files, bundle_template)
+    _update_bundle(jenkins_manager.target_jenkins_home_casc_startup_bundle)
+
+# click command to download war file
+@cli.command()
+@server_options
+@common_options
+@click.pass_context
+def ci_start_server(ctx, log_level, ci_version, ci_type, ci_server_home):
+    """Download CloudBees WAR file"""
+    jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
+    jenkins_manager.start_server()
+
+# click command to download war file
+@cli.command()
+@server_options
+@common_options
+@click.pass_context
+def ci_stop_server(ctx, log_level, ci_version, ci_type, ci_server_home):
+    """Download CloudBees WAR file"""
+    jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
+    jenkins_manager.stop_server()
 
 # add a diff command to diff two directories by calling the diff command on each file
 @cli.command()
@@ -146,15 +196,21 @@ def completion(ctx, shell):
 
 @cli.command()
 @common_options
-@click.option('-U', '--url', 'url', default=default_validate_url, help='The controller URL to fetch YAML from (or use BUNDLEUTILS_URL).')
+@click.option('-U', '--url', 'url', default=default_validate_url, help='The controller URL to fetch YAML from (or use BUNDLEUTILS_JENKINS_URL).')
 @click.option('-u', '--username', 'username', default=os.environ.get('BUNDLEUTILS_USERNAME'), help='Username for basic authentication (or use BUNDLEUTILS_USERNAME).')
 @click.option('-p', '--password', 'password', default=os.environ.get('BUNDLEUTILS_PASSWORD'), help='Password for basic authentication (or use BUNDLEUTILS_PASSWORD).')
-@click.option('-s', '--source-dir', 'source_dir', required=True, default=os.environ.get('BUNDLEUTILS_SOURCE_DIR', ''), help='The source directory for the YAML documents (or use BUNDLEUTILS_TARGET_DIR).')
+@click.option('-s', '--source-dir', 'source_dir', required=True, default=os.environ.get('BUNDLEUTILS_SOURCE_DIR', ''), type=click.Path(file_okay=False, dir_okay=True), help='The source directory for the YAML documents (or use BUNDLEUTILS_TARGET_DIR).')
 @click.option('-w', '--ignore-warnings', default=False, is_flag=True, help='Do not fail if warnings are found.')
 @click.pass_context
 def validate(ctx, log_level, url, username, password, source_dir, ignore_warnings):
     """Validate bundle in source dir against URL."""
     set_logging(ctx, log_level)
+    if not url:
+        sys.exit('No URL provided')
+    # if the url does end with /casc-bundle-mgnt/casc-bundle-validate, append it
+    if not url.endswith('/casc-bundle-mgnt/casc-bundle-validate'):
+        url = url + '/casc-bundle-mgnt/casc-bundle-validate'
+
     # fetch the YAML from the URL
     headers = { 'Content-Type': 'application/zip' }
     if username and password:
@@ -170,7 +226,10 @@ def validate(ctx, log_level, url, username, password, source_dir, ignore_warning
     # delete the zip file
     os.remove('bundle.zip')
     # print the response as pretty JSON
-    response_json = response.json()
+    try:
+        response_json = response.json()
+    except json.decoder.JSONDecodeError:
+        sys.exit(f'Failed to decode JSON from response: {response.text}')
     click.echo(json.dumps(response_json, indent=2))
     # Filter out non-info messages
     non_info_messages = [message for message in response_json["validation-messages"] if not message.startswith("INFO -")]
@@ -203,7 +262,7 @@ def filter_plugins(data):
 @common_options
 @click.option('-m', '--pluginJsonUrl', 'plugin_json_url', default=default_plugin_json_url, help='The URL to fetch plugins info (or use BUNDLEUTILS_JENKINS_URL).')
 @click.option('-M', '--pluginJsonPath', 'plugin_json_path', default=os.environ.get('BUNDLEUTILS_PATH'), help='The path to fetch JSON file from (found at /manage/pluginManager/api/json?pretty&depth=1).')
-@click.option('-P', '--path', 'path', default=os.environ.get('BUNDLEUTILS_PATH'), help='The path to fetch YAML from (or use BUNDLEUTILS_PATH).')
+@click.option('-P', '--path', 'path', default=os.environ.get('BUNDLEUTILS_PATH'), type=click.Path(file_okay=True, dir_okay=False), help='The path to fetch YAML from (or use BUNDLEUTILS_PATH).')
 @click.option('-U', '--url', 'url', default=default_fetch_url, help='The URL to fetch YAML from (or use BUNDLEUTILS_JENKINS_URL).')
 @click.option('-u', '--username', 'username', default=os.environ.get('BUNDLEUTILS_USERNAME'), help='Username for basic authentication (or use BUNDLEUTILS_USERNAME).')
 @click.option('-p', '--password', 'password', default=os.environ.get('BUNDLEUTILS_PASSWORD'), help='Password for basic authentication (or use BUNDLEUTILS_PASSWORD).')
@@ -249,6 +308,9 @@ def update_plugins(plugin_json_url, plugin_json_path, username, password, target
         with open(plugin_json_path, 'r') as f:
             data = json.load(f)
         filtered_plugins = filter_plugins(data)
+    else:
+        logging.info('No plugin JSON URL or path provided. Cannot determine if disabled/deleted plugins present in list.')
+        return
 
     # removing from the plugins.yaml file
     plugins_file = os.path.join(target_dir, 'plugins.yaml')
@@ -456,6 +518,10 @@ def apply_patch(filename, patch_list):
         yaml.dump(obj, out)
 
 def handle_patches(patches, target_dir):
+    # if patches is empty, skip
+    if not patches:
+        logging.info('No patches to apply')
+        return
     # for each key in the patches, open the file and apply the patch
     for filename, patch in patches.items():
         filename = os.path.join(target_dir, filename)
@@ -471,6 +537,10 @@ def apply_replacements(filename, custom_replacements):
         traverse_credentials(filename, obj, custom_replacements)
 
 def handle_credentials(credentials, target_dir):
+    # if credentials is empty, skip
+    if not credentials:
+        logging.info('No credentials to replace')
+        return
     # for each key in the patches, open the file and apply the patch
     for filename, replacements in credentials.items():
         filename = os.path.join(target_dir, filename)
@@ -480,6 +550,10 @@ def handle_credentials(credentials, target_dir):
         apply_replacements(filename, replacements)
 
 def handle_substitutions(substitutions, target_dir):
+    # if substitutions is empty, skip
+    if not substitutions:
+        logging.info('No substitutions to apply')
+        return
     # for each key in the patches, open the file and apply the patch
     for filename, replacements in substitutions.items():
         filename = os.path.join(target_dir, filename)
@@ -499,6 +573,10 @@ def handle_substitutions(substitutions, target_dir):
             logging.info(f'Wrote {filename}')
 
 def handle_splits(splits, target_dir):
+    # if splits is empty, skip
+    if not splits:
+        logging.info('No splits to apply')
+        return
     # for type in items, jcasc, if the key exists, process
     for split_type, split_dict in splits.items():
         if split_type == 'items':
@@ -570,7 +648,7 @@ def normalize(ctx, log_level, strict, configs, source_dir, target_dir):
             logging.info('Using normalize.yaml in the current directory')
             configs = ['normalize.yaml']
         else:
-            path = pkg_resources.files('bundleutilspkg.configs') / 'normalize.yaml'
+            path = pkg_resources.files('defaults.configs') / 'normalize.yaml'
             configs = [path]
     _transform(configs, source_dir, target_dir)
 
@@ -591,7 +669,7 @@ def operationalize(ctx, log_level, strict, configs, source_dir, target_dir):
             logging.info('Using operationalize.yaml in the current directory')
             configs = ['operationalize.yaml']
         else:
-            path = pkg_resources.files('bundleutilspkg.configs') / 'operationalize.yaml'
+            path = pkg_resources.files('defaults.configs') / 'operationalize.yaml'
             configs = [path]
     _transform(configs, source_dir, target_dir)
 
@@ -605,12 +683,12 @@ def transform(ctx, log_level, strict, configs, source_dir, target_dir):
     _transform(configs, source_dir, target_dir)
 
 @click.pass_context
-def _file_check(ctx, file):
+def _file_check(ctx, file, strict=False):
     # if file does not exist, or is empty, skip
     logging.debug(f'Checking file: {file}')
     if not os.path.exists(file) or os.path.getsize(file) == 0:
         # if default_fail_on_missing is set, raise an exception
-        if ctx.params["strict"]:
+        if ctx.params["strict"] or strict:
             sys.exit(f'File {file} does not exist')
         logging.warning(f'File {file} does not exist. Skipping.')
         return False
@@ -621,8 +699,7 @@ def _transform(configs, source_dir, target_dir):
     # add the transformation configs recursively into the merged config
     merged_config = {}
     for config in configs:
-        if not _file_check(config):
-            continue
+        _file_check(config, True)
         with open(config, 'r') as inp:
             logging.info(f'Processing config: {config}')
             obj = yaml.load(inp)
@@ -675,7 +752,7 @@ def remove_empty_keys(data):
 
 @cli.command()
 @common_options
-@click.option('-t', '--target-dir', 'target_dir')
+@click.option('-t', '--target-dir', 'target_dir', required=True, type=click.Path(file_okay=False, dir_okay=True), help='The target directory to update the bundle.yaml file.')
 @click.pass_context
 def update_bundle(ctx, log_level, target_dir):
     """Update the bundle.yaml file in the target directory."""
@@ -696,19 +773,23 @@ def _update_bundle(target_dir):
         files = []
         # Special case for 'jcasc'
         if key == 'jcasc':
-            prefix = 'jenkins'
+            prefixes = ['jenkins', 'jcasc']
         elif key == 'catalog':
-            prefix = 'plugin-catalog'
+            prefixes = ['plugin-catalog']
         else:
-            prefix = key
+            prefixes = [key]
 
         # if prefix.yaml exists, add
-        exact_match = os.path.join(target_dir, f'{prefix}.yaml')
-        if os.path.exists(exact_match):
-            files = [exact_match]
+        exact_match = None
+        for prefix in prefixes:
+            exact_match = os.path.join(target_dir, f'{prefix}.yaml')
+            if os.path.exists(exact_match):
+                files = [exact_match]
+                break
 
         # Add list of YAML files starting with the prefix
-        files += sorted(glob.glob(os.path.join(target_dir, f'{prefix}.*.yaml')))
+        for prefix in prefixes:
+            files += sorted(glob.glob(os.path.join(target_dir, f'{prefix}.*.yaml')))
         # remove any empty files
         files = [file for file in files if _file_check(file)]
 

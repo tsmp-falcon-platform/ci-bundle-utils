@@ -1,0 +1,15 @@
+---
+jenkins:
+  systemMessage: "Testing Configuration Bundles"
+  securityRealm:
+    local:
+      allowsSignup: false
+      enableCaptcha: false
+      users:
+        - id: admin
+          name: "Administrator"
+          password: ${ADMIN_PASSWORD}
+          properties:
+            - mailer:
+                emailAddress: "admin@example.com"
+  authorizationStrategy: "cloudBeesRoleBasedAccessControl"
