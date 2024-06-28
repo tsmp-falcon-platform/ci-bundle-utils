@@ -4,6 +4,7 @@
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 ## Contents
 
+- [TLDR](#tldr)
 - [Intro](#intro)
 - [Fetch](#fetch)
 - [Transform](#transform)
@@ -12,6 +13,32 @@
   - [Interactive Custom Transformation](#interactive-custom-transformation)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
+## TLDR
+
+Start a container with a cache volume using the provided
+
+```sh
+docker compose up -d
+```
+
+Exec into the container
+
+```sh
+docker exec -it ci-bundle-utils-bundleutils-1 bash
+```
+
+Think about setting the licence(!) then, run the example script and follow the instructions:
+
+```sh
+./examples/run-all.sh
+```
+
+Stop and clean up...
+
+```sh
+docker compose down
+```
 
 ## Intro
 

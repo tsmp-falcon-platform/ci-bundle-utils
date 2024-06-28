@@ -7,6 +7,11 @@ services:
       context: .
       dockerfile: Dockerfile
     network_mode: ${NETWORK_MODE:-host}
+    environment:
+      - CASC_VALIDATION_LICENSE_KEY=${CASC_VALIDATION_LICENSE_KEY:-}
+      - CASC_VALIDATION_LICENSE_CERT=${CASC_VALIDATION_LICENSE_CERT:-}
+      - CASC_VALIDATION_LICENSE_KEY_B64=${CASC_VALIDATION_LICENSE_KEY_B64:-}
+      - CASC_VALIDATION_LICENSE_CERT_B64=${CASC_VALIDATION_LICENSE_CERT_B64:-}
     volumes:
       - *bundleutils-cache
     entrypoint: ["/bin/sleep", "infinity"]

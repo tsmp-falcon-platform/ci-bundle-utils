@@ -287,7 +287,7 @@ def filter_plugins(data):
 @cli.command()
 @common_options
 @click.option('-m', '--pluginJsonUrl', 'plugin_json_url', default=default_plugin_json_url, help='The URL to fetch plugins info (or use BUNDLEUTILS_JENKINS_URL).')
-@click.option('-M', '--pluginJsonPath', 'plugin_json_path', default=os.environ.get('BUNDLEUTILS_PATH'), help='The path to fetch JSON file from (found at /manage/pluginManager/api/json?pretty&depth=1).')
+@click.option('-M', '--pluginJsonPath', 'plugin_json_path', default=os.environ.get('BUNDLEUTILS_PLUGINS_JSON_PATH'), help='The path to fetch JSON file from (found at /manage/pluginManager/api/json?pretty&depth=1).')
 @click.option('-P', '--path', 'path', default=os.environ.get('BUNDLEUTILS_PATH'), type=click.Path(file_okay=True, dir_okay=False), help='The path to fetch YAML from (or use BUNDLEUTILS_PATH).')
 @click.option('-U', '--url', 'url', default=default_fetch_url, help='The URL to fetch YAML from (or use BUNDLEUTILS_JENKINS_URL).')
 @click.option('-u', '--username', 'username', default=os.environ.get('BUNDLEUTILS_USERNAME'), help='Username for basic authentication (or use BUNDLEUTILS_USERNAME).')
@@ -325,12 +325,14 @@ def fetch(ctx, log_level, url, path, username, password, target_dir, plugin_json
 def update_plugins(plugin_json_url, plugin_json_path, username, password, target_dir):
     # if the plugin_json_url is set, fetch the plugins JSON from the URL
     if plugin_json_url:
+        logging.debug(f'Loading plugin JSON from URL: {plugin_json_url}')
         response_text = call_jenkins_api(plugin_json_url, username, password)
         # parse text as JSON
         data = json.loads(response_text)
         filtered_plugins = filter_plugins(data)
         # if the plugins.yaml file exists in the target directory, remove the filtered plugins from the file
     elif plugin_json_path:
+        logging.debug(f'Loading plugin JSON from path: {plugin_json_path}')
         with open(plugin_json_path, 'r') as f:
             data = json.load(f)
         filtered_plugins = filter_plugins(data)
@@ -390,7 +392,7 @@ def fetch_yaml_docs(url, path, username, password, target_dir):
     if path:
         # if the path points to a zip file, extract the YAML from the zip file
         if path.endswith('.zip'):
-            logging.debug(f'Extracting YAML from ZIP file: {path}')
+            logging.info(f'Extracting YAML from ZIP file: {path}')
             with zipfile.ZipFile(path, 'r') as zip_ref:
                 # list the files in the zip file
                 for filename in zip_ref.namelist():
@@ -405,11 +407,12 @@ def fetch_yaml_docs(url, path, username, password, target_dir):
                         else:
                             logging.warning(f'Skipping empty file: {filename}')
         else:
-            logging.debug(f'Read YAML from path: {path}')
+            logging.info(f'Read YAML from path: {path}')
             with open(path, 'r') as f:
                 yaml_docs = list(yaml.load_all(f))
                 write_all_yaml_docs_from_comments(yaml_docs, target_dir)
     elif url:
+        logging.info(f'Read YAML from url: {url}')
         response_text = call_jenkins_api(url, username, password)
         # logging.debug(f'Fetched YAML from {url}:\n{response.text}')
         yaml_docs = list(yaml.load_all(response_text))
@@ -532,7 +535,7 @@ def apply_patch(filename, patch_list):
         # Apply the patch
         patch = jsonpatch.JsonPatch([patch])
         try:
-            logging.info(f'Applying JSON patch to {filename}')
+            logging.debug(f'Applying JSON patch to {filename}')
             logging.debug(f' ->' + str(patch))
             obj = patch.apply(obj)
         except jsonpatch.JsonPatchConflict:
@@ -546,12 +549,12 @@ def apply_patch(filename, patch_list):
 def handle_patches(patches, target_dir):
     # if patches is empty, skip
     if not patches:
-        logging.info('No patches to apply')
+        logging.info('Transform: no JSON patches to apply')
         return
     # for each key in the patches, open the file and apply the patch
     for filename, patch in patches.items():
         filename = os.path.join(target_dir, filename)
-        logging.info(f'Applying patch to {filename}')
+        logging.info(f'Transform: applying JSON patches to {filename}')
         apply_patch(filename, patch)
 
 def apply_replacements(filename, custom_replacements):
@@ -565,27 +568,27 @@ def apply_replacements(filename, custom_replacements):
 def handle_credentials(credentials, target_dir):
     # if credentials is empty, skip
     if not credentials:
-        logging.info('No credentials to replace')
+        logging.info('Transform: no credentials to replace')
         return
     # for each key in the patches, open the file and apply the patch
     for filename, replacements in credentials.items():
         filename = os.path.join(target_dir, filename)
         if not _file_check(filename):
             continue
-        logging.info(f'Applying cred replacements to {filename}')
+        logging.info(f'Transform: applying cred replacements to {filename}')
         apply_replacements(filename, replacements)
 
 def handle_substitutions(substitutions, target_dir):
     # if substitutions is empty, skip
     if not substitutions:
-        logging.info('No substitutions to apply')
+        logging.info('Transform: no substitutions to apply')
         return
     # for each key in the patches, open the file and apply the patch
     for filename, replacements in substitutions.items():
         filename = os.path.join(target_dir, filename)
         if not _file_check(filename):
             continue
-        logging.info(f'Applying substitutions to {filename}')
+        logging.info(f'Transform: applying substitutions to {filename}')
         with open(filename, 'r') as inp:
             # use pattern as a regex to replace the text in the file
             text = inp.read()
@@ -601,18 +604,18 @@ def handle_substitutions(substitutions, target_dir):
 def handle_splits(splits, target_dir):
     # if splits is empty, skip
     if not splits:
-        logging.info('No splits to apply')
+        logging.info('Transform: no splits to apply')
         return
     # for type in items, jcasc, if the key exists, process
     for split_type, split_dict in splits.items():
         if split_type == 'items':
             for filename, configs in split_dict.items():
-                logging.info(f'Applying split to {target_dir}/{filename}')
+                logging.info(f'Transform: applying item split to {target_dir}/{filename}')
                 logging.debug(f'Using configs: {configs}')
                 split_items(target_dir, filename, configs)
         elif split_type == 'jcasc':
             for filename, configs in split_dict.items():
-                logging.info(f'Applying split to {target_dir}/{filename}')
+                logging.info(f'Applying jcasc split to {target_dir}/{filename}')
                 logging.debug(f'Using configs: {configs}')
                 split_jcasc(target_dir, filename, configs)
 
@@ -727,7 +730,7 @@ def _transform(configs, source_dir, target_dir):
     for config in configs:
         _file_check(config, True)
         with open(config, 'r') as inp:
-            logging.info(f'Processing config: {config}')
+            logging.info(f'Transformation: processing {config}')
             obj = yaml.load(inp)
             merged_config = recursive_merge(merged_config, obj)
 
@@ -735,7 +738,7 @@ def _transform(configs, source_dir, target_dir):
     # if the target directory is not set, use the source directory suffixed with -transformed
     if not target_dir:
         target_dir = source_dir + '-transformed'
-    logging.info(f'Transforming {source_dir} to {target_dir}')
+    logging.info(f'Transform: source {source_dir} to target {target_dir}')
     # create the target directory if it does not exist, delete all files in it
     os.makedirs(target_dir, exist_ok=True)
     for filename in os.listdir(target_dir):
@@ -760,17 +763,17 @@ def remove_empty_keys(data):
     if isinstance(data, dict):  # If the data is a dictionary
         # Create a new dictionary, skipping entries with empty keys
         ret = {k: remove_empty_keys(v) for k, v in data.items() if k != ""}
-        logging.debug(f'Removing empty keys from DICT {data}')
-        logging.debug(f'Result: {ret}')
+        logging.log(logging.NOTSET, f'Removing empty keys from DICT {data}')
+        logging.log(logging.NOTSET, f'Result: {ret}')
         return ret
     elif isinstance(data, list):  # If the data is a list
-        logging.debug(f'Removing empty keys from LIST {data}')
+        logging.log(logging.NOTSET, f'Removing empty keys from LIST {data}')
         newdata = []
         for v in data:
             ret = remove_empty_keys(v)
             if ret:
                 newdata.append(ret)
-        logging.debug(f'Result: {newdata}')
+        logging.log(logging.NOTSET, f'Result: {newdata}')
         return newdata
     else:
         # Return the item itself if it's not a dictionary or list
@@ -861,7 +864,7 @@ def _update_bundle(target_dir):
     data['version'] = os.popen(f'cat {" ".join([os.path.join(target_dir, file) for file in all_files])} | md5sum').read().split()[0]
 
     # Save the YAML file
-    logging.info(f'Writing bundle to {target_dir}/bundle.yaml')
+    logging.info(f'Wrote {target_dir}/bundle.yaml')
     with open(os.path.join(target_dir, 'bundle.yaml'), 'w') as file:
         yaml.dump(data, file)
 
@@ -946,7 +949,7 @@ def split_jcasc(target_dir, filename, configs):
         os.rename(full_filename, new_filename)
 
 def split_items(target_dir, filename, configs):
-    logging.info('Loading YAML object')
+    logging.debug('Loading YAML object')
 
     full_filename = os.path.join(target_dir, filename)
     if not _file_check(full_filename):

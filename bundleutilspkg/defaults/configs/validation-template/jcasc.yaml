@@ -13,3 +13,6 @@ jenkins:
             - mailer:
                 emailAddress: "admin@example.com"
   authorizationStrategy: "cloudBeesRoleBasedAccessControl"
+license:
+  certificate: ${CASC_VALIDATION_LICENSE_CERT}
+  key: ${CASC_VALIDATION_LICENSE_KEY}

@@ -212,29 +212,35 @@ class JenkinsServerManager:
         with open(os.path.join(self.target_jenkins_home_init_scripts, "init_02_admin_token.groovy"), "w") as file:
             file.write(token_script)
 
-        java_opts = os.getenv('BUNDLE_UTILS_JAVA_OPTS', '')
-        http_port = os.getenv('BUNDLE_UTILS_HTTP_PORT', '8080')
+        java_opts = os.getenv('BUNDLEUTILS_JAVA_OPTS', '')
+        http_port = os.getenv('BUNDLEUTILS_HTTP_PORT', '8080')
         # if port is already in use, fail
         try:
             response = requests.get(f"http://localhost:{http_port}/whoAmI/api/json")
             if response.status_code == 200:
-                sys.exit(f"Port {http_port} is already in use. Please specify a different port using the BUNDLE_UTILS_HTTP_PORT environment variable.")
+                sys.exit(f"Port {http_port} is already in use. Please specify a different port using the BUNDLEUTILS_HTTP_PORT environment variable.")
         except requests.ConnectionError:
             pass
         # write the server URL to the jenkins_url file
         with open(self.url_file, 'w') as file:
             file.write(f"http://localhost:{http_port}")
-        jenkins_opts = os.getenv('BUNDLE_UTILS_JENKINS_OPTS', '')
-        # if BUNDLE_UTILS_JENKINS_OPTS contains -Dcore.casc.config.bundle, fail
+        jenkins_opts = os.getenv('BUNDLEUTILS_JENKINS_OPTS', '')
+        # if BUNDLEUTILS_JENKINS_OPTS contains -Dcore.casc.config.bundle, fail
         if "core.casc.config.bundle" in jenkins_opts or "core.casc.config.bundle" in java_opts:
-            sys.exit("BUNDLE_UTILS_JENKINS_OPTS or BUNDLE_UTILS_JAVA_OPTS contains core.casc.config.bundle. This is not allowed.")
+            sys.exit("BUNDLEUTILS_JENKINS_OPTS or BUNDLEUTILS_JAVA_OPTS contains core.casc.config.bundle. This is not allowed.")
         # if self.target_jenkins_home_casc_startup_bundle doesn't exist, fail
         if not os.path.exists(self.target_jenkins_home_casc_startup_bundle):
             sys.exit(f"Startup bundle {self.target_jenkins_home_casc_startup_bundle} does not exist.")
-        # add -Dcore.casc.config.bundle=/tmp/validation-bundle to the jenkins_opts
-        java_opts += f" -Dcore.casc.config.bundle={self.target_jenkins_home_casc_startup_bundle}"
-        command = ['java', java_opts, '-jar', self.war_path, f"--httpPort={http_port}", f"--webroot={self.target_jenkins_webroot}", jenkins_opts]
-        # command = ['java', '-jar', self.war_path, f"--httpPort={http_port}", f"--webroot={self.target_jenkins_webroot}"]
+        # if java_opts not empty, add ' -Dcore.casc.config.bundle=/tmp/validation-bundle', else set it
+        if java_opts:
+            java_opts += f" -Dcore.casc.config.bundle={self.target_jenkins_home_casc_startup_bundle}"
+        else:
+            java_opts = f"-Dcore.casc.config.bundle={self.target_jenkins_home_casc_startup_bundle}"
+        # create the command to start the Jenkins server by joining the elements in the list
+        command = ['java']
+        command.extend(java_opts.split())
+        command.extend(['-jar', self.war_path, f"--httpPort={http_port}", f"--webroot={self.target_jenkins_webroot}"])
+        command.extend(jenkins_opts.split())
         command = [element.strip() for element in command if element and element.strip()]
         env = os.environ.copy()
         env['JENKINS_HOME'] = self.target_jenkins_home
@@ -280,10 +286,11 @@ class JenkinsServerManager:
         # ensure the response is valid JSON and the authorities key contains a list with at least one element called authenticated
         response_json = response.json()
         if 'authorities' not in response_json or 'authenticated' not in response_json['authorities']:
+            logging.error(f"Response: {response_json}")
             sys.exit("ERROR: Authentication failed. Please check the username and password.")
         else:
             # print the response
-            logging.info("Authentication successful. Response:", response_json)
+            logging.info(f"Authentication successful. Response: {response_json}")
 
     def wait_for_server(self):
         """Wait for the Jenkins server to start."""
