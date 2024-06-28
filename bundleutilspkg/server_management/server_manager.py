@@ -1,4 +1,6 @@
 import base64
+from pathlib import Path
+import shutil
 import requests
 import subprocess
 import time
@@ -17,15 +19,19 @@ class JenkinsServerManager:
         # user can specify a cache directory to store the downloaded WAR files by setting the environment variable BUNDLEUTILS_CACHE_DIR
         # defaults to the users home directory if not set
         if 'BUNDLEUTILS_CACHE_DIR' in os.environ:
-            self.war_cache_dir = os.environ['BUNDLEUTILS_CACHE_DIR']
+            self.cache_dir = os.environ['BUNDLEUTILS_CACHE_DIR']
         else:
-            self.war_cache_dir = os.path.join(os.path.expanduser("~"), ".bundleutils", "cache", "war", ci_type, ci_version)
+            self.cache_dir = os.path.join(os.path.expanduser("~"), ".bundleutils", "cache")
+        self.war_cache_dir = os.path.join(self.cache_dir, "war", ci_type, ci_version)
+        self.tar_cache_dir = os.path.join(self.cache_dir, "tar", ci_type, ci_version)
+        self.tar_cache_file = os.path.join(self.tar_cache_dir, "jenkins.war")
         if not target_dir:
             target_dir = os.path.join('/tmp/ci_server_home', ci_type, ci_version)
         self.ci_type = ci_type
         self.ci_version = ci_version
         self.target_dir = target_dir
         self.pid_file = os.path.join(target_dir, 'jenkins.pid')
+        self.url_file = os.path.join(target_dir, 'jenkins.url')
         self.target_jenkins_home = os.path.join(target_dir, 'jenkins-home')
         self.target_jenkins_home_init_scripts = os.path.join(self.target_jenkins_home, 'init.groovy.d')
         self.target_jenkins_home_casc_startup_bundle = os.path.join(self.target_jenkins_home, 'casc-startup-bundle')
@@ -59,6 +65,31 @@ class JenkinsServerManager:
 
         return cb_docker_image, cb_war_download_url
 
+    def copy_war_from_skopeo(self):
+        if not os.path.exists(self.tar_cache_dir):
+            os.makedirs(self.tar_cache_dir)
+            # Copy image using skopeo
+            subprocess.run(['skopeo', 'copy', f'docker://{self.cb_docker_image}', f'dir:{self.tar_cache_dir}'], check=True)
+        else:
+            print(f"Found image in {self.tar_cache_dir}")
+
+        if not os.path.exists(self.tar_cache_file):
+            # Find and extract jenkins.war
+            jenkins_war_found = False
+            for f in sorted(Path(self.tar_cache_dir).glob('*'), key=os.path.getsize, reverse=True):
+                try:
+                    # run process in self.tar_cache_dir to avoid extracting the whole image
+                    subprocess.run(['tar', '-C', self.tar_cache_dir, '--strip-components=3', '-xf', str(f), 'usr/share/jenkins/jenkins.war'], stderr=subprocess.DEVNULL, check=True)
+                    print(f"Found jenkins.war in {f}. Copying to war cache directory.")
+                    shutil.copy(self.tar_cache_file, self.war_cache_file)
+                    jenkins_war_found = True
+                    break
+                except subprocess.CalledProcessError:
+                    continue
+            # Check if jenkins.war was found
+            if not jenkins_war_found:
+                sys.exit("jenkins.war not found after extracting the Docker image.")
+
     def copy_war_from_docker(self):
         """Copy the Jenkins WAR file from the Docker container to the target directory."""
         # Pull the Docker image
@@ -80,7 +111,13 @@ class JenkinsServerManager:
             if not os.path.exists(self.war_cache_dir):
                 os.makedirs(self.war_cache_dir)
             if self.cb_docker_image:
-                self.copy_war_from_docker()
+                # if docker on path or BUNDLEUTILS_USE_SKOPEO=1, use docker to copy the war file
+                if shutil.which('docker') and os.getenv('BUNDLEUTILS_USE_SKOPEO') != '1':
+                    self.copy_war_from_docker()
+                elif shutil.which('skopeo'):
+                    self.copy_war_from_skopeo()
+                else:
+                    sys.exit("Docker or Skopeo not found in path. No way of getting the WAR file from the docker image")
             elif self.cb_war_download_url:
                 self.download_war()
             else:
@@ -120,8 +157,7 @@ class JenkinsServerManager:
                 # check if the validation-template directory exists in the defaults.configs package
                 print('Using validation-template from the defaults.configs package')
                 validation_template = pkg_resources.files('defaults.configs') / 'validation-template'
-        else:
-            print(f"Using validation template '{validation_template}'")
+        print(f"Using validation template '{validation_template}'")
         # recreate the  target_jenkins_home_casc_startup_bundle directory
         if os.path.exists(self.target_jenkins_home_casc_startup_bundle):
             subprocess.run(['rm', '-r', self.target_jenkins_home_casc_startup_bundle], check=True)
@@ -165,9 +201,9 @@ class JenkinsServerManager:
             os.environ["CASC_VALIDATION_LICENSE_CERT"] = base64.b64decode(casc_validation_license_cert_b64).decode('utf-8')
 
         # Fail if either CASC_VALIDATION_LICENSE_KEY or CASC_VALIDATION_LICENSE_CERT are not set
-        if not os.environ.get("CASC_VALIDATION_LICENSE_KEY") and not os.environ.get("IGNORE_LICENCE"):
+        if not os.environ.get("CASC_VALIDATION_LICENSE_KEY") and not os.environ.get("IGNORE_LICENSE"):
             sys.exit("CASC_VALIDATION_LICENSE_KEY is not set.")
-        if not os.environ.get("CASC_VALIDATION_LICENSE_CERT") and not os.environ.get("IGNORE_LICENCE"):
+        if not os.environ.get("CASC_VALIDATION_LICENSE_CERT") and not os.environ.get("IGNORE_LICENSE"):
             sys.exit("CASC_VALIDATION_LICENSE_CERT is not set.")
 
         # Add token script to init.groovy.d
@@ -183,7 +219,9 @@ class JenkinsServerManager:
                 sys.exit(f"Port {http_port} is already in use. Please specify a different port using the BUNDLE_UTILS_HTTP_PORT environment variable.")
         except requests.ConnectionError:
             pass
-        self.server_url = f"http://localhost:{http_port}"
+        # write the server URL to the jenkins_url file
+        with open(self.url_file, 'w') as file:
+            file.write(f"http://localhost:{http_port}")
         jenkins_opts = os.getenv('BUNDLE_UTILS_JENKINS_OPTS', '')
         # if BUNDLE_UTILS_JENKINS_OPTS contains -Dcore.casc.config.bundle, fail
         if "core.casc.config.bundle" in jenkins_opts or "core.casc.config.bundle" in java_opts:
@@ -212,6 +250,38 @@ class JenkinsServerManager:
         print(f"Jenkins server starting with PID {process.pid}")
         print(f"Jenkins server logging to {self.target_jenkins_log}")
         self.wait_for_server()
+        self.check_auth_token()
+
+    def get_server_url(self):
+        # Get the Jenkins server url, username, and password (from self.target_jenkins_home/secrets/initialAdminToken)
+        with open(self.url_file, 'r') as file:
+            server_url = file.read().strip()
+        return server_url
+
+    def get_server_details(self):
+        # Get the Jenkins server url, username, and password (from self.target_jenkins_home/secrets/initialAdminToken)
+        with open(os.path.join(self.target_jenkins_home, 'secrets', 'initialAdminToken'), 'r') as file:
+            initial_admin_token = file.read().strip()
+        server_url = self.get_server_url()
+        return server_url, 'admin', initial_admin_token
+
+    def check_auth_token(self):
+        print("Checking authentication token...")
+        headers = {}
+        server_url, username, password = self.get_server_details()
+        url = f"{server_url}/whoAmI/api/json"
+        if username and password:
+            headers['Authorization'] = 'Basic ' + base64.b64encode(f'{username}:{password}'.encode('utf-8')).decode('utf-8')
+        # zip and post the YAML to the URL
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        # ensure the response is valid JSON and the authorities key contains a list with at least one element called authenticated
+        response_json = response.json()
+        if 'authorities' not in response_json or 'authenticated' not in response_json['authorities']:
+            sys.exit("ERROR: Authentication failed. Please check the username and password.")
+        else:
+            # print the response
+            print("Authentication successful. Response:", response_json)
 
     def wait_for_server(self):
         """Wait for the Jenkins server to start."""
@@ -219,9 +289,10 @@ class JenkinsServerManager:
         CONNECT_MAX_WAIT = 60
         end_time = time.time() + CONNECT_MAX_WAIT
         print("Waiting for server to start...")
+        server_url = self.get_server_url()
         while time.time() < end_time:
             try:
-                response = requests.get(f"{self.server_url}/whoAmI/api/json")
+                response = requests.get(f"{server_url}/whoAmI/api/json")
                 if response.status_code == 200:
                     server_started = True
                     time.sleep(5)
@@ -247,6 +318,9 @@ class JenkinsServerManager:
                 pid = int(file.read().strip())
             os.kill(pid, 15)  # SIGTERM
             print(f"Stopped Jenkins server with PID {pid}")
+            # delete the PID file and URL file
+            os.remove(self.pid_file)
+            os.remove(self.url_file)
         except FileNotFoundError:
             print("PID file not found. Is the server running?")
         except ProcessLookupError:

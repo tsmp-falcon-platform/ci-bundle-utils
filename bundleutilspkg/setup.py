@@ -6,7 +6,7 @@ setup(
     version='0.1',
     packages=find_packages(),
     package_data={
-        'defaults': ['configs/*'],
+        'defaults': ['configs/**/*', 'configs/*'],
     },
     install_requires=[
         'click',

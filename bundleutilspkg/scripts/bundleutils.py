@@ -88,7 +88,6 @@ def compare_func(x, y, level=None):
     except Exception:
         raise CannotCompare() from None
 
-# click command to download war file
 @cli.command()
 @server_options
 @click.option('-s', '--source-dir', 'source_dir',  required=True, type=click.Path(file_okay=False, dir_okay=True), help='The bundle to be validated (startup will use the plugins from here).')
@@ -96,7 +95,7 @@ def compare_func(x, y, level=None):
 @common_options
 @click.pass_context
 def ci_setup(ctx, log_level, ci_version, ci_type, ci_server_home, source_dir, bundle_template):
-    """Download CloudBees WAR file"""
+    """Download CloudBees WAR file, and setup the starter bundle"""
     if not os.path.exists(source_dir):
         sys.exit(f"Source directory '{source_dir}' does not exist")
     # parse the source directory bundle.yaml file and copy the files under the plugins and catalog keys to the target_jenkins_home_casc_startup_bundle directory
@@ -113,23 +112,37 @@ def ci_setup(ctx, log_level, ci_version, ci_type, ci_server_home, source_dir, bu
     jenkins_manager.create_startup_bundle(plugin_files, bundle_template)
     _update_bundle(jenkins_manager.target_jenkins_home_casc_startup_bundle)
 
-# click command to download war file
+@cli.command()
+@server_options
+@click.option('-s', '--source-dir', 'source_dir',  required=True, type=click.Path(file_okay=False, dir_okay=True), help='The bundle to be validated.')
+@click.option('-w', '--ignore-warnings', default=False, is_flag=True, help='Do not fail if warnings are found.')
+@common_options
+@click.pass_context
+def ci_validate(ctx, log_level, ci_version, ci_type, ci_server_home, source_dir, ignore_warnings):
+    """Validate bundle against controller started with ci-start-server."""
+    set_logging(ctx, log_level)
+    if not os.path.exists(source_dir):
+        sys.exit(f"Source directory '{source_dir}' does not exist")
+    jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
+    server_url, username, password = jenkins_manager.get_server_details()
+    logging.debug(f"Server URL: {server_url}, Username: {username}, Password: {password}")
+    _validate(server_url, username, password, source_dir, ignore_warnings)
+
 @cli.command()
 @server_options
 @common_options
 @click.pass_context
-def ci_start_server(ctx, log_level, ci_version, ci_type, ci_server_home):
-    """Download CloudBees WAR file"""
+def ci_start(ctx, log_level, ci_version, ci_type, ci_server_home):
+    """Start CloudBees Server"""
     jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
     jenkins_manager.start_server()
 
-# click command to download war file
 @cli.command()
 @server_options
 @common_options
 @click.pass_context
-def ci_stop_server(ctx, log_level, ci_version, ci_type, ci_server_home):
-    """Download CloudBees WAR file"""
+def ci_stop(ctx, log_level, ci_version, ci_type, ci_server_home):
+    """Stop CloudBees Server"""
     jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
     jenkins_manager.stop_server()
 
@@ -194,19 +207,32 @@ def completion(ctx, shell):
     click.echo(f'  2. echo "$(_{script_name_upper}_COMPLETE={shell}_source {script_name})" > {script_name}-complete.{shell}')
     click.echo(f'     source {script_name}-complete.{shell}')
 
+def null_check(obj, obj_name, obj_env_var=None):
+    if not obj:
+        if obj_env_var:
+            obj = os.environ.get(obj_env_var, obj)
+            if not obj:
+                sys.exit(f'No {obj_name} option provided and no {obj_env_var} not set')
+    return obj
+
 @cli.command()
 @common_options
 @click.option('-U', '--url', 'url', default=default_validate_url, help='The controller URL to fetch YAML from (or use BUNDLEUTILS_JENKINS_URL).')
-@click.option('-u', '--username', 'username', default=os.environ.get('BUNDLEUTILS_USERNAME'), help='Username for basic authentication (or use BUNDLEUTILS_USERNAME).')
-@click.option('-p', '--password', 'password', default=os.environ.get('BUNDLEUTILS_PASSWORD'), help='Password for basic authentication (or use BUNDLEUTILS_PASSWORD).')
-@click.option('-s', '--source-dir', 'source_dir', required=True, default=os.environ.get('BUNDLEUTILS_SOURCE_DIR', ''), type=click.Path(file_okay=False, dir_okay=True), help='The source directory for the YAML documents (or use BUNDLEUTILS_TARGET_DIR).')
+@click.option('-u', '--username', 'username', help='Username for basic authentication (or use BUNDLEUTILS_USERNAME).')
+@click.option('-p', '--password', 'password', help='Password for basic authentication (or use BUNDLEUTILS_PASSWORD).')
+@click.option('-s', '--source-dir', 'source_dir', required=True, type=click.Path(file_okay=False, dir_okay=True), help='The source directory for the YAML documents (or use BUNDLEUTILS_TARGET_DIR).')
 @click.option('-w', '--ignore-warnings', default=False, is_flag=True, help='Do not fail if warnings are found.')
 @click.pass_context
 def validate(ctx, log_level, url, username, password, source_dir, ignore_warnings):
     """Validate bundle in source dir against URL."""
     set_logging(ctx, log_level)
-    if not url:
-        sys.exit('No URL provided')
+    _validate(url, username, password, source_dir, ignore_warnings)
+
+def _validate(url, username, password, source_dir, ignore_warnings):
+    username = null_check(username, 'username', 'BUNDLEUTILS_USERNAME')
+    password = null_check(password, 'password', 'BUNDLEUTILS_PASSWORD')
+    source_dir = null_check(source_dir, 'source directory', 'BUNDLEUTILS_SOURCE_DIR')
+    url = null_check(url, 'url')
     # if the url does end with /casc-bundle-mgnt/casc-bundle-validate, append it
     if not url.endswith('/casc-bundle-mgnt/casc-bundle-validate'):
         url = url + '/casc-bundle-mgnt/casc-bundle-validate'
@@ -318,7 +344,7 @@ def update_plugins(plugin_json_url, plugin_json_path, username, password, target
         with open(plugins_file, 'r') as f:
             plugins_data = yaml.load(f)  # Load the existing data
 
-        logging.info(f"Removing disabled/deleted plugins from plugins.yaml")
+        logging.info(f"Looking for disabled/deleted plugins to remove from plugins.yaml")
         # Check if 'plugins' key exists and it's a list
         if 'plugins' in plugins_data and isinstance(plugins_data['plugins'], list):
             updated_plugins = []
@@ -338,7 +364,7 @@ def update_plugins(plugin_json_url, plugin_json_path, username, password, target
         with open(plugin_catalog, 'r') as f:
             catalog_data = yaml.load(f)  # Load the existing data
 
-        logging.info(f"Removing disabled/deleted plugins from plugin-catalog.yaml")
+        logging.info(f"Looking for disabled/deleted plugins to remove from plugin-catalog.yaml")
         # Check and remove plugins listed in filtered_plugins from includePlugins
         for configuration in catalog_data.get('configurations', []):
             if 'includePlugins' in configuration:

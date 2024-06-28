@@ -1,0 +1,29 @@
+x-configs:
+  volumes:
+    bundleutils-cache: &bundleutils-cache 'bundleutils-cache:/home/bundle-user/.bundleutils/cache'
+services:
+  bundleutils:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    network_mode: ${NETWORK_MODE:-host}
+    volumes:
+      - *bundleutils-cache
+    entrypoint: ["/bin/sleep", "infinity"]
+  fix-bundleutils-cache-permissions:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    user: root
+    command: chown -R bundle-user:bundle-user /home/bundle-user
+    volumes:
+      - *bundleutils-cache
+
+volumes:
+  # points to the default local directory on the host
+  bundleutils-cache:
+    driver: local
+    driver_opts:
+      type: none
+      device: ~/.bundleutils/cache
+      o: bind
