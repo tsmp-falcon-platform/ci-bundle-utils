@@ -7,6 +7,8 @@ import time
 import os
 import re
 import sys
+import logging
+
 import importlib.resources as pkg_resources
 
 class JenkinsServerManager:
@@ -71,7 +73,7 @@ class JenkinsServerManager:
             # Copy image using skopeo
             subprocess.run(['skopeo', 'copy', f'docker://{self.cb_docker_image}', f'dir:{self.tar_cache_dir}'], check=True)
         else:
-            print(f"Found image in {self.tar_cache_dir}")
+            logging.info(f"Found image in {self.tar_cache_dir}")
 
         if not os.path.exists(self.tar_cache_file):
             # Find and extract jenkins.war
@@ -80,7 +82,7 @@ class JenkinsServerManager:
                 try:
                     # run process in self.tar_cache_dir to avoid extracting the whole image
                     subprocess.run(['tar', '-C', self.tar_cache_dir, '--strip-components=3', '-xf', str(f), 'usr/share/jenkins/jenkins.war'], stderr=subprocess.DEVNULL, check=True)
-                    print(f"Found jenkins.war in {f}. Copying to war cache directory.")
+                    logging.info(f"Found jenkins.war in {f}. Copying to war cache directory.")
                     shutil.copy(self.tar_cache_file, self.war_cache_file)
                     jenkins_war_found = True
                     break
@@ -103,7 +105,7 @@ class JenkinsServerManager:
 
         # Remove the created container
         subprocess.run(['docker', 'rm', container_id], check=True)
-        print(f"Copied WAR file to {self.war_cache_file}")
+        logging.info(f"Copied WAR file to {self.war_cache_file}")
 
     def get_war(self):
         """Download the Jenkins WAR file for the specified type and version."""
@@ -123,14 +125,14 @@ class JenkinsServerManager:
             else:
                 sys.exit("No download URL or Docker image specified")
         else:
-            print(f"WAR file already exists at {self.war_cache_file}")
+            logging.info(f"WAR file already exists at {self.war_cache_file}")
         # recreate the jenkins-home directory
-        print(f"Recreating {self.target_jenkins_home}")
+        logging.info(f"Recreating {self.target_jenkins_home}")
         if os.path.exists(self.target_jenkins_home):
             subprocess.run(['rm', '-r', self.target_jenkins_home], check=True)
         os.makedirs(self.target_jenkins_home)
         # copy the WAR file to the target directory
-        print(f"Copying WAR file to {self.war_path}")
+        logging.info(f"Copying WAR file to {self.war_path}")
         subprocess.run(['cp', self.war_cache_file, self.war_path], check=True)
 
     def download_war(self):
@@ -139,7 +141,7 @@ class JenkinsServerManager:
         if response.status_code == 200:
             with open(self.war_cache_file, 'wb') as file:
                 file.write(response.content)
-            print(f"Downloaded WAR version {self.ci_version} to {self.war_cache_file}")
+            logging.info(f"Downloaded WAR version {self.ci_version} to {self.war_cache_file}")
         else:
             sys.exit(f"Failed to download WAR file from {self.cb_war_download_url}. Status code: {response.status_code}")
 
@@ -151,13 +153,13 @@ class JenkinsServerManager:
         if not validation_template or os.path.exists(validation_template):
             # check if the validation-template directory exists in the current directory
             if os.path.exists('validation-template'):
-                print('Using validation-template in the current directory')
+                logging.info('Using validation-template in the current directory')
                 validation_template = 'validation-template'
             else:
                 # check if the validation-template directory exists in the defaults.configs package
-                print('Using validation-template from the defaults.configs package')
+                logging.info('Using validation-template from the defaults.configs package')
                 validation_template = pkg_resources.files('defaults.configs') / 'validation-template'
-        print(f"Using validation template '{validation_template}'")
+        logging.info(f"Using validation template '{validation_template}'")
         # recreate the  target_jenkins_home_casc_startup_bundle directory
         if os.path.exists(self.target_jenkins_home_casc_startup_bundle):
             subprocess.run(['rm', '-r', self.target_jenkins_home_casc_startup_bundle], check=True)
@@ -171,12 +173,12 @@ class JenkinsServerManager:
                 subprocess.run(['cp', src_file, dest_file], check=True)
         for plugin_file in plugin_files:
             subprocess.run(['cp', plugin_file, self.target_jenkins_home_casc_startup_bundle], check=True)
-        print(f"Created startup bundle in {self.target_jenkins_home_casc_startup_bundle}")
+        logging.info(f"Created startup bundle in {self.target_jenkins_home_casc_startup_bundle}")
 
     def start_server(self):
         """Start the Jenkins server using the downloaded WAR file."""
         if not os.path.exists(self.war_path):
-            print("WAR file does not exist. Getting now...")
+            logging.info("WAR file does not exist. Getting now...")
             self.get_war()
 
         token_script="""
@@ -194,7 +196,7 @@ class JenkinsServerManager:
         """
         # Account for the case where the license is base64 encoded
         if "CASC_VALIDATION_LICENSE_KEY_B64" in os.environ:
-            print("Decoding the license key and cert...")
+            logging.info("Decoding the license key and cert...")
             casc_validation_license_key_b64 = os.environ["CASC_VALIDATION_LICENSE_KEY_B64"]
             casc_validation_license_cert_b64 = os.environ.get("CASC_VALIDATION_LICENSE_CERT_B64", "")
             os.environ["CASC_VALIDATION_LICENSE_KEY"] = base64.b64decode(casc_validation_license_key_b64).decode('utf-8')
@@ -238,17 +240,17 @@ class JenkinsServerManager:
         env['JENKINS_HOME'] = self.target_jenkins_home
         # if ADMIN_PASSWORD env var not set, create a random password
         if 'ADMIN_PASSWORD' not in os.environ:
-            print("ADMIN_PASSWORD not set. Creating a random password...")
+            logging.info("ADMIN_PASSWORD not set. Creating a random password...")
             admin_password = os.urandom(16).hex()
             env['ADMIN_PASSWORD'] = admin_password
-            print(f"Temporary ADMIN_PASSWORD set to: {admin_password}")
-        print(f"Starting Jenkins server with command: {' '.join(command)}")
+            logging.info(f"Temporary ADMIN_PASSWORD set to: {admin_password}")
+        logging.info(f"Starting Jenkins server with command: {' '.join(command)}")
         with open(self.target_jenkins_log, 'w') as log_file:
             process = subprocess.Popen(command, env=env, stdout=log_file, stderr=subprocess.STDOUT)
         with open(self.pid_file, 'w') as file:
             file.write(str(process.pid))
-        print(f"Jenkins server starting with PID {process.pid}")
-        print(f"Jenkins server logging to {self.target_jenkins_log}")
+        logging.info(f"Jenkins server starting with PID {process.pid}")
+        logging.info(f"Jenkins server logging to {self.target_jenkins_log}")
         self.wait_for_server()
         self.check_auth_token()
 
@@ -266,7 +268,7 @@ class JenkinsServerManager:
         return server_url, 'admin', initial_admin_token
 
     def check_auth_token(self):
-        print("Checking authentication token...")
+        logging.info("Checking authentication token...")
         headers = {}
         server_url, username, password = self.get_server_details()
         url = f"{server_url}/whoAmI/api/json"
@@ -281,14 +283,14 @@ class JenkinsServerManager:
             sys.exit("ERROR: Authentication failed. Please check the username and password.")
         else:
             # print the response
-            print("Authentication successful. Response:", response_json)
+            logging.info("Authentication successful. Response:", response_json)
 
     def wait_for_server(self):
         """Wait for the Jenkins server to start."""
         server_started = False
         CONNECT_MAX_WAIT = 60
         end_time = time.time() + CONNECT_MAX_WAIT
-        print("Waiting for server to start...")
+        logging.info("Waiting for server to start...")
         server_url = self.get_server_url()
         while time.time() < end_time:
             try:
@@ -296,18 +298,18 @@ class JenkinsServerManager:
                 if response.status_code == 200:
                     server_started = True
                     time.sleep(5)
-                    print("Server started")
+                    logging.info("Server started")
                     break
                 else:
                     time.sleep(5)
-                    print("Waiting for server to start...")
+                    logging.info("Waiting for server to start...")
             except requests.ConnectionError:
                 time.sleep(5)
-                print("Waiting for server to start...")
+                logging.info("Waiting for server to start...")
         if not server_started:
-            print("ERROR: Server not started in time. Printing the Jenkins log....")
+            logging.info("ERROR: Server not started in time. Printing the Jenkins log....")
             with open(self.target_jenkins_log, "r") as log_file:
-                print(log_file.read())
+                logging.info(log_file.read())
             self.stop_server()
             sys.exit(1)
 
@@ -317,11 +319,11 @@ class JenkinsServerManager:
             with open(self.pid_file, 'r') as file:
                 pid = int(file.read().strip())
             os.kill(pid, 15)  # SIGTERM
-            print(f"Stopped Jenkins server with PID {pid}")
+            logging.info(f"Stopped Jenkins server with PID {pid}")
             # delete the PID file and URL file
             os.remove(self.pid_file)
             os.remove(self.url_file)
         except FileNotFoundError:
-            print("PID file not found. Is the server running?")
+            logging.info("PID file not found. Is the server running?")
         except ProcessLookupError:
-            print("Process not found. It may have already been stopped.")
+            logging.info("Process not found. It may have already been stopped.")
