@@ -3,6 +3,9 @@
 # Run all examples
 set -euo pipefail
 
+# script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 exit_trap() {
     if [ -z "${BUNDLEUTILS_NO_STOP_ON_FAIL:-}" ]; then
         bundleutils ci-stop
@@ -16,7 +19,7 @@ export BUNDLEUTILS_PATH BUNDLEUTILS_PASSWORD BUNDLEUTILS_USERNAME BUNDLEUTILS_JE
 # export BUNDLEUTILS_PASSWORD=11d41c03f331b654a9be07618365aee016; export BUNDLEUTILS_USERNAME=admin; export BUNDLEUTILS_JENKINS_URL=http://ci.127.0.0.1.beesdns.com/dev-1
 # export BUNDLEUTILS_CI_VERSION=2.452.2.3
 
-DEFAULT_BUNDLEUTILS_PATH="examples/bundlecontent.yaml"
+DEFAULT_BUNDLEUTILS_PATH="${SCRIPT_DIR}/bundlecontent.yaml"
 # if BUNDLEUTILS_PATH not set, offer to set it with default value
 if [ -z "${BUNDLEUTILS_PATH:-}" ]; then
     read -ep "Enter the BUNDLEUTILS_PATH (remove to fetch from url): " -i "$DEFAULT_BUNDLEUTILS_PATH" BUNDLEUTILS_PATH

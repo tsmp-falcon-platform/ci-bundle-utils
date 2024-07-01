@@ -1,6 +1,6 @@
 x-configs:
   volumes:
-    bundleutils-cache: &bundleutils-cache 'bundleutils-cache:/home/bundle-user/.bundleutils/cache'
+    bundleutils-cache: &bundleutils-cache 'bundleutils-cache:/opt/bundleutils/.cache'
 services:
   bundleutils:
     build:
@@ -15,20 +15,26 @@ services:
     volumes:
       - *bundleutils-cache
     entrypoint: ["/bin/sleep", "infinity"]
-  fix-bundleutils-cache-permissions:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    user: root
-    command: chown -R bundle-user:bundle-user /home/bundle-user
-    volumes:
-      - *bundleutils-cache
+
+  # option 2 - hack to fix permissions on the cache directory
+  # fix-bundleutils-cache-permissions:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   user: root
+  #   command: chown -R "${UID:-bundle-user}" /opt/bundleutils/.cache
+  #   volumes:
+  #     - *bundleutils-cache
 
 volumes:
-  # points to the default local directory on the host
-  bundleutils-cache:
-    driver: local
-    driver_opts:
-      type: none
-      device: ~/.bundleutils/cache
-      o: bind
+  # option 1 - creates a named volume for the bundleutils-cache
+  bundleutils-cache: {}
+
+  # option 2 - points to the default local directory on the host
+  # for use both in the docker-compose.yaml and locally
+  # bundleutils-cache:
+  #   driver: local
+  #   driver_opts:
+  #     type: none
+  #     device: ~/.bundleutils/cache
+  #     o: bind

@@ -1,7 +1,6 @@
 # Use an official Python runtime as a parent image
 FROM eclipse-temurin:17.0.11_9-jdk-jammy
 
-# TODO: Add the maintainer label
 # TODO: make multi-stage build
 # COPY --from=builder /opt/venv /opt/venv
 
@@ -16,28 +15,31 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-pip \
     zip \
     && rm -rf /var/lib/apt/lists/* \
-    && useradd -m -u 1000 bundle-user
-
-# Set the working directory in the container to /home/bundle-user
-WORKDIR /home/bundle-user
-USER bundle-user
+    && mkdir -p /opt/bundleutils/.cache /opt/bundleutils/.app /opt/bundleutils/work \
+    && chmod -R 777 /opt/bundleutils/.cache /opt/bundleutils/work
 
 # Create a virtual environment
-RUN python3 -m venv /home/bundle-user/venv
-ENV PATH="/home/bundle-user/venv/bin:$PATH"
-
-# Add the current directory contents into the container at /app
-ADD --chown=bundle-user:bundle-user bundleutilspkg bundleutilspkg
+RUN python3 -m venv /opt/bundleutils/.venv
+ENV PATH="/opt/bundleutils/.venv/bin:$PATH" BUNDLEUTILS_CACHE_DIR="/opt/bundleutils/.cache"
 
 # Install any needed packages specified in setup.py
 RUN pip install --upgrade pip \
-    && pip install wheel \
-    && pip install ./bundleutilspkg \
-    && mkdir -p ./bundleutils/cache
+    && pip install wheel
 
-# Add the current directory contents into the container
-ADD --chown=bundle-user:bundle-user examples examples
-ADD --chown=bundle-user:bundle-user README.md ./
+# Add the current directory contents into the container at /app
+ADD bundleutilspkg /opt/bundleutils/.app/bundleutilspkg
+ADD examples /opt/bundleutils/work/examples
+ADD README.md /opt/bundleutils/work/README.md
+
+# Install any needed packages specified in setup.py
+RUN pip install /opt/bundleutils/.app/bundleutilspkg
+
+# Install any needed packages specified in setup.py
+RUN useradd -m -u 1000 bundle-user
+
+# Set the working directory in the container to /home/bundle-user
+WORKDIR /opt/bundleutils/work
+USER bundle-user
 
 # Run main.py when the container launches
 ENTRYPOINT [ "bundleutils"]
