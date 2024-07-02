@@ -51,8 +51,8 @@ def server_options(func):
 def transform_options(func):
     func = click.option('-S', '--strict', default=False, is_flag=True, help='Fail when refrencing non-existent files. Warn otherwise.')(func)
     func = click.option('-c', '--config', 'configs', multiple=True, default=os.environ.get('BUNDLEUTILS_TRANSFORMATIONS'), help='The transformation config(s) (or use BUNDLEUTILS_TRANSFORMATION).')(func)
-    func = click.option('-s', '--source-dir', 'source_dir', default=os.environ.get('BUNDLEUTILS_SOURCE_DIR', ''), type=click.Path(file_okay=False, dir_okay=True), help='The source directory for the YAML documents (or use BUNDLEUTILS_SOURCE_DIR).')(func)
-    func = click.option('-t', '--target-dir', 'target_dir', default=os.environ.get('BUNDLEUTILS_TARGET_DIR', ''), type=click.Path(file_okay=False, dir_okay=True), help='The target directory for the YAML documents (or use BUNDLEUTILS_TARGET_DIR). Defaults to the source directory suffixed with -transformed.')(func)
+    func = click.option('-s', '--source-dir', 'source_dir', type=click.Path(file_okay=False, dir_okay=True), help='The source directory for the YAML documents (or use BUNDLEUTILS_SOURCE_DIR).')(func)
+    func = click.option('-t', '--target-dir', 'target_dir', type=click.Path(file_okay=False, dir_okay=True), help='The target directory for the YAML documents (or use BUNDLEUTILS_TARGET_DIR). Defaults to the source directory suffixed with -transformed.')(func)
     return func
 
 def set_logging(ctx, log_level, default=''):
@@ -709,6 +709,15 @@ def operationalize(ctx, log_level, strict, configs, source_dir, target_dir):
 def transform(ctx, log_level, strict, configs, source_dir, target_dir):
     """Transform using a custom transformation config."""
     set_logging(ctx, log_level)
+    source_dir = null_check(source_dir, 'source directory', 'BUNDLEUTILS_SOURCE_DIR')
+    target_dir = null_check(target_dir, 'target directory', 'BUNDLEUTILS_TARGET_DIR')
+    if not configs:
+        # if a transform.yaml file is found in the current directory, use it
+        if os.path.exists('transform.yaml'):
+            logging.info('Using transform.yaml in the current directory')
+            configs = ['transform.yaml']
+        else:
+            sys.exit('No transformation config provided and no transform.yaml found in the current directory')
     _transform(configs, source_dir, target_dir)
 
 @click.pass_context
