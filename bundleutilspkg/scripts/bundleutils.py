@@ -909,6 +909,28 @@ def _update_bundle(target_dir):
         # remove any empty files
         files = [file for file in files if _file_check(file)]
 
+        # special case for 'plugins'. If any of the files does not contain the yaml key 'plugins', remove the key from the data
+        if key == 'plugins':
+            for file in files:
+                with open(file, 'r') as f:
+                    plugins_file = yaml.load(f)
+                    # if no plugins key or plugins is empty, remove the file from the list
+                    if 'plugins' not in plugins_file or not plugins_file['plugins']:
+                        logging.info(f'Removing {file} from the list due to missing or empty plugins')
+                        files.remove(file)
+                        os.remove(file)
+
+        # special case for 'catalog'. If any of the files does not contain the yaml key 'configurations', remove the key from the data
+        if key == 'catalog':
+            for file in files:
+                with open(file, 'r') as f:
+                    catalog_file = yaml.load(f)
+                    # if no configurations key or configurations is empty, remove the file from the list
+                    if 'configurations' not in catalog_file or not catalog_file['configurations']:
+                        logging.info(f'Removing {file} from the list due to missing or empty configurations')
+                        files.remove(file)
+                        os.remove(file)
+
         # special case for 'items'. If any of the files does not contain the yaml key 'items', remove the key from the data
         if key == 'items':
             for file in files:
