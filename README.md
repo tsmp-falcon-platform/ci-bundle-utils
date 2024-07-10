@@ -4,18 +4,98 @@
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 ## Contents
 
-- [Intro](#intro)
-- [Fetch](#fetch)
-- [Transform](#transform)
-- [Example](#example)
+- [TLDR](#tldr)
+- [TLDR 2 - using a shared local cache](#tldr-2---using-a-shared-local-cache)
+- [Introduction](#introduction)
+  - [Bundle Util Commands](#bundle-util-commands)
+  - [Test Server Commands](#test-server-commands)
+- [The `transform` Command](#the-transform-command)
+- [Examples](#examples)
   - [Non-Interactive Standard Workflow](#non-interactive-standard-workflow)
   - [Interactive Custom Transformation](#interactive-custom-transformation)
+- [Local Development](#local-development)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
-## Intro
+## TLDR
+
+Set the wildcard test license environment variables so that docker compose knows of them.
+
+```sh
+# e.g. using base64 to cover line breaks, etc
+# cat license.key | base64 -w0
+# cat license.cert | base64 -w0
+export CASC_VALIDATION_LICENSE_KEY_B64=$(cat license.key | base64 -w0)
+export CASC_VALIDATION_LICENSE_CERT_B64=$(cat license.cert | base64 -w0)
+```
+
+Start a container with a cache volume using the provided
+
+```sh
+docker compose up -d
+```
+
+Exec into the container
+
+```sh
+docker exec -it ci-bundle-utils-bundleutils-1 bash
+```
+
+Think about setting the licence(!) if not done so above. Then, run the example script and follow the instructions:
+
+```sh
+./examples/run-all.sh
+```
+
+Stop and clean up...
+
+```sh
+docker compose down
+```
+
+## TLDR 2 - using a shared local cache
+
+The default docker compose file creates a docker volume for the cache, but maybe you want to use your local file system.
+
+This would allow you to run `bundleutils` locally and in docker, sharing the cache between both.
+
+The main difference to the steps above would be to:
+
+- create the local cache directory
+- use the new directory in the docker compose configuration
+- exec into the container as the local user instead of using the default
+  - NOTE: this is only necessary if your own UID and GID differs from the default in the container (1000)
+
+Create a local cache volume if not
+
+```sh
+mkdir -p ~/.bundleutils/cache
+```
+
+Use the local cache volume in the [docker compose configuration](./docker-compose.yaml):
+
+```sh
+  # option 2 - points to the default local directory on the host
+  # for use both in the docker-compose.yaml and locally
+  bundleutils-cache:
+    driver: local
+    driver_opts:
+      type: none
+      device: ~/.bundleutils/cache
+      o: bind
+```
+
+Exec into the container as the local user
+
+```sh
+docker exec -it -u $(id -u ) -g $(id -g) ci-bundle-utils-bundleutils-1 bash
+```
+
+## Introduction
 
 Initial project to provide some nice bundle utility features.
+
+### Bundle Util Commands
 
 Main commands:
 
@@ -23,48 +103,52 @@ Main commands:
   - defaults to the `core-casc-export-*.zip` in the current directory
 - `transform` to transform the exported bundle
   - takes one or more transformation configurations
+- `validate` to validate a bundle against a target server
+  - takes a source directory, url, username, password, etc
 
 Special transformational commands:
 
 - `normalize` used to help compare bundles by normalizing the values
-  - a transformation based on the [normalize.yaml](./bundleutilspkg/configs/normalize.yaml)
+  - a transformation based on the [normalize.yaml](./bundleutilspkg/defaults/configs/normalize.yaml)
   - can be overridden file of the same name in the current directory.
 - `operationalize` used to make a bundle which is consumable by a controller or operation center
-  - a transformation based on the [operationalize.yaml](./bundleutilspkg/configs/operationalize.yaml)
+  - a transformation based on the [operationalize.yaml](./bundleutilspkg/defaults/configs/operationalize.yaml)
   - can be overridden file of the same name in the current directory.
 
-## Fetch
+### Test Server Commands
 
-The `fetch` command can fetch an exported bundle and split it up into the appropriate bundle structure.
+Special `ci-*` commands to provide local testing capabilities:
 
-```sh
-❯ bundleutils fetch --help
-Usage: bundleutils fetch [OPTIONS]
+Common variables for all commands:
 
-  Fetch YAML documents from a URL or path.
+- The server version with either `BUNDLEUTILS_CI_VERSION` or `--ci-version`
+- The server type with either `BUNDLEUTILS_CI_TYPE` or `--ci-type` (defaults to `mm`)
 
-Options:
-  -l, --log-level TEXT   The log level (or use BUNDLEUTILS_LOG_LEVEL).
-  -P, --path TEXT        The path to fetch YAML from (or use
-                         BUNDLEUTILS_PATH).
-  -U, --url TEXT         The controller URL to fetch YAML from (or use
-                         BUNDLEUTILS_URL).
-  -u, --username TEXT    Username for basic authentication (or use
-                         BUNDLEUTILS_USERNAME).
-  -p, --password TEXT    Password for basic authentication (or use
-                         BUNDLEUTILS_PASSWORD).
-  -t, --target-dir TEXT  The target directory for the YAML documents (or use
-                         BUNDLEUTILS_TARGET_DIR).
-  --help                 Show this message and exit.
-```
+Individual commands:
 
-## Transform
+- `ci-setup` prepares a server for local testing
+  - takes a bundle directory as a source for expected plugins
+  - downloads the appropriate war file
+  - creates a startup bundle using
+    - the plugins  the [default validation template](./bundleutilspkg/defaults/configs/validation-template) (can be overridden)
+- `ci-start` starts the test server
+  - starting the java process
+  - saves the pid file
+  - tests the authentication token
+- `ci-validate` validates a bundle aginst the started server
+  - takes the bundle source directory
+  - returns the validation result JSON
+- `ci-stop` stops the test server
+  - uses the pid file from the start command above
+
+## The `transform` Command
 
 The `transform` command can transform a fetched bundle according to a configuration based upon:
 
 - `patches` - a set of patches as shown by https://jsonpatch.com/
 - `credentials` - the ability to replace encrypted credentials with a given or autogenerated text
 - `splits` - split configuration files (typically `items.yaml` or `jenkins.yaml`) into smaller chunked configuration files.
+- `substitutions` - generic regex substitutions for post processing config files.
 
 It can take multiple transformation files which it merges together before applying.
 
@@ -86,7 +170,7 @@ Options:
   --help                 Show this message and exit.
 ```
 
-## Example
+## Examples
 
 Create a docker image:
 
@@ -253,4 +337,22 @@ items:
 - items.casc-test-1.yaml
 - items.casc-test-2.yaml
 - items.controllers.yaml
+```
+
+## Local Development
+
+To run locally:
+
+```sh
+# create a virtual environment
+python -m venv .venv
+
+# install dependencies in edit mode
+pip install -e bundleutilspkg
+
+# activate environment
+source .venv/bin/activate
+
+# activate shell completion
+bundleutils completion -s ... # e.g. bash or zsh
 ```

@@ -6,7 +6,7 @@ setup(
     version='0.1',
     packages=find_packages(),
     package_data={
-        'bundleutilspkg': ['configs/*.yaml'],
+        'defaults': ['configs/**/*', 'configs/*'],
     },
     install_requires=[
         'click',
@@ -19,7 +19,7 @@ setup(
     ],
     entry_points={
         'console_scripts': [
-            'bundleutils = bundleutilspkg.scripts.bundleutils:cli',
+            'bundleutils = scripts.bundleutils:cli',
         ],
     },
 )

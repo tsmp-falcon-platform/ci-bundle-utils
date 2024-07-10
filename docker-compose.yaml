@@ -1,0 +1,40 @@
+x-configs:
+  volumes:
+    bundleutils-cache: &bundleutils-cache 'bundleutils-cache:/opt/bundleutils/.cache'
+services:
+  bundleutils:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    network_mode: ${NETWORK_MODE:-host}
+    environment:
+      - CASC_VALIDATION_LICENSE_KEY=${CASC_VALIDATION_LICENSE_KEY:-}
+      - CASC_VALIDATION_LICENSE_CERT=${CASC_VALIDATION_LICENSE_CERT:-}
+      - CASC_VALIDATION_LICENSE_KEY_B64=${CASC_VALIDATION_LICENSE_KEY_B64:-}
+      - CASC_VALIDATION_LICENSE_CERT_B64=${CASC_VALIDATION_LICENSE_CERT_B64:-}
+    volumes:
+      - *bundleutils-cache
+    entrypoint: ["/bin/sleep", "infinity"]
+
+  # option 2 - hack to fix permissions on the cache directory
+  # fix-bundleutils-cache-permissions:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   user: root
+  #   command: chown -R "${UID:-bundle-user}" /opt/bundleutils/.cache
+  #   volumes:
+  #     - *bundleutils-cache
+
+volumes:
+  # option 1 - creates a named volume for the bundleutils-cache
+  bundleutils-cache: {}
+
+  # option 2 - points to the default local directory on the host
+  # for use both in the docker-compose.yaml and locally
+  # bundleutils-cache:
+  #   driver: local
+  #   driver_opts:
+  #     type: none
+  #     device: ~/.bundleutils/cache
+  #     o: bind
