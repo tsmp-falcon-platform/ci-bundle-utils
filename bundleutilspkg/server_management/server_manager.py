@@ -8,8 +8,8 @@ import os
 import re
 import sys
 import logging
+
 import importlib.resources as pkg_resources
-from datetime import datetime, timedelta
 
 class JenkinsServerManager:
     def __init__(self, ci_type, ci_version, target_dir):
@@ -18,7 +18,6 @@ class JenkinsServerManager:
             sys.exit("Invalid type. Must be one of 'oc', 'oc-traditional', 'mm', or 'cm'")
         if not re.match(r'\d+\.\d+\.\d+\.\d+', ci_version):
             sys.exit("Invalid version. Must match the format 'W.X.Y.Z'")
-
         # user can specify a cache directory to store the downloaded WAR files by setting the environment variable BUNDLEUTILS_CACHE_DIR
         # defaults to the users home directory if not set
         if 'BUNDLEUTILS_CACHE_DIR' in os.environ:
@@ -28,8 +27,6 @@ class JenkinsServerManager:
         self.war_cache_dir = os.path.join(self.cache_dir, "war", ci_type, ci_version)
         self.tar_cache_dir = os.path.join(self.cache_dir, "tar", ci_type, ci_version)
         self.tar_cache_file = os.path.join(self.tar_cache_dir, "jenkins.war")
-        self.uc_cache_dir = os.path.join(self.cache_dir, "uc", ci_type, ci_version)
-        self.uc_cache_file = os.path.join(self.uc_cache_dir, "update-center.json")
         if not target_dir:
             target_dir = os.path.join('/tmp/ci_server_home', ci_type, ci_version)
         self.ci_type = ci_type
