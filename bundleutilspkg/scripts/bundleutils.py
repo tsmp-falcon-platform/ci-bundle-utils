@@ -27,6 +27,10 @@ yaml = YAML(typ='rt')
 script_name = os.path.basename(__file__).replace('.py', '')
 script_name_upper = script_name.upper()
 
+plugin_json_url_path = '/manage/pluginManager/api/json?pretty&depth=1'
+fetch_url_path = '/core-casc-export'
+validate_url_path = '/casc-bundle-mgnt/casc-bundle-validate'
+
 default_target = 'target/docs'
 default_normalized = default_target + '-normalized'
 default_operationalized = default_target + '-operationalized'
@@ -34,9 +38,9 @@ default_plugin_json_url = ''
 default_fetch_url = ''
 default_validate_url = ''
 if 'BUNDLEUTILS_JENKINS_URL' in os.environ:
-    default_plugin_json_url = os.environ['BUNDLEUTILS_JENKINS_URL'] + '/manage/pluginManager/api/json?pretty&depth=1'
-    default_fetch_url = os.environ['BUNDLEUTILS_JENKINS_URL'] + '/core-casc-export'
-    default_validate_url = os.environ['BUNDLEUTILS_JENKINS_URL'] + '/casc-bundle-mgnt/casc-bundle-validate'
+    default_plugin_json_url = os.environ['BUNDLEUTILS_JENKINS_URL'] + plugin_json_url_path
+    default_fetch_url = os.environ['BUNDLEUTILS_JENKINS_URL'] + fetch_url_path
+    default_validate_url = os.environ['BUNDLEUTILS_JENKINS_URL'] + validate_url_path
 
 def common_options(func):
     func = click.option('-l', '--log-level', default=os.environ.get('BUNDLEUTILS_LOG_LEVEL', ''), help='The log level (or use BUNDLEUTILS_LOG_LEVEL).')(func)
@@ -99,8 +103,9 @@ def ci_setup(ctx, log_level, ci_version, ci_type, ci_server_home, source_dir, bu
     if not os.path.exists(source_dir):
         sys.exit(f"Source directory '{source_dir}' does not exist")
     # parse the source directory bundle.yaml file and copy the files under the plugins and catalog keys to the target_jenkins_home_casc_startup_bundle directory
-    plugin_files = []
-    with open(os.path.join(source_dir, 'bundle.yaml'), 'r') as file:
+    bundle_yaml = os.path.join(source_dir, 'bundle.yaml')
+    plugin_files = [bundle_yaml]
+    with open(bundle_yaml, 'r') as file:
         bundle_yaml = yaml.load(file)
         for key in ['plugins', 'catalog']:
             # list paths to all entries under bundle_yaml.plugins
@@ -119,7 +124,7 @@ def ci_setup(ctx, log_level, ci_version, ci_type, ci_server_home, source_dir, bu
 @common_options
 @click.pass_context
 def ci_validate(ctx, log_level, ci_version, ci_type, ci_server_home, source_dir, ignore_warnings):
-    """Validate bundle against controller started with ci-start-server."""
+    """Validate bundle against controller started with ci-start."""
     set_logging(ctx, log_level)
     if not os.path.exists(source_dir):
         sys.exit(f"Source directory '{source_dir}' does not exist")
@@ -127,6 +132,81 @@ def ci_validate(ctx, log_level, ci_version, ci_type, ci_server_home, source_dir,
     server_url, username, password = jenkins_manager.get_server_details()
     logging.debug(f"Server URL: {server_url}, Username: {username}, Password: {password}")
     _validate(server_url, username, password, source_dir, ignore_warnings)
+
+@cli.command()
+@server_options
+@click.option('-s', '--source-dir', 'source_dir',  required=True, type=click.Path(file_okay=False, dir_okay=True), help='The bundle to be validated.')
+@click.option('-p', '--pin-plugins', default=False, is_flag=True, help='Add versions to 3rd party plugins (only available for apiVersion 2).')
+@click.option('-c', '--custom-url', help='Add a custom URL, e.g. http://plugins-repo/plugins/PNAME/PVERSION/PNAME.hpi')
+@common_options
+@click.pass_context
+def ci_sanitize_plugins(ctx, log_level, ci_version, ci_type, ci_server_home, source_dir, pin_plugins, custom_url):
+    """Sanitizes plugins using controller started with ci-start."""
+    set_logging(ctx, log_level)
+    if not os.path.exists(source_dir):
+        sys.exit(f"Source directory '{source_dir}' does not exist")
+    jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
+    server_url, username, password = jenkins_manager.get_server_details()
+    logging.debug(f"Server URL: {server_url}, Username: {username}, Password: {password}")
+
+    # read the plugins.yaml file from the source directory
+    plugins_file = os.path.join(source_dir, 'plugins.yaml')
+    if not os.path.exists(plugins_file):
+        sys.exit(f"Plugins file '{plugins_file}' does not exist")
+    with open(plugins_file, 'r') as f:
+        plugins_data = yaml.load(f)  # Load the existing data
+
+    envelope_json = jenkins_manager.get_envelope_json()
+    envelope_json = json.loads(envelope_json)
+
+    plugin_json_url = server_url + plugin_json_url_path
+    response_text = call_jenkins_api(plugin_json_url, username, password)
+    data = json.loads(response_text)
+
+    installed_plugins = {}
+    envelope_plugins = {}
+    bootstrap_plugins = {}
+    for plugin_id, plugin_info in envelope_json['plugins'].items():
+        envelope_plugins[plugin_id] = plugin_info
+        if plugin_info.get('scope') == 'bootstrap':
+            bootstrap_plugins[plugin_id] = plugin_info
+
+    if not installed_plugins:
+        for installed_plugin in data['plugins']:
+            installed_plugins[installed_plugin['shortName']] = installed_plugin
+
+    # Check if 'plugins' key exists and it's a list
+    if 'plugins' in plugins_data and isinstance(plugins_data['plugins'], list):
+        updated_plugins = []
+        for plugin in plugins_data['plugins']:
+            if plugin['id'] in envelope_plugins.keys():
+                logging.info(f"SANITIZE PLUGINS -> ignoring bundled: {plugin['id']}")
+                updated_plugins.append(plugin)
+            elif plugin['id'] in bootstrap_plugins.keys():
+                logging.info(f"SANITIZE PLUGINS  -> removing bootstrap: {plugin['id']}")
+            else:
+                if custom_url:
+                    # remove the version from the plugin
+                    plugin.pop('version', None)
+                    plugin['url'] = custom_url.replace('PNAME', plugin['id']).replace('PVERSION', installed_plugins[plugin['id']]['version']).strip()
+                    logging.info(f"SANITIZE PLUGINS -> adding URL to: {plugin['id']} ({plugin['url']})")
+                    updated_plugins.append(plugin)
+                elif pin_plugins:
+                    if plugin['id'] in installed_plugins:
+                        # remove the url from the plugin
+                        plugin.pop('url', None)
+                        plugin['version'] = installed_plugins[plugin['id']]['version']
+                        logging.info(f"SANITIZE PLUGINS -> adding version to : {plugin['id']} ({plugin['version']})")
+                        updated_plugins.append(plugin)
+                    else:
+                        logging.warning(f"SANITIZE PLUGINS -> no version found for: {plugin['id']}")
+                else:
+                    logging.info(f"SANITIZE PLUGINS -> not pinning: {plugin['id']}")
+                    updated_plugins.append(plugin)
+        plugins_data['plugins'] = updated_plugins
+    with open(plugins_file, 'w') as f:
+        yaml.dump(plugins_data, f)  # Write the updated data back to the file
+
 
 @cli.command()
 @server_options
@@ -212,7 +292,7 @@ def null_check(obj, obj_name, obj_env_var=None):
         if obj_env_var:
             obj = os.environ.get(obj_env_var, obj)
             if not obj:
-                sys.exit(f'No {obj_name} option provided and no {obj_env_var} not set')
+                sys.exit(f'No {obj_name} option provided and no {obj_env_var} set')
     return obj
 
 @cli.command()
@@ -270,9 +350,7 @@ def _validate(url, username, password, source_dir, ignore_warnings):
             sys.exit('Validation failed with errors or critical messages')
 
 def filter_plugins(data):
-    """
-    Filters out plugins where enabled is False or deleted is True.
-    """
+    """Filters out plugins where enabled is False or deleted is True."""
     filtered_plugins = []
     plugins = data.get("plugins", [])
     for plugin in plugins:
