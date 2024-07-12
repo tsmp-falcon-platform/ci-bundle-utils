@@ -4,8 +4,9 @@
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 ## Contents
 
-- [TLDR](#tldr)
-- [TLDR 2 - using a shared local cache](#tldr-2---using-a-shared-local-cache)
+- [TLDR - option 1 - docker](#tldr---option-1---docker)
+- [TLDR - option 2 - docker compose](#tldr---option-2---docker-compose)
+- [TLDR - option 3 - using a shared local cache](#tldr---option-3---using-a-shared-local-cache)
 - [Introduction](#introduction)
   - [Bundle Util Commands](#bundle-util-commands)
   - [Test Server Commands](#test-server-commands)
@@ -17,7 +18,55 @@
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
-## TLDR
+## TLDR - option 1 - docker
+
+Set the wildcard test license environment variables so that docker compose knows of them.
+
+```sh
+# e.g. using base64 to cover line breaks, etc
+# cat license.key | base64 -w0
+# cat license.cert | base64 -w0
+export CASC_VALIDATION_LICENSE_KEY_B64=$(cat license.key | base64 -w0)
+export CASC_VALIDATION_LICENSE_CERT_B64=$(cat license.cert | base64 -w0)
+```
+
+(optional) Create a cache volume to hold the war files, etc
+
+```sh
+docker volume create bundleutils-cache
+```
+
+Start a container with a cache volume
+
+```sh
+docker run -d -v bundleutils-cache:/opt/bundleutils/.cache \
+-e CASC_VALIDATION_LICENSE_KEY_B64="$CASC_VALIDATION_LICENSE_KEY_B64" \
+-e CASC_VALIDATION_LICENSE_CERT_B64="$CASC_VALIDATION_LICENSE_CERT_B64" \
+--name bundleutils \
+--entrypoint bash \
+ghcr.io/tsmp-falcon-platform/ci-bundle-utils \
+-c "tail -f /dev/null"
+```
+
+Exec into the container
+
+```sh
+docker exec -it bundleutils bash
+```
+
+Think about setting the licence(!) if not done so above. Then, run the example script and follow the instructions:
+
+```sh
+./examples/run-all.sh
+```
+
+Stop and clean up...
+
+```sh
+docker rm -f bundleutils
+```
+
+## TLDR - option 2 - docker compose
 
 Set the wildcard test license environment variables so that docker compose knows of them.
 
@@ -53,7 +102,7 @@ Stop and clean up...
 docker compose down
 ```
 
-## TLDR 2 - using a shared local cache
+## TLDR - option 3 - using a shared local cache
 
 The default docker compose file creates a docker volume for the cache, but maybe you want to use your local file system.
 

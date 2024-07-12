@@ -63,13 +63,73 @@ else
     read -rp "Press enter to continue"
 fi
 
+# a function to echo a banner with a multiline message
+banner() {
+    echo "===================================================================================================="
+    echo ""
+    echo "$*"
+    echo "===================================================================================================="
+}
+
+banner "This will fetch the bundle from a given location.
+
+You can pass
+- a path to a bundlecontent.yaml
+- a path to a bundle.zip
+- a url to a jenkins instance
+
+It defaults to fetching a bundle export from a jenkins instance using:
+- BUNDLEUTILS_USERNAME
+- BUNDLEUTILS_PASSWORD
+- BUNDLEUTILS_JENKINS_URL
+"
 set -x
 bundleutils fetch
+set +x
+
+banner "This will normalize the bundle by:
+- Removing the license section
+- Replacing all credentials with smart references
+
+The default normalize.yaml file can be overwritten by cli or a file of the same name in the CWD.
+"
+set -x
 bundleutils normalize
+set +x
+
+banner "This will operationalize with transform the bundle further by:
+- Removing problematic sections of CasC such as remotingSecurity and slaveAgentPort
+
+The default operationalize.yaml file can be overwritten by cli or a file of the same name in the CWD.
+"
+set -x
 bundleutils operationalize
+set +x
+
+banner "This will setup a server (according to the BUNDLEUTILS_CI_TYPE and BUNDLEUTILS_CI_VERSION):
+- Used for validating the bundle
+- Downloading the appropriate jenkins.war
+- Creating a simple starter bundle with appropriate plugins
+"
+set -x
 bundleutils ci-setup -s target/docs-operationalized
+set +x
+
+banner "This will start the server (according to the BUNDLEUTILS_CI_TYPE and BUNDLEUTILS_CI_VERSION)
+"
+set -x
 bundleutils ci-start || exit_trap
+set +x
+
+banner "This will validate your bundle
+"
+set -x
 bundleutils ci-validate -s target/docs-operationalized || exit_trap
+set +x
+
+banner "This will stop the server (according to the BUNDLEUTILS_CI_TYPE and BUNDLEUTILS_CI_VERSION)
+"
+set -x
 bundleutils ci-stop
 set +x
 
