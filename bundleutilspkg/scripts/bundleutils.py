@@ -314,8 +314,8 @@ def _validate(url, username, password, source_dir, ignore_warnings):
     source_dir = null_check(source_dir, 'source directory', 'BUNDLEUTILS_SOURCE_DIR')
     url = null_check(url, 'url')
     # if the url does end with /casc-bundle-mgnt/casc-bundle-validate, append it
-    if not url.endswith('/casc-bundle-mgnt/casc-bundle-validate'):
-        url = url + '/casc-bundle-mgnt/casc-bundle-validate'
+    if validate_url_path not in url:
+        url = url + validate_url_path
 
     # fetch the YAML from the URL
     headers = { 'Content-Type': 'application/zip' }
@@ -383,6 +383,10 @@ def fetch(ctx, log_level, url, path, username, password, target_dir, plugin_json
             path = zip_files[0]
         elif len(zip_files) > 1:
             sys.exit('Multiple core-casc-export-*.zip files found in the current directory')
+    elif url:
+        # if the url does not contain (not just ends with) fetch_url_path, append it
+        if fetch_url_path not in url:
+            url = url + fetch_url_path
     if not plugin_json_path and not plugin_json_url:
         plugin_json_files = glob.glob('plugins*.json')
         if len(plugin_json_files) == 1:
