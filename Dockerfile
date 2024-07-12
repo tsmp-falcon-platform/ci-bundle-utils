@@ -6,7 +6,8 @@ FROM eclipse-temurin:17.0.11_9-jdk-jammy
 
 # Install any needed packages specified in setup.py
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    vim-tiny \
+    less \
+    vim \
     git \
     make \
     skopeo \
