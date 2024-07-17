@@ -19,10 +19,13 @@ from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap
 from ruamel.yaml.comments import CommentedSeq
 from server_management.server_manager import JenkinsServerManager
+from dotenv import load_dotenv
+from dotenv import find_dotenv
 
 locale.setlocale(locale.LC_ALL, "C")
 
 yaml = YAML(typ='rt')
+load_dotenv(find_dotenv(usecwd=True))
 
 script_name = os.path.basename(__file__).replace('.py', '')
 script_name_upper = script_name.upper()
@@ -47,16 +50,22 @@ def common_options(func):
     return func
 
 def server_options(func):
-    func = click.option('-v', '--ci-version', 'ci_version', default=os.environ.get('BUNDLEUTILS_CI_VERSION', ''), help='The version of the CloudBees WAR file.')(func)
-    func = click.option('-t', '--ci-type', 'ci_type', default=os.environ.get('BUNDLEUTILS_CI_TYPE', 'mm'), required=False, type=click.STRING, help='The type of the CloudBees server.')(func)
+    func = click.option('-v', '--ci-version', 'ci_version', type=click.STRING, help='The version of the CloudBees WAR file.')(func)
+    func = click.option('-t', '--ci-type', 'ci_type', type=click.STRING, help='The type of the CloudBees server.')(func)
     func = click.option('-H', '--ci-server-home', 'ci_server_home', required=False, help='Defaults to /tmp/ci_server_home/<ci_type>/<ci_version>.')(func)
     return func
 
+def server_options_null_check(ci_version, ci_type, ci_server_home):
+    ci_version = null_check(ci_version, 'ci_version', 'BUNDLEUTILS_CI_VERSION')
+    ci_type = null_check(ci_type, 'ci_type', 'BUNDLEUTILS_CI_TYPE')
+    ci_server_home = null_check(ci_server_home, 'ci_server_home', 'BUNDLEUTILS_CI_SERVER_HOME', False)
+    return ci_version, ci_type, ci_server_home
+
 def transform_options(func):
-    func = click.option('-S', '--strict', default=False, is_flag=True, help='Fail when refrencing non-existent files. Warn otherwise.')(func)
-    func = click.option('-c', '--config', 'configs', multiple=True, default=os.environ.get('BUNDLEUTILS_TRANSFORMATIONS'), help='The transformation config(s) (or use BUNDLEUTILS_TRANSFORMATION).')(func)
-    func = click.option('-s', '--source-dir', 'source_dir', type=click.Path(file_okay=False, dir_okay=True), help='The source directory for the YAML documents (or use BUNDLEUTILS_SOURCE_DIR).')(func)
-    func = click.option('-t', '--target-dir', 'target_dir', type=click.Path(file_okay=False, dir_okay=True), help='The target directory for the YAML documents (or use BUNDLEUTILS_TARGET_DIR). Defaults to the source directory suffixed with -transformed.')(func)
+    func = click.option('-S', '--strict', default=False, is_flag=True, help='Fail when refrencing non-existent files - warn otherwise.')(func)
+    func = click.option('-c', '--config', 'configs', multiple=True, help='The transformation config(s).')(func)
+    func = click.option('-s', '--source-dir', 'source_dir', type=click.Path(file_okay=False, dir_okay=True), help='The source directory for the YAML documents.')(func)
+    func = click.option('-t', '--target-dir', 'target_dir', type=click.Path(file_okay=False, dir_okay=True), help='The target directory for the YAML documents. Defaults to the source directory suffixed with -transformed.')(func)
     return func
 
 def set_logging(ctx, log_level, default=''):
@@ -100,6 +109,7 @@ def compare_func(x, y, level=None):
 @click.pass_context
 def ci_setup(ctx, log_level, ci_version, ci_type, ci_server_home, source_dir, bundle_template):
     """Download CloudBees WAR file, and setup the starter bundle"""
+    ci_version, ci_type, ci_server_home = server_options_null_check(ci_version, ci_type, ci_server_home)
     if not os.path.exists(source_dir):
         sys.exit(f"Source directory '{source_dir}' does not exist")
     # parse the source directory bundle.yaml file and copy the files under the plugins and catalog keys to the target_jenkins_home_casc_startup_bundle directory
@@ -126,6 +136,7 @@ def ci_setup(ctx, log_level, ci_version, ci_type, ci_server_home, source_dir, bu
 def ci_validate(ctx, log_level, ci_version, ci_type, ci_server_home, source_dir, ignore_warnings):
     """Validate bundle against controller started with ci-start."""
     set_logging(ctx, log_level)
+    ci_version, ci_type, ci_server_home = server_options_null_check(ci_version, ci_type, ci_server_home)
     if not os.path.exists(source_dir):
         sys.exit(f"Source directory '{source_dir}' does not exist")
     jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
@@ -143,6 +154,7 @@ def ci_validate(ctx, log_level, ci_version, ci_type, ci_server_home, source_dir,
 def ci_sanitize_plugins(ctx, log_level, ci_version, ci_type, ci_server_home, source_dir, pin_plugins, custom_url):
     """Sanitizes plugins using controller started with ci-start."""
     set_logging(ctx, log_level)
+    ci_version, ci_type, ci_server_home = server_options_null_check(ci_version, ci_type, ci_server_home)
     if not os.path.exists(source_dir):
         sys.exit(f"Source directory '{source_dir}' does not exist")
     jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
@@ -214,6 +226,7 @@ def ci_sanitize_plugins(ctx, log_level, ci_version, ci_type, ci_server_home, sou
 @click.pass_context
 def ci_start(ctx, log_level, ci_version, ci_type, ci_server_home):
     """Start CloudBees Server"""
+    ci_version, ci_type, ci_server_home = server_options_null_check(ci_version, ci_type, ci_server_home)
     jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
     jenkins_manager.start_server()
 
@@ -223,6 +236,7 @@ def ci_start(ctx, log_level, ci_version, ci_type, ci_server_home):
 @click.pass_context
 def ci_stop(ctx, log_level, ci_version, ci_type, ci_server_home):
     """Stop CloudBees Server"""
+    ci_version, ci_type, ci_server_home = server_options_null_check(ci_version, ci_type, ci_server_home)
     jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
     jenkins_manager.stop_server()
 
@@ -287,17 +301,17 @@ def completion(ctx, shell):
     click.echo(f'  2. echo "$(_{script_name_upper}_COMPLETE={shell}_source {script_name})" > {script_name}-complete.{shell}')
     click.echo(f'     source {script_name}-complete.{shell}')
 
-def null_check(obj, obj_name, obj_env_var=None):
+def null_check(obj, obj_name, obj_env_var=None, mandatory=True):
     if not obj:
         if obj_env_var:
-            obj = os.environ.get(obj_env_var, obj)
-            if not obj:
+            obj = os.environ.get(obj_env_var, '')
+            if not obj and mandatory:
                 sys.exit(f'No {obj_name} option provided and no {obj_env_var} set')
     return obj
 
 @cli.command()
 @common_options
-@click.option('-U', '--url', 'url', default=default_validate_url, help='The controller URL to fetch YAML from (or use BUNDLEUTILS_JENKINS_URL).')
+@click.option('-U', '--url', 'url', help='The controller URL to fetch YAML from (or use BUNDLEUTILS_JENKINS_URL).')
 @click.option('-u', '--username', 'username', help='Username for basic authentication (or use BUNDLEUTILS_USERNAME).')
 @click.option('-p', '--password', 'password', help='Password for basic authentication (or use BUNDLEUTILS_PASSWORD).')
 @click.option('-s', '--source-dir', 'source_dir', required=True, type=click.Path(file_okay=False, dir_okay=True), help='The source directory for the YAML documents (or use BUNDLEUTILS_TARGET_DIR).')
@@ -312,7 +326,7 @@ def _validate(url, username, password, source_dir, ignore_warnings):
     username = null_check(username, 'username', 'BUNDLEUTILS_USERNAME')
     password = null_check(password, 'password', 'BUNDLEUTILS_PASSWORD')
     source_dir = null_check(source_dir, 'source directory', 'BUNDLEUTILS_SOURCE_DIR')
-    url = null_check(url, 'url')
+    url = null_check(url, 'url', 'BUNDLEUTILS_JENKINS_URL')
     # if the url does end with /casc-bundle-mgnt/casc-bundle-validate, append it
     if validate_url_path not in url:
         url = url + validate_url_path
@@ -338,16 +352,22 @@ def _validate(url, username, password, source_dir, ignore_warnings):
         sys.exit(f'Failed to decode JSON from response: {response.text}')
     click.echo(json.dumps(response_json, indent=2))
     # Filter out non-info messages
-    non_info_messages = [message for message in response_json["validation-messages"] if not message.startswith("INFO -")]
-    if non_info_messages:
-        # if non info messages only include warnings...
-        if all("WARNING -" in message for message in non_info_messages):
-            if not ignore_warnings:
-                sys.exit('Validation failed with warnings')
+    if "validation-messages" not in response_json:
+        logging.warning('No validation messages found in response. Is this an old CI version?')
+        # check if the valid key exists and is True
+        if "valid" not in response_json or not response_json["valid"]:
+            sys.exit('Validation failed. See response for details.')
+    else:
+        non_info_messages = [message for message in response_json["validation-messages"] if not message.startswith("INFO -")]
+        if non_info_messages:
+            # if non info messages only include warnings...
+            if all("WARNING -" in message for message in non_info_messages):
+                if not ignore_warnings:
+                    sys.exit('Validation failed with warnings')
+                else:
+                    logging.warning('Validation failed with warnings. Ignoring due to --ignore-warnings flag')
             else:
-                logging.warning('Validation failed with warnings. Ignoring due to --ignore-warnings flag')
-        else:
-            sys.exit('Validation failed with errors or critical messages')
+                sys.exit('Validation failed with errors or critical messages')
 
 def filter_plugins(data):
     """Filters out plugins where enabled is False or deleted is True."""
