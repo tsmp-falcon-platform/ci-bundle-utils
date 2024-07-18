@@ -27,8 +27,9 @@ class JenkinsServerManager:
         self.war_cache_dir = os.path.join(self.cache_dir, "war", ci_type, ci_version)
         self.tar_cache_dir = os.path.join(self.cache_dir, "tar", ci_type, ci_version)
         self.tar_cache_file = os.path.join(self.tar_cache_dir, "jenkins.war")
+        self.target_base_dir = '/tmp/ci_server_home'
         if not target_dir:
-            target_dir = os.path.join('/tmp/ci_server_home', ci_type, ci_version)
+            target_dir = os.path.join(self.target_base_dir, ci_type, ci_version)
         self.ci_type = ci_type
         self.ci_version = ci_version
         self.target_dir = target_dir
@@ -339,15 +340,30 @@ class JenkinsServerManager:
 
     def stop_server(self):
         """Stop the Jenkins server using the PID file."""
-        try:
+        if os.path.exists(self.pid_file):
             with open(self.pid_file, 'r') as file:
-                pid = int(file.read().strip())
-            os.kill(pid, 15)  # SIGTERM
-            logging.info(f"Stopped Jenkins server with PID {pid}")
-            # delete the PID file and URL file
-            os.remove(self.pid_file)
-            os.remove(self.url_file)
-        except FileNotFoundError:
+                pidstr = file.read().strip()
+                os.remove(self.pid_file)
+                if os.path.exists(self.url_file):
+                    os.remove(self.url_file)
+                if not pidstr:
+                    logging.info("PID file is empty.")
+                else:
+                    # check if the PID is a valid integer
+                    if not pidstr.isdigit():
+                        logging.info("PID file does not contain a valid PID.")
+                    else:
+                        logging.info(f"Stopping server with PID {pidstr}")
+                        pid = int(pidstr)
+                        try:
+                            os.kill(pid, 15)  # SIGTERM
+                            logging.info(f"Stopped Jenkins server with PID {pid}")
+                        except ProcessLookupError:
+                            logging.info("Process not found. It may have already been stopped.")
+        else:
             logging.info("PID file not found. Is the server running?")
-        except ProcessLookupError:
-            logging.info("Process not found. It may have already been stopped.")
+            # glob for files matching "target_base_dir/.*/.*/jenkins.pid"
+            pid_files = Path(self.target_base_dir).glob('**/jenkins.pid')
+            for pid_file in pid_files:
+                logging.info(f"Perhaps this one -> {pid_file}")
+
