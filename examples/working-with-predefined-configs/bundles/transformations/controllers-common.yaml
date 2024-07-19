@@ -1,0 +1,5 @@
+# Patches based upon https://jsonpatch.com/
+patches:
+  jenkins.yaml:
+  - op: remove
+    path: /license
