@@ -87,7 +87,7 @@ def set_logging(ctx, log_level, env_file, default=''):
     elif default:
         ctx.obj['LOG_LEVEL'] = default
     logging.getLogger().setLevel(ctx.obj.get('LOG_LEVEL', 'INFO'))
-    logging.debug(f'Set log level to: {ctx.obj.get('LOG_LEVEL', 'INFO')}')
+    logging.debug(f"Set log level to: {ctx.obj.get('LOG_LEVEL', 'INFO')}")
 
     if not ctx.obj.get(BUNDLEUTILS_ENV, ''):
         # auto env based on current directory
