@@ -1,0 +1,17 @@
+plugins:
+- id: antisamy-markup-formatter
+- id: bootstrap5-api
+- id: cloudbees-casc-client
+- id: cloudbees-casc-items-api
+- id: cloudbees-casc-items-server
+- id: cloudbees-jenkins-advisor
+- id: cloudbees-nodes-plus
+- id: cloudbees-quiet-start
+- id: configuration-as-code
+- id: font-awesome-api
+- id: operations-center-jnlp-controller
+- id: operations-center-rbac
+- id: operations-center-webhooks
+- id: plugin-util-api
+- id: prism-api
+- id: sshd

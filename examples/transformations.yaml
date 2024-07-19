@@ -1,10 +1,12 @@
 # Sets
 patches:
+
   jenkins.yaml:
   - op: remove
     path: /license
   - op: remove
     path: /jenkins/securityRealm
+
   bundle.yaml:
   - op: replace
     path: /id
@@ -35,16 +37,30 @@ splits:
   items:
     # Split by name on regex (auto takes each item separately)
     items.yaml:
+
+      # put all casc-test-.* jobs in the casc-test.yaml
     - target: auto
       patterns: ['casc-test-.*']
+
+      # put all controllers-.* jobs in the controllers.yaml
     - target: controllers.yaml
       patterns: ['controller-.*']
+
+      # put the admin-controller in the admin.yaml
     - target: admin.yaml
       patterns: ['admin-controller']
+
+      # delete the test-fs job
+    - target: delete
+      patterns: ['test-fs']
 
   jcasc:
     # Split by path (auto takes each item separately, replacing '/' with '.')
     jenkins.yaml:
+
+      # put the credentials section in the credentials.yaml
+      # put the jenkins/clouds section in the jenkins.clouds.yaml
+      # ...
     - target: auto
       paths:
       - credentials
@@ -54,6 +70,8 @@ splits:
       - cloudBeesCasCServer
       - controllerLifecycleNotifications
       - support
+
+      # put the following sections in the kubernetes.yaml
     - target: kubernetes.yaml
       paths:
       - masterprovisioning
