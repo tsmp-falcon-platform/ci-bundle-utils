@@ -27,6 +27,7 @@ class JenkinsServerManager:
         self.war_cache_dir = os.path.join(self.cache_dir, "war", ci_type, ci_version)
         self.tar_cache_dir = os.path.join(self.cache_dir, "tar", ci_type, ci_version)
         self.tar_cache_file = os.path.join(self.tar_cache_dir, "jenkins.war")
+        self.whoami_url = '/whoAmI/api/json?tree=authenticated'
         self.target_base_dir = '/tmp/ci_server_home'
         if not target_dir:
             target_dir = os.path.join(self.target_base_dir, ci_type, ci_version)
@@ -217,7 +218,7 @@ class JenkinsServerManager:
         http_port = os.getenv('BUNDLEUTILS_HTTP_PORT', '8080')
         # if port is already in use, fail
         try:
-            response = requests.get(f"http://localhost:{http_port}/whoAmI/api/json")
+            response = requests.get(f"http://localhost:{http_port}{self.whoami_url}")
             if response.status_code == 200:
                 sys.exit(f"Port {http_port} is already in use. Please specify a different port using the BUNDLEUTILS_HTTP_PORT environment variable.")
         except requests.ConnectionError:
@@ -295,7 +296,7 @@ class JenkinsServerManager:
         logging.info("Checking authentication token...")
         headers = {}
         server_url, username, password = self.get_server_details()
-        url = f"{server_url}/whoAmI/api/json"
+        url = f"{server_url}{self.whoami_url}"
         if username and password:
             headers['Authorization'] = 'Basic ' + base64.b64encode(f'{username}:{password}'.encode('utf-8')).decode('utf-8')
         # zip and post the YAML to the URL
@@ -303,7 +304,7 @@ class JenkinsServerManager:
         response.raise_for_status()
         # ensure the response is valid JSON and the authorities key contains a list with at least one element called authenticated
         response_json = response.json()
-        if 'authorities' not in response_json or 'authenticated' not in response_json['authorities']:
+        if 'authenticated' not in response_json:
             logging.error(f"Response: {response_json}")
             sys.exit("ERROR: Authentication failed. Please check the username and password.")
         else:
@@ -319,7 +320,7 @@ class JenkinsServerManager:
         server_url = self.get_server_url()
         while time.time() < end_time:
             try:
-                response = requests.get(f"{server_url}/whoAmI/api/json")
+                response = requests.get(f"{server_url}{self.whoami_url}")
                 if response.status_code == 200:
                     server_started = True
                     time.sleep(5)

@@ -29,7 +29,7 @@ yaml = YAML(typ='rt')
 script_name = os.path.basename(__file__).replace('.py', '')
 script_name_upper = script_name.upper()
 
-plugin_json_url_path = '/manage/pluginManager/api/json?pretty&depth=1'
+plugin_json_url_path = '/manage/pluginManager/api/json?pretty&depth=1&tree=plugins[*]'
 fetch_url_path = '/core-casc-export'
 validate_url_path = '/casc-bundle-mgnt/casc-bundle-validate'
 
