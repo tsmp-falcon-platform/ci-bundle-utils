@@ -29,7 +29,7 @@ yaml = YAML(typ='rt')
 script_name = os.path.basename(__file__).replace('.py', '')
 script_name_upper = script_name.upper()
 
-plugin_json_url_path = '/manage/pluginManager/api/json?pretty&depth=1&tree=plugins[*]'
+plugin_json_url_path = '/manage/pluginManager/api/json?pretty&depth=1&tree=plugins[*[*]]'
 fetch_url_path = '/core-casc-export'
 validate_url_path = '/casc-bundle-mgnt/casc-bundle-validate'
 
@@ -55,7 +55,7 @@ BUNDLEUTILS_PASSWORD = 'BUNDLEUTILS_PASSWORD'
 BUNDLEUTILS_PATH = 'BUNDLEUTILS_PATH'
 BUNDLEUTILS_FETCH_TARGET_DIR = 'BUNDLEUTILS_FETCH_TARGET_DIR'
 BUNDLEUTILS_PLUGINS_JSON_PATH = 'BUNDLEUTILS_PLUGINS_JSON_PATH'
-
+BUNDLEUTILS_PLUGINS_JSON_ADDITIONS = 'BUNDLEUTILS_PLUGINS_JSON_ADDITIONS'
 
 def common_options(func):
     func = click.option('-l', '--log-level', default=os.environ.get(BUNDLEUTILS_LOG_LEVEL, ''), help=f'The log level (or use {BUNDLEUTILS_LOG_LEVEL}).')(func)
@@ -87,7 +87,7 @@ def set_logging(ctx, log_level, env_file, default=''):
     elif default:
         ctx.obj['LOG_LEVEL'] = default
     logging.getLogger().setLevel(ctx.obj.get('LOG_LEVEL', 'INFO'))
-    logging.debug(f'Set log level to: {ctx.obj.get('LOG_LEVEL', 'INFO')}')
+    logging.debug(f"Set log level to: {ctx.obj.get('LOG_LEVEL', 'INFO')}")
 
     if not ctx.obj.get(BUNDLEUTILS_ENV, ''):
         # auto env based on current directory
@@ -199,15 +199,16 @@ def ci_validate(ctx, log_level, env_file, ci_version, ci_type, ci_server_home, s
 
 @cli.command()
 @server_options
-@click.option('-s', '--source-dir', 'source_dir',  required=True, type=click.Path(file_okay=False, dir_okay=True), help=f'The bundle to be validated.')
+@click.option('-s', '--source-dir', 'source_dir',  required=False, type=click.Path(file_okay=False, dir_okay=True), help=f'The bundle of the plugins to be sanitized.')
 @click.option('-p', '--pin-plugins', default=False, is_flag=True, help=f'Add versions to 3rd party plugins (only available for apiVersion 2).')
 @click.option('-c', '--custom-url', help=f'Add a custom URL, e.g. http://plugins-repo/plugins/PNAME/PVERSION/PNAME.hpi')
 @common_options
 @click.pass_context
 def ci_sanitize_plugins(ctx, log_level, env_file, ci_version, ci_type, ci_server_home, source_dir, pin_plugins, custom_url):
-    """Sanitizes plugins using controller started with ci-start."""
+    """Sanitizes plugins (needs ci-start)."""
     set_logging(ctx, log_level, env_file)
     ci_version, ci_type, ci_server_home = server_options_null_check(ci_version, ci_type, ci_server_home)
+    source_dir = null_check(source_dir, 'source_dir', BUNDLEUTILS_TRANSFORM_TARGET_DIR)
     if not os.path.exists(source_dir):
         sys.exit(f"Source directory '{source_dir}' does not exist")
     jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
@@ -239,9 +240,8 @@ def ci_sanitize_plugins(ctx, log_level, env_file, ci_version, ci_type, ci_server
             logging.debug(f"SANITIZE PLUGINS -> registering non-bootstrap: {plugin_id}")
             envelope_plugins[plugin_id] = plugin_info
 
-    if not installed_plugins:
-        for installed_plugin in data['plugins']:
-            installed_plugins[installed_plugin['shortName']] = installed_plugin
+    for installed_plugin in data['plugins']:
+        installed_plugins[installed_plugin['shortName']] = installed_plugin
 
     # Check if 'plugins' key exists and it's a list
     if 'plugins' in plugins_data and isinstance(plugins_data['plugins'], list):
@@ -430,38 +430,32 @@ def _validate(url, username, password, source_dir, ignore_warnings):
             else:
                 sys.exit('Validation failed with errors or critical messages')
 
-def filter_plugins(data):
-    """Filters out plugins where enabled is False or deleted is True."""
-    filtered_plugins = []
-    plugins = data.get("plugins", [])
-    for plugin in plugins:
-        if plugin.get("deleted", True):
-            logging.debug(f"Plugins: removing deleted plugin: {plugin['shortName']}")
-            filtered_plugins.append(plugin['shortName'])
-        elif not plugin.get("enabled", True):
-            logging.debug(f"Plugins: removing disabled plugin: {plugin['shortName']}")
-            filtered_plugins.append(plugin['shortName'])
-    return filtered_plugins
-
 @cli.command()
 @common_options
-@click.option('-m', '--pluginJsonUrl', 'plugin_json_url', help=f'The URL to fetch plugins info (or use {BUNDLEUTILS_JENKINS_URL}).')
-@click.option('-M', '--pluginJsonPath', 'plugin_json_path', help=f'The path to fetch JSON file from (found at {plugin_json_url_path}).')
+@click.option('-m', '--plugin-json-additions', 'plugin_json_additions', help=f'Strategy for adding missing plugins (or use {BUNDLEUTILS_PLUGINS_JSON_ADDITIONS}).')
+@click.option('-m', '--plugin-json-url', 'plugin_json_url', help=f'The URL to fetch plugins info (or use {BUNDLEUTILS_JENKINS_URL}).')
+@click.option('-M', '--plugin-json-path', 'plugin_json_path', help=f'The path to fetch JSON file from (found at {plugin_json_url_path}).')
 @click.option('-P', '--path', 'path', type=click.Path(file_okay=True, dir_okay=False), help=f'The path to fetch YAML from (or use {BUNDLEUTILS_PATH}).')
 @click.option('-U', '--url', 'url', help=f'The URL to fetch YAML from (or use {BUNDLEUTILS_JENKINS_URL}).')
 @click.option('-u', '--username', 'username', help=f'Username for basic authentication (or use {BUNDLEUTILS_USERNAME}).')
 @click.option('-p', '--password', 'password', help=f'Password for basic authentication (or use {BUNDLEUTILS_PASSWORD}).')
-@click.option('-t', '--target-dir', 'target_dir', type=click.Path(file_okay=True, dir_okay=False), help=f'The target directory for the YAML documents (or use {BUNDLEUTILS_FETCH_TARGET_DIR}).')
+@click.option('-t', '--target-dir', 'target_dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The target directory for the YAML documents (or use {BUNDLEUTILS_FETCH_TARGET_DIR}).')
 @click.pass_context
-def fetch(ctx, log_level, env_file, url, path, username, password, target_dir, plugin_json_url, plugin_json_path):
+def fetch(ctx, log_level, env_file, url, path, username, password, target_dir, plugin_json_url, plugin_json_path, plugin_json_additions):
     """Fetch YAML documents from a URL or path."""
     set_logging(ctx, log_level, env_file)
     username = null_check(username, 'username', BUNDLEUTILS_USERNAME)
     password = null_check(password, 'password', BUNDLEUTILS_PASSWORD)
     url = null_check(url, 'url', BUNDLEUTILS_JENKINS_URL, False)
+    if url:
+        plugin_json_url = url
+    else:
+        plugin_json_url = null_check(plugin_json_url, 'plugin_json_url', BUNDLEUTILS_JENKINS_URL, False)
+
     path = null_check(path, 'path', BUNDLEUTILS_PATH, False)
     plugin_json_path = null_check(plugin_json_path, 'plugin_json_path', BUNDLEUTILS_PLUGINS_JSON_PATH, False)
-    plugin_json_url = null_check(plugin_json_url, 'plugin_json_url', BUNDLEUTILS_JENKINS_URL, False)
+    plugin_json_additions = null_check(plugin_json_additions, 'plugin_json_additions', BUNDLEUTILS_PLUGINS_JSON_ADDITIONS, False, '')
+
     target_dir = null_check(target_dir, 'target directory', BUNDLEUTILS_FETCH_TARGET_DIR, False, default_target)
     if url and fetch_url_path not in url:
         url = url + fetch_url_path
@@ -488,28 +482,151 @@ def fetch(ctx, log_level, env_file, url, path, username, password, target_dir, p
     except Exception as e:
         sys.exit(f'Failed to fetch and write YAML documents: {e}')
     try:
-        update_plugins(plugin_json_url, plugin_json_path, username, password, target_dir)
+        update_plugins(plugin_json_url, plugin_json_path, username, password, target_dir, plugin_json_additions)
     except Exception as e:
         sys.exit(f'Failed to fetch and update plugin data: {e}')
 
+def find_plugin_by_shortname(plugins, short_name):
+    logging.debug(f"Finding plugin by short name: {short_name}")
+    for plugin in plugins:
+        if plugin.get('shortName') == short_name:
+            return plugin
+    return None
 
-def update_plugins(plugin_json_url, plugin_json_path, username, password, target_dir):
-    # if the plugin_json_url is set, fetch the plugins JSON from the URL
+def get_non_optional_deps(plugins, plugin, seen_dependencies=set()):
+    logging.debug(f"Checking dependencies for {plugin}")
+    non_optional_deps = []
+    for dependency in plugin.get("dependencies", []):
+        logging.debug(f"Checking dependency: {dependency}")
+        dependency_details = find_plugin_by_shortname(plugins, dependency["shortName"])
+        if dependency_details is None:
+            if dependency["shortName"] in seen_dependencies:
+                logging.debug(f"Dependency already seen: {dependency['shortName']}")
+                continue
+            logging.error(f"Dependency not found: {dependency['shortName']}")
+            sys.exit(f"Dependency not found: {dependency['shortName']}")
+        if not dependency_details.get("bundled", True) and not dependency.get("optional", True) and dependency["shortName"] not in seen_dependencies:
+            logging.debug(f"Adding non-optional dependency: {dependency['shortName']}")
+            seen_dependencies.add(dependency["shortName"])
+            non_optional_deps.append(dependency_details)
+            # Recursively fetch and add non-optional dependencies of the current dependency
+            non_optional_deps.extend(get_non_optional_deps(plugins, dependency_details, seen_dependencies))
+    return non_optional_deps
+
+def _analyze_server_plugins(plugins_from_json):
+        logging.debug("Plugin Analysis - Analyzing server plugins...")
+        # copy the list of plugins
+        original_plugins = plugins_from_json.copy()
+        reduced_plugins = plugins_from_json.copy()
+        all_deleted_or_inactive_plugins = []
+        # while 100 max iterations is not reached
+        max = 100
+        seen_dependencies = set()
+        while max > 0:
+            max -= 1
+            # start equal
+            current_plugins = reduced_plugins.copy()
+            for plugin in current_plugins:
+                if plugin.get("deleted", True):
+                    all_deleted_or_inactive_plugins.append(plugin['shortName'])
+                    logging.debug(f"Removing deleted plugin: {dep['shortName']}")
+                    reduced_plugins.remove(dep)
+                elif not plugin.get("enabled", True):
+                    all_deleted_or_inactive_plugins.append(plugin['shortName'])
+                    logging.debug(f"Removing disabled plugin: {dep['shortName']}")
+                    reduced_plugins.remove(dep)
+                else:
+                    non_optional_deps = get_non_optional_deps(current_plugins, plugin, seen_dependencies)
+                    for dep in non_optional_deps:
+                        logging.debug(f"Removing non-optional dep {dep['shortName']} - {dep['version']} - {dep['bundled']}")
+                        reduced_plugins.remove(dep)
+                # remove bundled plugins
+                if plugin.get("bundled", True):
+                    logging.debug(f"Removing bootstrap plugin: {plugin['shortName']} - {plugin['version']} - {plugin['bundled']}")
+                    reduced_plugins.remove(plugin)
+                    seen_dependencies.add(plugin["shortName"])
+
+            # break if no change
+            logging.debug(f"Iteration {100 - max}")
+            if current_plugins == reduced_plugins:
+                break
+
+
+        all_roots = reduced_plugins.copy()
+        all_non_optional_deps = original_plugins.copy()
+        for plugin in original_plugins:
+            if plugin.get("bundled", True) or plugin in reduced_plugins:
+                all_non_optional_deps.remove(plugin)
+        all_roots_and_deps = reduced_plugins.copy()
+        all_roots_and_deps.extend(all_non_optional_deps)
+        all_roots_and_deps = sorted(all_roots_and_deps, key=lambda x: x['shortName'])
+
+        logging.info("Plugin Analysis - Non-optional dependencies which can be removed with apiVersion 2:")
+        for plugin in all_non_optional_deps:
+            logging.info(f" -> {plugin['shortName']} - {plugin['version']} - {plugin['bundled']}")
+        logging.info("Plugin Analysis - Root plugins which should be kept with apiVersion 2:")
+        for plugin in all_roots:
+            logging.info(f" -> {plugin['shortName']} - {plugin['version']} - {plugin['bundled']}")
+        logging.info("Plugin Analysis - all non-bootstrap:")
+        # sort the list by shortName
+        for plugin in all_roots_and_deps:
+            logging.info(f" -> {plugin['shortName']} - {plugin['version']} - {plugin['bundled']}")
+
+        logging.info("Plugin Analysis - finished analysis.")
+        return all_roots, all_non_optional_deps, all_roots_and_deps, all_deleted_or_inactive_plugins
+
+def find_plugin_by_id(plugins, plugin_id):
+    logging.debug(f"Finding plugin by id: {plugin_id}")
+    for plugin in plugins:
+        if plugin.get('id') == plugin_id:
+            return plugin
+    return None
+
+def update_plugins(plugin_json_url, plugin_json_path, username, password, target_dir, plugin_json_additions):
     if plugin_json_url:
         logging.debug(f'Loading plugin JSON from URL: {plugin_json_url}')
         response_text = call_jenkins_api(plugin_json_url, username, password)
         # parse text as JSON
         data = json.loads(response_text)
-        filtered_plugins = filter_plugins(data)
-        # if the plugins.yaml file exists in the target directory, remove the filtered plugins from the file
+        plugins_from_json = data.get("plugins", [])
+        all_roots, all_non_optional_deps, all_roots_and_deps, all_deleted_or_inactive_plugins = _analyze_server_plugins(plugins_from_json)
     elif plugin_json_path:
         logging.debug(f'Loading plugin JSON from path: {plugin_json_path}')
         with open(plugin_json_path, 'r') as f:
             data = json.load(f)
-        filtered_plugins = filter_plugins(data)
+        plugins_from_json = data.get("plugins", [])
+        all_roots, all_non_optional_deps, all_roots_and_deps, all_deleted_or_inactive_plugins = _analyze_server_plugins(plugins_from_json)
     else:
         logging.info('No plugin JSON URL or path provided. Cannot determine if disabled/deleted plugins present in list.')
         return
+    if not plugin_json_additions:
+        logging.info('No plugin_json_additions provided. Setting based on apiVersion in bundle.yaml')
+        # find the apiVersion from the bundle.yaml file
+        bundle_yaml = os.path.join(target_dir, 'bundle.yaml')
+        if os.path.exists(bundle_yaml):
+            with open(bundle_yaml, 'r') as f:
+                bundle_yaml = yaml.load(f)
+                api_version = bundle_yaml.get('apiVersion', '')
+                logging.info(f"Found apiVersion: {api_version}")
+                if not api_version:
+                    sys.exit('No apiVersion found in bundle.yaml file')
+                elif api_version == '1':
+                    plugin_json_additions = 'all'
+                elif api_version == '2':
+                    plugin_json_additions = 'roots'
+                else:
+                    sys.exit(f"Invalid apiVersion found in bundle.yaml file: {api_version}")
+
+    # additions can be one of: 'roots', 'all', 'none'
+    expected_plugins = all_roots
+    if plugin_json_additions not in ['roots', 'all', 'none']:
+        sys.exit(f"Invalid plugin_json_additions value: {plugin_json_additions}. Must be one of: 'roots', 'all', 'none'")
+    else:
+        logging.info(f"Using plugin_json_additions: {plugin_json_additions}")
+        if plugin_json_additions == 'all':
+            expected_plugins = all_roots_and_deps
+        elif plugin_json_additions == 'roots':
+            expected_plugins = all_roots
 
     # removing from the plugins.yaml file
     plugins_file = os.path.join(target_dir, 'plugins.yaml')
@@ -517,16 +634,29 @@ def update_plugins(plugin_json_url, plugin_json_path, username, password, target
         with open(plugins_file, 'r') as f:
             plugins_data = yaml.load(f)  # Load the existing data
 
+        updated_plugins = []
+        current_plugins = plugins_data.get("plugins", [])
+        # check for plugins that are installed and necessary but not in the plugins.yaml file
+        # if the plugin is not in the plugins.yaml file, add it
+        for plugin in expected_plugins:
+            found_plugin = find_plugin_by_id(current_plugins, plugin['shortName'])
+            if found_plugin is None:
+                if plugin_json_additions == 'none':
+                    logging.warn(f"Skipping plugin installed on server but not in bundle (according to strategy: {plugin_json_additions}) : {plugin['shortName']}")
+                else:
+                    logging.info(f"Adding expected plugin (according to strategy: {plugin_json_additions}) : {plugin['shortName']}")
+                    updated_plugins.append({'id': plugin['shortName']})
+
         logging.info(f"Looking for disabled/deleted plugins to remove from plugins.yaml")
         # Check if 'plugins' key exists and it's a list
         if 'plugins' in plugins_data and isinstance(plugins_data['plugins'], list):
-            updated_plugins = []
             for plugin in plugins_data['plugins']:
-                if plugin['id'] in filtered_plugins:
+                if plugin['id'] in all_deleted_or_inactive_plugins:
                     logging.info(f" -> removing: {plugin['id']}")
                 else:
                     updated_plugins.append(plugin)
 
+            updated_plugins = sorted(updated_plugins, key=lambda x: x['id'])
             plugins_data['plugins'] = updated_plugins
         with open(plugins_file, 'w') as f:
             yaml.dump(plugins_data, f)  # Write the updated data back to the file
@@ -542,7 +672,7 @@ def update_plugins(plugin_json_url, plugin_json_path, username, password, target
         for configuration in catalog_data.get('configurations', []):
             if 'includePlugins' in configuration:
                 for plugin_id in list(configuration['includePlugins']):
-                    if plugin_id in filtered_plugins:
+                    if plugin_id in all_deleted_or_inactive_plugins:
                         del configuration['includePlugins'][plugin_id]
                         logging.info(f" -> removing: {plugin_id}")
 
@@ -651,25 +781,30 @@ def traverse_credentials(filename, obj, custom_replacements={}, path=""):
     if isinstance(obj, dict):
         for k, v in obj.items():
             new_path = f"{path}/{k}" if path else f"/{k}"
-            if isinstance(v, str) and re.match(r'{.*}', v) and 'id' in obj:
+            # does custom_replacements contain an id that matches the id in the object and a key matching k?
+            if isinstance(v, str) and 'id' in obj:
                 id = obj['id']
-                # if custom replacement found for this id, use the custom replacement value
-                matching_tuple = next((item for item in custom_replacements if item['id'] == id), None)
-                if matching_tuple is None or k not in matching_tuple:
-                    logging.debug(f"Matching tuple NOT found. Creating replacement for {id} and {k}")
-                    # create a string consisting of:
-                    # - all non-alphanumeric characters changed to underscores
-                    # - the id and k joined with an underscore
-                    # - all uppercased
-                    replacement = "${" + re.sub(r'\W', '_', id + "_" + k).upper() + "}"
-                else:
-                    logging.debug(f"Matching tuple found: {matching_tuple}")
-                    replacement = matching_tuple[k]
+                matching_tuple = None
+                custom_replacements_for_id = [item for item in custom_replacements if item['id'] == id]
+                for custom_replacement in custom_replacements_for_id:
+                    if k in custom_replacement:
+                        matching_tuple = custom_replacement
+                if re.match(r'{.*}', v) or matching_tuple is not None:
+                    if matching_tuple is None or k not in matching_tuple:
+                        logging.debug(f"Matching tuple NOT found. Creating replacement for {id} and {k}")
+                        # create a string consisting of:
+                        # - all non-alphanumeric characters changed to underscores
+                        # - the id and k joined with an underscore
+                        # - all uppercased
+                        replacement = "${" + re.sub(r'\W', '_', id + "_" + k).upper() + "}"
+                    else:
+                        logging.debug(f"Matching tuple found: {matching_tuple}")
+                        replacement = matching_tuple[k]
 
-                # print the JSON Patch operation for the replacement
-                patch = {"op": "replace", "path": f'{new_path}', "value": f'{replacement}'}
-                apply_patch(filename, [patch])
-                continue
+                    # print the JSON Patch operation for the replacement
+                    patch = {"op": "replace", "path": f'{new_path}', "value": f'{replacement}'}
+                    apply_patch(filename, [patch])
+                    continue
             traverse_credentials(filename, v, custom_replacements, new_path)
     elif isinstance(obj, list):
         for i, v in enumerate(obj):
@@ -1079,6 +1214,7 @@ def _update_bundle(target_dir, description=None):
 
     # update the version key with the md5sum of the content of all files
     data['version'] = os.popen(f'cat {" ".join([os.path.join(target_dir, file) for file in all_files])} | md5sum').read().split()[0]
+    logging.info(f'Updated version to {data["version"]}')
 
     # Save the YAML file
     logging.info(f'Wrote {target_dir}/bundle.yaml')
