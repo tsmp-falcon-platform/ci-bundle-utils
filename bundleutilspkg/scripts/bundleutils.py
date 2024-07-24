@@ -520,6 +520,7 @@ def _analyze_server_plugins(plugins_from_json):
         original_plugins = plugins_from_json.copy()
         reduced_plugins = plugins_from_json.copy()
         all_deleted_or_inactive_plugins = []
+        all_bootstrap_plugins = []
         # while 100 max iterations is not reached
         max = 100
         seen_dependencies = set()
@@ -543,6 +544,7 @@ def _analyze_server_plugins(plugins_from_json):
                         reduced_plugins.remove(dep)
                 # remove bundled plugins
                 if plugin.get("bundled", True):
+                    all_bootstrap_plugins.append(plugin['shortName'])
                     logging.debug(f"Removing bootstrap plugin: {plugin['shortName']} - {plugin['version']} - {plugin['bundled']}")
                     reduced_plugins.remove(plugin)
                     seen_dependencies.add(plugin["shortName"])
@@ -574,7 +576,7 @@ def _analyze_server_plugins(plugins_from_json):
             logging.info(f" -> {plugin['shortName']} - {plugin['version']} - {plugin['bundled']}")
 
         logging.info("Plugin Analysis - finished analysis.")
-        return all_roots, all_non_bootstrap, all_roots_and_deps, all_deleted_or_inactive_plugins
+        return all_roots, all_bootstrap_plugins, all_non_bootstrap, all_roots_and_deps, all_deleted_or_inactive_plugins
 
 def find_plugin_by_id(plugins, plugin_id):
     logging.debug(f"Finding plugin by id: {plugin_id}")
@@ -590,13 +592,13 @@ def update_plugins(plugin_json_url, plugin_json_path, username, password, target
         # parse text as JSON
         data = json.loads(response_text)
         plugins_from_json = data.get("plugins", [])
-        all_roots, all_non_bootstrap, all_roots_and_deps, all_deleted_or_inactive_plugins = _analyze_server_plugins(plugins_from_json)
+        all_roots, all_bootstrap_plugins, all_non_bootstrap, all_roots_and_deps, all_deleted_or_inactive_plugins = _analyze_server_plugins(plugins_from_json)
     elif plugin_json_path:
         logging.debug(f'Loading plugin JSON from path: {plugin_json_path}')
         with open(plugin_json_path, 'r') as f:
             data = json.load(f)
         plugins_from_json = data.get("plugins", [])
-        all_roots, all_non_bootstrap, all_roots_and_deps, all_deleted_or_inactive_plugins = _analyze_server_plugins(plugins_from_json)
+        all_roots, all_bootstrap_plugins, all_non_bootstrap, all_roots_and_deps, all_deleted_or_inactive_plugins = _analyze_server_plugins(plugins_from_json)
     else:
         logging.info('No plugin JSON URL or path provided. Cannot determine if disabled/deleted plugins present in list.')
         return
@@ -652,10 +654,9 @@ def update_plugins(plugin_json_url, plugin_json_path, username, password, target
         # Check if 'plugins' key exists and it's a list
         if 'plugins' in plugins_data and isinstance(plugins_data['plugins'], list):
             for plugin in plugins_data['plugins']:
-                found_non_bootstrap_plugin = find_plugin_by_shortname(all_non_bootstrap, plugin['id'])
                 if plugin['id'] in all_deleted_or_inactive_plugins:
                     logging.info(f" -> removing deleted or inactive: {plugin['id']}")
-                elif found_non_bootstrap_plugin is None:
+                elif plugin['id'] in all_bootstrap_plugins:
                     logging.info(f" -> removing bootstrap: {plugin['id']}")
                 else:
                     updated_plugins.append(plugin)
