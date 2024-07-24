@@ -274,6 +274,7 @@ def ci_sanitize_plugins(ctx, log_level, env_file, ci_version, ci_type, ci_server
         plugins_data['plugins'] = updated_plugins
     with open(plugins_file, 'w') as f:
         yaml.dump(plugins_data, f)  # Write the updated data back to the file
+    _update_bundle(source_dir)
 
 
 @cli.command()
@@ -553,16 +554,16 @@ def _analyze_server_plugins(plugins_from_json):
 
 
         all_roots = reduced_plugins.copy()
-        all_non_optional_deps = original_plugins.copy()
+        all_non_bootstrap = original_plugins.copy()
         for plugin in original_plugins:
             if plugin.get("bundled", True) or plugin in reduced_plugins:
-                all_non_optional_deps.remove(plugin)
+                all_non_bootstrap.remove(plugin)
         all_roots_and_deps = reduced_plugins.copy()
-        all_roots_and_deps.extend(all_non_optional_deps)
+        all_roots_and_deps.extend(all_non_bootstrap)
         all_roots_and_deps = sorted(all_roots_and_deps, key=lambda x: x['shortName'])
 
         logging.info("Plugin Analysis - Non-optional dependencies which can be removed with apiVersion 2:")
-        for plugin in all_non_optional_deps:
+        for plugin in all_non_bootstrap:
             logging.info(f" -> {plugin['shortName']} - {plugin['version']} - {plugin['bundled']}")
         logging.info("Plugin Analysis - Root plugins which should be kept with apiVersion 2:")
         for plugin in all_roots:
@@ -573,7 +574,7 @@ def _analyze_server_plugins(plugins_from_json):
             logging.info(f" -> {plugin['shortName']} - {plugin['version']} - {plugin['bundled']}")
 
         logging.info("Plugin Analysis - finished analysis.")
-        return all_roots, all_non_optional_deps, all_roots_and_deps, all_deleted_or_inactive_plugins
+        return all_roots, all_non_bootstrap, all_roots_and_deps, all_deleted_or_inactive_plugins
 
 def find_plugin_by_id(plugins, plugin_id):
     logging.debug(f"Finding plugin by id: {plugin_id}")
@@ -589,13 +590,13 @@ def update_plugins(plugin_json_url, plugin_json_path, username, password, target
         # parse text as JSON
         data = json.loads(response_text)
         plugins_from_json = data.get("plugins", [])
-        all_roots, all_non_optional_deps, all_roots_and_deps, all_deleted_or_inactive_plugins = _analyze_server_plugins(plugins_from_json)
+        all_roots, all_non_bootstrap, all_roots_and_deps, all_deleted_or_inactive_plugins = _analyze_server_plugins(plugins_from_json)
     elif plugin_json_path:
         logging.debug(f'Loading plugin JSON from path: {plugin_json_path}')
         with open(plugin_json_path, 'r') as f:
             data = json.load(f)
         plugins_from_json = data.get("plugins", [])
-        all_roots, all_non_optional_deps, all_roots_and_deps, all_deleted_or_inactive_plugins = _analyze_server_plugins(plugins_from_json)
+        all_roots, all_non_bootstrap, all_roots_and_deps, all_deleted_or_inactive_plugins = _analyze_server_plugins(plugins_from_json)
     else:
         logging.info('No plugin JSON URL or path provided. Cannot determine if disabled/deleted plugins present in list.')
         return
@@ -651,8 +652,11 @@ def update_plugins(plugin_json_url, plugin_json_path, username, password, target
         # Check if 'plugins' key exists and it's a list
         if 'plugins' in plugins_data and isinstance(plugins_data['plugins'], list):
             for plugin in plugins_data['plugins']:
+                found_non_bootstrap_plugin = find_plugin_by_shortname(all_non_bootstrap, plugin['id'])
                 if plugin['id'] in all_deleted_or_inactive_plugins:
-                    logging.info(f" -> removing: {plugin['id']}")
+                    logging.info(f" -> removing deleted or inactive: {plugin['id']}")
+                elif found_non_bootstrap_plugin is None:
+                    logging.info(f" -> removing bootstrap: {plugin['id']}")
                 else:
                     updated_plugins.append(plugin)
 
