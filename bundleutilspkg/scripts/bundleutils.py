@@ -486,6 +486,61 @@ def fetch(ctx, log_level, env_file, url, path, username, password, target_dir, p
         update_plugins(plugin_json_url, plugin_json_path, username, password, target_dir, plugin_json_additions)
     except Exception as e:
         sys.exit(f'Failed to fetch and update plugin data: {e}')
+    # TODO remove as soon as the export does not add '^' to variables
+    handle_unwanted_escape_characters(target_dir)
+
+def handle_unwanted_escape_characters(target_dir):
+    prefix = 'ESCAPE CHAR CHECK: '
+    logging.info(f"{prefix}Start...")
+    # check in the jenkins.yaml file for the key 'cascItemsConfiguration.variableInterpolationEnabledForAdmin'
+    jenkins_yaml = os.path.join(target_dir, 'jenkins.yaml')
+    if not os.path.exists(jenkins_yaml):
+        sys.exit(f"Jenkins YAML file '{jenkins_yaml}' does not exist (something seriously wrong here)")
+    with open(jenkins_yaml, 'r') as f:
+        jenkins_data = yaml.load(f)
+    if 'cascItemsConfiguration' in jenkins_data['unclassified'] and 'variableInterpolationEnabledForAdmin' in jenkins_data['unclassified']['cascItemsConfiguration']:
+        pattern = r"\^{1,}\$\{"
+        search_replace = '${'
+        interpolation_enabled = jenkins_data['unclassified']['cascItemsConfiguration']['variableInterpolationEnabledForAdmin']
+        if interpolation_enabled == 'true':
+            # replace all instances of multiple '^' followed by with '${' with '^${' in the jenkins.yaml file
+            pattern = r"\^{2,}\$\{"
+            search_replace = '^${'
+        items_yaml = os.path.join(target_dir, 'items.yaml')
+        if os.path.exists(items_yaml):
+            with open(items_yaml, 'r') as f:
+                items_data = yaml.load(f)
+            logging.info(f"{prefix}Variable interpolation enabled for admin = {interpolation_enabled}. Replacing '{pattern}' with '{search_replace}' in items.yaml")
+            items_data = replace_string_in_dict(items_data, pattern, search_replace)
+        with open(items_yaml, 'w') as f:
+                yaml.dump(items_data, f)
+
+def replace_string_in_dict(data, pattern, replacement):
+    if isinstance(data, dict):
+        for key, value in data.items():
+            if isinstance(value, dict):
+                data[key] = replace_string_in_dict(value, pattern, replacement)
+            elif isinstance(value, list):
+                data[key] = replace_string_in_list(value, pattern, replacement)
+            elif isinstance(value, str):
+                match = re.search(pattern, value)
+                if match:
+                    logging.debug(f"Replacing '{pattern}' with '{replacement}' in dict '{value}'")
+                    data[key] = re.sub(pattern, replacement, value)
+    return data
+
+def replace_string_in_list(data, pattern, replacement):
+    for i, value in enumerate(data):
+        if isinstance(value, dict):
+            data[i] = replace_string_in_dict(value, pattern, replacement)
+        elif isinstance(value, list):
+            data[i] = replace_string_in_list(value, pattern, replacement)
+        elif isinstance(value, str):
+            match = re.search(pattern, value)
+            if match:
+                logging.debug(f"Replacing '{pattern}' with '{replacement}' in list '{value}'")
+                data[i] = re.sub(pattern, replacement, value)
+    return data
 
 def find_plugin_by_shortname(plugins, short_name):
     logging.debug(f"Finding plugin by short name: {short_name}")
