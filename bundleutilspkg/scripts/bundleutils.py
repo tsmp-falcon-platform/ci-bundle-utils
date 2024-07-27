@@ -445,14 +445,15 @@ def _validate(url, username, password, source_dir, ignore_warnings):
 def fetch(ctx, log_level, env_file, url, path, username, password, target_dir, plugin_json_url, plugin_json_path, plugin_json_additions):
     """Fetch YAML documents from a URL or path."""
     set_logging(ctx, log_level, env_file)
-    username = null_check(username, 'username', BUNDLEUTILS_USERNAME)
-    password = null_check(password, 'password', BUNDLEUTILS_PASSWORD)
     url = null_check(url, 'url', BUNDLEUTILS_JENKINS_URL, False)
+    if url or plugin_json_url:
+        # we'll need username and password for this
+        username = null_check(username, 'username', BUNDLEUTILS_USERNAME)
+        password = null_check(password, 'password', BUNDLEUTILS_PASSWORD)
     if url:
         plugin_json_url = url
     else:
         plugin_json_url = null_check(plugin_json_url, 'plugin_json_url', BUNDLEUTILS_JENKINS_URL, False)
-
     path = null_check(path, 'path', BUNDLEUTILS_PATH, False)
     plugin_json_path = null_check(plugin_json_path, 'plugin_json_path', BUNDLEUTILS_PLUGINS_JSON_PATH, False)
     plugin_json_additions = null_check(plugin_json_additions, 'plugin_json_additions', BUNDLEUTILS_PLUGINS_JSON_ADDITIONS, False, '')
