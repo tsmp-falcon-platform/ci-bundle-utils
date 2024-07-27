@@ -6,11 +6,6 @@
 # if no roles/groups are left in the rbac.yaml file, the file itself is removed
 
 patches:
-  jenkins.yaml:
-  - op: remove
-    path: /jenkins/remotingSecurity
-  - op: remove
-    path: /jenkins/slaveAgentPort
   items.yaml:
   - op: remove
     path: /items
@@ -20,11 +15,3 @@ patches:
   - op: remove
     path: /groups
 
-
-credentials:
-  jenkins.yaml: {}
-  items.yaml: {}
-
-splits:
-  items: {}
-  jcasc: {}

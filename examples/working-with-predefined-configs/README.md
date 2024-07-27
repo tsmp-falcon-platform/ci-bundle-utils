@@ -61,7 +61,6 @@ transformations
 └── remove-dynamic-stuff.yaml
 ```
 
-
 ### Config Example
 
 Take a look at `env.controller-a.yaml`
@@ -108,9 +107,9 @@ bundleutils ci-validate
 bundleutils ci-stop
 ```
 
-### Makefile
+### Optional Makefile
 
-The provided `Makefile` allows us the run commands from the root directory by:
+The provided `Makefile` allows us the run the above commands from the root directory by:
 
 - navigating to the bundle directory
 - performing the commands
