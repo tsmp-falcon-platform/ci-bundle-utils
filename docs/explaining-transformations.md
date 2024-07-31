@@ -1,3 +1,44 @@
+# Explaining Transformations
+
+The `bundleutils transform` command allows passing one of more transformation yaml files.
+
+These yaml files contains instructions on how to manipulate the files inside the bundle.
+
+Each yaml file can consist of 4 sections
+
+- `patches`
+  - written per file
+  - contains a list of JSON patch expressions to apply
+- `credentials`
+  - used to replace encrypted credentials values
+  - written per file
+  - contains a list of entries to replace
+  - credentials found but not listed will be auto-replaced according to the id and field
+- `splits`
+  - contains two types of split - `items` and `jcasc`
+  - `items`
+    - written per file
+    - contains a list of pattern and target
+    - `pattern` - will match the name of the item
+    - `target` - the target file whereby:
+      - `xxxxxxx.yaml` will save all matched items as `xxxxxxx.yaml`
+      - `auto` will save each matched item in a separate file
+      - `delete` will remove the item from the list
+  - `jcasc`
+    - written per file
+    - contains a list of paths and target
+    - `paths` - will match all the paths given
+    - `target` - the target file whereby:
+      - `xxxxxxx.yaml` will save all matched items as `xxxxxxx.yaml`
+      - `auto` will save each matched item in a separate file
+- `substitutions`
+  - written per file
+  - contains a list of regex patterns and replacement
+  - can be used as a fallback if the above doesn't fit the requirements
+
+## Example
+
+```yaml
 # Patches based upon https://jsonpatch.com/
 patches:
   jenkins.yaml:
@@ -13,6 +54,7 @@ patches:
 # Explicit:
 # - id: github-token-ro
 #   password: ${MY_READ_TOKEN}
+#   username: ${MY_READ_TOKEN}
 # - id: github-org-hooks-shared-secret
 #   secret: ${MY_SHARED_ORGS_HOOKS_SECRET}
 credentials:
@@ -58,3 +100,4 @@ substitutions: {}
   # jenkins.yaml:
   # - pattern: cloudbees/cloudbees-core-agent:[0-9\.]+
   #   value: cloudbees/cloudbees-core-agent:${readFile:/var/jenkins_home/jenkins.install.InstallUtil.lastExecVersion}
+```

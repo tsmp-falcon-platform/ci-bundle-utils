@@ -25,8 +25,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-pip \
     zip \
     && rm -rf /var/lib/apt/lists/* \
-    && mkdir -p /opt/bundleutils/.cache /opt/bundleutils/.app /opt/bundleutils/work \
-    && chmod -R 777 /opt/bundleutils/.cache /opt/bundleutils/work
+    && mkdir -p /opt/bundleutils/.cache /opt/bundleutils/.app /opt/bundleutils/work /workspace \
+    && chmod -R 777 /opt/bundleutils/.cache /opt/bundleutils/work /workspace
 
 # Create a virtual environment
 RUN python3 -m venv /opt/bundleutils/.venv

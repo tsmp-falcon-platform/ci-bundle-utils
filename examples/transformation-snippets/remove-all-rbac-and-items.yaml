@@ -1,0 +1,17 @@
+# This transformation uses patches to remove:
+# - the roles and groups from rbac.yaml
+# - the items from the items.yaml file
+#
+# if no items are left in the items.yaml file, the file itself is removed
+# if no roles/groups are left in the rbac.yaml file, the file itself is removed
+
+patches:
+  items.yaml:
+  - op: remove
+    path: /items
+  rbac.yaml:
+  - op: remove
+    path: /roles
+  - op: remove
+    path: /groups
+

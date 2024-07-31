@@ -1,0 +1,8 @@
+splits:
+  jcasc:
+    jenkins.yaml:
+    - target: bundleManagement.yaml
+      paths:
+      - unclassified/bundleUpdateTiming
+      - unclassified/cascItemsConfiguration
+
