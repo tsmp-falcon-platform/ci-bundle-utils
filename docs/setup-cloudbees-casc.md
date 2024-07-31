@@ -36,7 +36,7 @@ A full example of this configuration can be found in the provided [../template-b
 
 **NOTE: Have a cloud already?** You can just add the pod template.
 
-**NOTE (PVC):** If you have not set up a shared volume, remove the sections commented  `# TODO...`
+**NOTE:** Check the sections commented with `# TODO...` 
 
 ```yaml
 jenkins:
@@ -59,7 +59,7 @@ jenkins:
           spec:
             containers:
             - name: jnlp
-              image: ghcr.io/tsmp-falcon-platform/ci-bundle-utils:latest
+              image: ghcr.io/tsmp-falcon-platform/ci-bundle-utils:latest # TODO: check for the current version
               command: ["/usr/share/jenkins/jenkins-agent"]
               volumeMounts:
               - name: pseudo-jnlp
@@ -69,7 +69,7 @@ jenkins:
                 mountPath: /opt/bundleutils/.cache
             initContainers:
             - name: copy-agent-stuff
-              image: cloudbees/cloudbees-core-agent:2.452.3.2
+              image: cloudbees/cloudbees-core-agent:2.452.3.2 # TODO: check for the your version of CI
               command: ["sh", "-c", "cp /usr/share/jenkins/agent.jar /usr/local/bin/jenkins-agent  /pseudo-jnlp/"]
               volumeMounts:
               - name: pseudo-jnlp
@@ -91,7 +91,7 @@ jenkins:
           spec:
             containers:
             - name: jnlp
-              image: ghcr.io/tsmp-falcon-platform/ci-bundle-utils:latest
+              image: ghcr.io/tsmp-falcon-platform/ci-bundle-utils:latest # TODO: check for the current version
               command: ["/usr/share/jenkins/jenkins-agent"]
               volumeMounts:
               - name: pseudo-jnlp
@@ -101,7 +101,7 @@ jenkins:
                 mountPath: /opt/bundleutils/.cache
             initContainers:
             - name: copy-agent-stuff
-              image: cloudbees/cloudbees-core-agent:2.452.3.2
+              image: cloudbees/cloudbees-core-agent:2.452.3.2 # TODO: check for the your version of CI
               command: ["sh", "-c", "cp /usr/share/jenkins/agent.jar /usr/local/bin/jenkins-agent  /pseudo-jnlp/"]
               volumeMounts:
               - name: pseudo-jnlp
