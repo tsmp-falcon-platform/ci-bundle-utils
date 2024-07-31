@@ -490,7 +490,7 @@ def fetch(ctx, log_level, env_file, url, path, username, password, target_dir, p
     handle_unwanted_escape_characters(target_dir)
 
 def handle_unwanted_escape_characters(target_dir):
-    prefix = 'ESCAPE CHAR CHECK: '
+    prefix = 'ESCAPE CHAR CHECK - SECO-3944: '
     logging.info(f"{prefix}Start...")
     # check in the jenkins.yaml file for the key 'cascItemsConfiguration.variableInterpolationEnabledForAdmin'
     jenkins_yaml = os.path.join(target_dir, 'jenkins.yaml')
@@ -512,8 +512,33 @@ def handle_unwanted_escape_characters(target_dir):
                 items_data = yaml.load(f)
             logging.info(f"{prefix}Variable interpolation enabled for admin = {interpolation_enabled}. Replacing '{pattern}' with '{search_replace}' in items.yaml")
             items_data = replace_string_in_dict(items_data, pattern, search_replace)
+            prefix = 'EQUAL DISPLAY_NAME CHECK: '
+            logging.info(f"{prefix}Start...")
+            items_data = replace_display_name_if_necessary(items_data)
+            logging.info(f"{prefix}Finished...")
         with open(items_yaml, 'w') as f:
                 yaml.dump(items_data, f)
+
+def replace_display_name_if_necessary(data):
+    if isinstance(data, dict):
+        # if dict has key 'displayName' and 'name' and they are the same, remove the 'displayName' key
+        if 'displayName' in data and 'name' in data and data['displayName'] == data['name']:
+            logging.info(f"Setting 'displayName' to empty string since equal to name: {data['name']}")
+            data['displayName'] = ''
+        for key, value in data.items():
+            if isinstance(value, dict):
+                data[key] = replace_display_name_if_necessary(value)
+            elif isinstance(value, list):
+                data[key] = replace_display_name_if_necessary(value)
+            data[key] = value
+    elif isinstance(data, list):
+        for i, value in enumerate(data):
+            if isinstance(value, dict):
+                data[i] = replace_display_name_if_necessary(value)
+            elif isinstance(value, list):
+                data[i] = replace_display_name_if_necessary(value)
+    return data
+
 
 def replace_string_in_dict(data, pattern, replacement):
     if isinstance(data, dict):
