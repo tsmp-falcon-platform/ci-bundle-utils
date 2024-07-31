@@ -36,7 +36,7 @@ A full example of this configuration can be found in the provided [../template-b
 
 **NOTE: Have a cloud already?** You can just add the pod template.
 
-**NOTE (PVC):** If you have not set up a shared volume, remove the sections commented  `# TODO - remove...`
+**NOTE (PVC):** If you have not set up a shared volume, remove the sections commented  `# TODO...`
 
 ```yaml
 jenkins:
@@ -59,7 +59,7 @@ jenkins:
           spec:
             containers:
             - name: jnlp
-              image: ghcr.io/tsmp-falcon-platform/ci-bundle-utils:v0.4.6
+              image: ghcr.io/tsmp-falcon-platform/ci-bundle-utils:latest
               command: ["/usr/share/jenkins/jenkins-agent"]
               volumeMounts:
               - name: pseudo-jnlp
@@ -91,7 +91,7 @@ jenkins:
           spec:
             containers:
             - name: jnlp
-              image: ghcr.io/tsmp-falcon-platform/ci-bundle-utils:v0.4.6
+              image: ghcr.io/tsmp-falcon-platform/ci-bundle-utils:latest
               command: ["/usr/share/jenkins/jenkins-agent"]
               volumeMounts:
               - name: pseudo-jnlp
