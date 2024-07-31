@@ -1,4 +1,4 @@
-# In addition to the normal operationalize.yaml, this transformation uses patches to remove:
+# This transformation uses patches to remove:
 # - the roles and groups from rbac.yaml
 # - the items from the items.yaml file
 #

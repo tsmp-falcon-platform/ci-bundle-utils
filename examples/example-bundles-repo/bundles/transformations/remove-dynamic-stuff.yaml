@@ -9,3 +9,8 @@ patches:
     path: /jenkins/slaveAgentPort
   - op: remove
     path: /jenkins/updateCenter
+
+    # removing the credentials section so we can add our own in the UI (can be managed with CASC later)
+  - op: remove
+    path: /credentials
+

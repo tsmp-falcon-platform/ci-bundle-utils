@@ -1,6 +1,6 @@
 ## Predefined Configs Example
 
-Imagine the structure:
+Imagine the structure found in [../example-bundles-repo/bundles](../examples/example-bundles-repo/bundles):
 
 ```sh
 ├── bundles
@@ -29,15 +29,15 @@ Imagine the structure:
 
 ### Config Auto Discovery
 
-The `bundleutils` script will try to discover a predefined config.
+The `bundleutils` tool will try to discover a predefined config.
 
 A prefefined config is like a `.env` file for the bundleutils script.
 
 - provides values for the various steps (no need to pass cli options)
-- has the possible forms
-  - `env.<cwd-basename>.yaml` (env vars using YAML KEY: VAL)
-  - `env.<cwd-basename>` (env var in the normal KEY=VAL format)
 - expected in the parent directory of the CWD
+- has two the possible formats:
+  - `env.<cwd-basename>.yaml` (env vars using a YAML `KEY: VAL` format)
+  - `env.<cwd-basename>` (env var in the normal `KEY=VAL` format)
 
 This allows us to have the configuration for `controller-a` next to the bundle for `controller-a`
 
@@ -89,7 +89,7 @@ This would be the equivalent of running commands like...
 
 ```sh
 bundleutils fetch --url ... --target-dir ...
-bundleutils transform --source-dir ... --target-dir ... --config ...1 --config ...2 --config ...3
+bundleutils transform --source-dir ... --target-dir ... --config ...1.yaml --config ...2.yaml --config ...3.yaml
 bundleutils ci-setup --ci-type ... --ci-version ... --source-dir ...
 bundleutils ci-start --ci-type ... --ci-version ...
 bundleutils ci-validate --source-dir ...

@@ -1,8 +1,0 @@
-apiVersion: '1'
-id: controller-a
-description: Bundle for controller-a
-version: 7657e60a5eb471d8ed26dfd039ec001f
-jcasc:
-- jenkins.yaml
-plugins:
-- plugins.yaml

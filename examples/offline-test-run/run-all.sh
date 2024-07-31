@@ -97,22 +97,13 @@ set -x
 bundleutils normalize
 set +x
 
-banner "This will operationalize with transform the bundle further by:
-- Removing problematic sections of CasC such as remotingSecurity and slaveAgentPort
-
-The default operationalize.yaml file can be overwritten by cli or a file of the same name in the CWD.
-"
-set -x
-bundleutils operationalize
-set +x
-
 banner "This will setup a server (according to the BUNDLEUTILS_CI_TYPE and BUNDLEUTILS_CI_VERSION):
 - Used for validating the bundle
 - Downloading the appropriate jenkins.war
 - Creating a simple starter bundle with appropriate plugins
 "
 set -x
-bundleutils ci-setup -s target/docs-operationalized
+bundleutils ci-setup -s target/docs-normalized
 set +x
 
 banner "This will start the server (according to the BUNDLEUTILS_CI_TYPE and BUNDLEUTILS_CI_VERSION)
@@ -124,7 +115,7 @@ set +x
 banner "This will validate your bundle
 "
 set -x
-bundleutils ci-validate -s target/docs-operationalized || exit_trap
+bundleutils ci-validate -s target/docs-normalized || exit_trap
 set +x
 
 banner "This will stop the server (according to the BUNDLEUTILS_CI_TYPE and BUNDLEUTILS_CI_VERSION)

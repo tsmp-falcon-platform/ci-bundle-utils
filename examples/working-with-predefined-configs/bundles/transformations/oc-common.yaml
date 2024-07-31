@@ -1,9 +1,0 @@
-# Patches based upon https://jsonpatch.com/
-patches:
-  jenkins.yaml:
-  - op: replace
-    path: /license/key
-    value: ${CI_LICENSE_KEY}
-  - op: replace
-    path: /license/certificate
-    value: ${CI_LICENSE_CERT}
