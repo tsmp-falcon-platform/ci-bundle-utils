@@ -8,6 +8,8 @@ The following gives provides an example for one operations center and one contro
 
 Copy the [../examples/example-bundles-repo](../examples/example-bundles-repo) to a repository of your choice.
 
+**NOTE:** You can also use the template repository at https://github.com/tsmp-falcon-platform/example-bundles-drift
+
 Notice the structure and the `env.<bundle_name>.yaml` configuration file in the parent directory.
 
 ```sh
