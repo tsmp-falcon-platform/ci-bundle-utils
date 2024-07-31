@@ -9,8 +9,8 @@ BUNDLES_WORKSPACE ?= $(CWD)
 .PHONY: compose/start-dev
 compose/start-dev: ## Start the bundleutils container
 compose/start-dev: compose/stop
-	@docker compose run --rm builder
-	@BUNDLEUTLS_IMAGE=bundleutils:dev docker compose up -d
+	@docker compose run --rm --build builder
+	@BUNDLEUTILS_IMAGE=bundleutils:dev docker compose up -d
 
 .PHONY: compose/start
 compose/start: ## Start the bundleutils container
