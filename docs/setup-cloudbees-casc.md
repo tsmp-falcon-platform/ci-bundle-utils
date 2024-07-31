@@ -36,7 +36,7 @@ A full example of this configuration can be found in the provided [../template-b
 
 **NOTE: Have a cloud already?** You can just add the pod template.
 
-**NOTE:** Check the sections commented with `# TODO...` 
+**NOTE:** Check the sections commented with `# TODO...`
 
 ```yaml
 jenkins:

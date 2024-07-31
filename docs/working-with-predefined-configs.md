@@ -49,6 +49,43 @@ This allows us to have the configuration for `controller-a` next to the bundle f
 └── env.controller-a.yaml
 ```
 
+### Overriding Config Values
+
+By default, configuration values cannot be overridden by environment variables of the same.
+
+You can allow overrides by setting the `BUNDLEUTILS_ENV_OVERRIDE=1` before running the command.
+
+e.g. normal setting
+
+```sh
+❯ bundleutils fetch
+...
+...
+INFO:root:Setting environment variable: BUNDLEUTILS_JENKINS_URL=https://cjoc.eks.sboardwell.aws.ps.beescloud.com
+```
+
+e.g. overriding with `BUNDLEUTILS_ENV_OVERRIDE=1`
+
+```sh
+❯ BUNDLEUTILS_ENV_OVERRIDE=1 \
+  BUNDLEUTILS_JENKINS_URL=bla \
+  bundleutils fetch
+...
+...
+INFO:root:Overriding with env, setting: BUNDLEUTILS_JENKINS_URL=bla
+```
+
+e.g. unsuccesful override without `BUNDLEUTILS_ENV_OVERRIDE=1`
+
+```sh
+❯ BUNDLEUTILS_ENV_OVERRIDE=0 \
+  BUNDLEUTILS_JENKINS_URL=bla \
+  bundleutils fetch
+...
+...
+INFO:root:Ignoring passed env, setting: BUNDLEUTILS_JENKINS_URL=https://cjoc.eks.sboardwell.aws.ps.beescloud.com
+```
+
 ### Reusable Transformation Files
 
 The transformation yaml can be re-used by different bundles.

@@ -114,24 +114,24 @@ def set_logging(ctx, log_level, env_file, default=''):
         should_override = os.environ.get(BUNDLEUTILS_ENV_OVERRIDE, 'false').lower() in ['true', '1', 't', 'y', 'yes']
         # if env file ends with .yaml, load it as a YAML file
         if env_file.endswith('.yaml') or env_file.endswith('.yml'):
-            logging.debug(f'Loading dotenv file: {env_file}')
+            logging.info(f'Loading dotenv file: {env_file}')
             with open(env_file, 'r') as f:
                 env_vars = yaml.load(f)
                 for key, value in env_vars.items():
                     if key not in os.environ:
-                        logging.debug(f'Setting environment variable: {key}={value}')
+                        logging.info(f'Setting environment variable: {key}={value}')
                         os.environ[key] = str(value)
                     elif should_override:
-                        logging.debug(f'Overriding with env, setting: {key}=' + os.environ[key])
+                        logging.info(f'Overriding with env, setting: {key}=' + os.environ[key])
                     else:
-                        logging.debug(f'Ignoring passed env, setting: {key}={value}')
+                        logging.info(f'Ignoring passed env, setting: {key}={value}')
                         os.environ[key] = str(value)
         else:
             env_file_path = find_dotenv(env_file, usecwd=True)
-            logging.debug(f'Loading dotenv file: {env_file} ({env_file_path})')
+            logging.info(f'Loading dotenv file: {env_file} ({env_file_path})')
             load_dotenv(env_file_path, verbose=True, override=should_override)
     else:
-        logging.debug(f'No env file provided')
+        logging.info(f'No env file provided')
 
 @click.group(invoke_without_command=True)
 @common_options
