@@ -5,6 +5,7 @@ repos:
   - id: doctoc
     args:
     - -u
+    - --notitle
 - repo: https://github.com/cloudposse/pre-commit-makefile
   rev: v0.2.0
   hooks:

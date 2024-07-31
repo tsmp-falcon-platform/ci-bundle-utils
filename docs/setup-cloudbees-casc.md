@@ -4,7 +4,6 @@ We will need a number of components to enable running pods on the operations cen
 
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
-## Contents
 
 - [Through the UI?](#through-the-ui)
 - [Through CasC](#through-casc)
