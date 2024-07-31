@@ -4,6 +4,7 @@
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 ## Contents
 
+- [Show me the money](#show-me-the-money)
 - [What is it?](#what-is-it)
 - [Why create it?](#why-create-it)
 - [Where can I run it?](#where-can-i-run-it)
@@ -11,6 +12,10 @@
 - [Local Development](#local-development)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
+## Show me the money
+
+If you don't like reading documentation and just want to try it out in your current setup, see [this document](./docs/show-me-the-money.md).
 
 ## What is it?
 
