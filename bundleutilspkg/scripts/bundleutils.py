@@ -35,7 +35,6 @@ validate_url_path = '/casc-bundle-mgnt/casc-bundle-validate'
 
 default_target = 'target/docs'
 default_normalized = default_target + '-normalized'
-default_operationalized = default_target + '-operationalized'
 
 # environment variables
 BUNDLEUTILS_CI_VERSION = 'BUNDLEUTILS_CI_VERSION'
@@ -1048,27 +1047,6 @@ def normalize(ctx, log_level, env_file, strict, configs, source_dir, target_dir)
             configs = ['normalize.yaml']
         else:
             path = pkg_resources.files('defaults.configs') / 'normalize.yaml'
-            configs = [path]
-    _transform(configs, source_dir, target_dir)
-
-@cli.command()
-@common_options
-@transform_options
-@click.pass_context
-def operationalize(ctx, log_level, env_file, strict, configs, source_dir, target_dir):
-    """Transform using the operationalize.yaml (run normalise first)."""
-    set_logging(ctx, log_level, env_file)
-    if not source_dir:
-        source_dir = default_normalized
-    if not target_dir:
-        target_dir = default_operationalized
-    if not configs:
-        # if a normalize.yaml file is found in the current directory, use it
-        if os.path.exists('operationalize.yaml'):
-            logging.info('Using operationalize.yaml in the current directory')
-            configs = ['operationalize.yaml']
-        else:
-            path = pkg_resources.files('defaults.configs') / 'operationalize.yaml'
             configs = [path]
     _transform(configs, source_dir, target_dir)
 

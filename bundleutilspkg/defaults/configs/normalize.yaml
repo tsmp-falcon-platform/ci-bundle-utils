@@ -13,6 +13,8 @@ patches:
 # Explicit:
 # - id: github-token-ro
 #   password: ${MY_READ_TOKEN}
+# - id: github-org-hooks-shared-secret
+#   secret: ${MY_SHARED_ORGS_HOOKS_SECRET}
 credentials:
   # jenkins.yaml:
   # - id: github-token-ro
