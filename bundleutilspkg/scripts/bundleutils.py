@@ -382,7 +382,8 @@ def find_bundle_by_url(ctx, log_level, env_file, url, ci_version, bundles_dir):
     for env_file in glob.iglob(f'{bundles_dir}/**/env.*.yaml', recursive=True):
         with open(env_file, 'r') as f:
             env_vars = yaml.load(f)
-            if env_vars.get(BUNDLEUTILS_JENKINS_URL) == url and env_vars.get(BUNDLEUTILS_CI_VERSION) == ci_version:
+            # if string contains the URL with or without a trailing slash and the ci_version matches
+            if env_vars.get(BUNDLEUTILS_JENKINS_URL, '').strip().rstrip('/') == url.strip().rstrip('/') and env_vars.get(BUNDLEUTILS_CI_VERSION, '') == ci_version:
                 # env. and .yaml from the file base name and add it to the parent directory path
                 bundle_name = os.path.basename(env_file).replace('env.', '').replace('.yaml', '')
                 bundle_dir = os.path.join(os.path.dirname(env_file), bundle_name)
