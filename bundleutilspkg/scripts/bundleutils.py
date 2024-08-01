@@ -56,6 +56,7 @@ BUNDLEUTILS_PATH = 'BUNDLEUTILS_PATH'
 BUNDLEUTILS_FETCH_TARGET_DIR = 'BUNDLEUTILS_FETCH_TARGET_DIR'
 BUNDLEUTILS_PLUGINS_JSON_PATH = 'BUNDLEUTILS_PLUGINS_JSON_PATH'
 BUNDLEUTILS_PLUGINS_JSON_ADDITIONS = 'BUNDLEUTILS_PLUGINS_JSON_ADDITIONS'
+BUNDLEUTILS_BUNDLES_DIR = 'BUNDLEUTILS_BUNDLES_DIR'
 
 def common_options(func):
     func = click.option('-l', '--log-level', default=os.environ.get(BUNDLEUTILS_LOG_LEVEL, ''), help=f'The log level (or use {BUNDLEUTILS_LOG_LEVEL}).')(func)
@@ -353,6 +354,47 @@ def diff2(file1, file2):
     else:
         logging.info(f"No diff between {file1} and {file2}")
         return False
+
+@cli.command()
+@common_options
+@click.option('-U', '--url', 'url', help=f'The controller URL to test for (or use JENKINS_URL).')
+@click.option('-v', '--ci-version', 'ci_version', type=click.STRING, help=f'Optional version (taken from the remote instance otherwise).')
+@click.option('-b', '--bundles-dir', 'bundles_dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The directory to search for bundles. Defaults to PWD.')
+@click.pass_context
+def find_bundle_by_url(ctx, log_level, env_file, url, ci_version, bundles_dir):
+    """Find a bundle by Jenkins URL."""
+    set_logging(ctx, log_level, env_file)
+    bundles_dir = null_check(bundles_dir, 'bundles_dir', BUNDLEUTILS_BUNDLES_DIR, False, os.getcwd())
+    url = null_check(url, 'url', 'JENKINS_URL')
+    if not ci_version:
+        whoami_url = f'{url}/whoAmI/api/json?tree=authenticated'
+        # get headers from the whoami_url
+        response = requests.get(whoami_url)
+        response.raise_for_status()
+        headers = response.headers
+        logging.debug(f"Headers: {headers}")
+        # get the x-jenkins header ignoring case and removing any carriage returns
+        ci_version = headers.get('x-jenkins', headers.get('X-Jenkins', '')).replace('\r', '')
+        logging.debug(f"Version: {ci_version} (taken from remote)")
+    else:
+        logging.debug(f"Version: {ci_version} (taken from command line)")
+    # search the bundles_dir recursively for a "env.<bundle_name>.yaml" file
+    for env_file in glob.iglob(f'{bundles_dir}/**/env.*.yaml', recursive=True):
+        with open(env_file, 'r') as f:
+            env_vars = yaml.load(f)
+            if env_vars.get(BUNDLEUTILS_JENKINS_URL) == url and env_vars.get(BUNDLEUTILS_CI_VERSION) == ci_version:
+                # env. and .yaml from the file base name and add it to the parent directory path
+                bundle_name = os.path.basename(env_file).replace('env.', '').replace('.yaml', '')
+                bundle_dir = os.path.join(os.path.dirname(env_file), bundle_name)
+                # ensure the bundle_dir contains a bundle.yaml file
+                if os.path.exists(os.path.join(bundle_dir, 'bundle.yaml')):
+                    logging.debug(f"Found {bundle_dir}")
+                    # print the bundle directory relative to the bundles_dir
+                    click.echo(os.path.relpath(bundle_dir, bundles_dir))
+                else:
+                    sys.exit(f"Bundle directory {bundle_dir} does not contain a bundle.yaml file")
+            else:
+                logging.debug(f"Skipping {env_file} with URL {env_vars.get(BUNDLEUTILS_JENKINS_URL)} and version {env_vars.get(BUNDLEUTILS_CI_VERSION)}")
 
 # add completion command which takes the shell as an argument
 # shell can only be bash, fish, or zsh
