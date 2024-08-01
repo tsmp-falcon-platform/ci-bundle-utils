@@ -4,6 +4,7 @@ services:
     # - docker pull ghcr.io/tsmp-falcon-platform/ci-bundle-utils
     # - docker inspect ghcr.io/tsmp-falcon-platform/ci-bundle-utils | grep "org.opencontainers.image.version"
     image: ${BUNDLEUTILS_IMAGE:-ghcr.io/tsmp-falcon-platform/ci-bundle-utils}
+    pull_policy: always
     # run with UID and GID of the current user
     user: "${UID:-1000}:${GID:-1000}"
     network_mode: ${NETWORK_MODE:-host}
