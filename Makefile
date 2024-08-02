@@ -14,6 +14,7 @@ compose/start-dev: compose/stop
 
 .PHONY: compose/start
 compose/start: ## Start the bundleutils container
+	@docker compose pull
 	@docker compose up -d
 
 .PHONY: compose/stop
