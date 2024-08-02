@@ -19,8 +19,6 @@ from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap
 from ruamel.yaml.comments import CommentedSeq
 from server_management.server_manager import JenkinsServerManager
-from dotenv import load_dotenv
-from dotenv import find_dotenv
 
 locale.setlocale(locale.LC_ALL, "C")
 
@@ -86,6 +84,11 @@ def transform_options(func):
     func = click.option('-t', '--target-dir', 'target_dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The target directory for the YAML documents. Defaults to the source directory suffixed with -transformed.')(func)
     return func
 
+def _set_env_if_not_set(prefix, env_var, value):
+    if not os.environ.get(env_var, ''):
+        logging.info(f'{prefix} environment variable: {env_var}={value}')
+        os.environ[env_var] = value
+
 def set_logging(ctx, log_level, env_file, default=''):
     if log_level:
         ctx.obj['LOG_LEVEL'] = log_level
@@ -99,7 +102,7 @@ def set_logging(ctx, log_level, env_file, default=''):
         current_parent_dir = os.path.dirname(os.getcwd())
         current_dir_base_name = os.path.basename(os.getcwd())
         logging.debug("Checking for possible env files in parent directory: " + current_parent_dir)
-        auto_env_files = [f"env.{current_dir_base_name}.yaml", f"env.{current_dir_base_name}.yml", f"env.{current_dir_base_name}"]
+        auto_env_files = [f"env.{current_dir_base_name}.yaml", f"env.{current_dir_base_name}.yml"]
         for auto_env_file in auto_env_files:
             auto_env_file_path = os.path.join(current_parent_dir, auto_env_file)
             logging.debug("Checking for env file: " + auto_env_file_path)
@@ -117,24 +120,28 @@ def set_logging(ctx, log_level, env_file, default=''):
         ctx.obj[BUNDLEUTILS_ENV] = env_file
         # parse boolean value from an env var called BUNDLEUTILS_ENV_OVERRIDE
         should_override = os.environ.get(BUNDLEUTILS_ENV_OVERRIDE, 'false').lower() in ['true', '1', 't', 'y', 'yes']
-        # if env file ends with .yaml, load it as a YAML file
-        if env_file.endswith('.yaml') or env_file.endswith('.yml'):
-            logging.info(f'Loading dotenv file: {env_file}')
-            with open(env_file, 'r') as f:
-                env_vars = yaml.load(f)
-                for key, value in env_vars.items():
-                    if key not in os.environ:
-                        logging.info(f'Setting environment variable: {key}={value}')
-                        os.environ[key] = str(value)
-                    elif should_override:
-                        logging.info(f'Overriding with env, setting: {key}=' + os.environ[key])
-                    else:
-                        logging.info(f'Ignoring passed env, setting: {key}={value}')
-                        os.environ[key] = str(value)
-        else:
-            env_file_path = find_dotenv(env_file, usecwd=True)
-            logging.info(f'Loading dotenv file: {env_file} ({env_file_path})')
-            load_dotenv(env_file_path, verbose=True, override=should_override)
+        logging.info(f'Loading config file: {env_file}')
+        with open(env_file, 'r') as f:
+            env_vars = yaml.load(f)
+            for key, value in env_vars.items():
+                if key not in os.environ:
+                    logging.info(f'Setting environment variable: {key}={value}')
+                    os.environ[key] = str(value)
+                elif should_override:
+                    logging.info(f'Overriding with env, setting: {key}=' + os.environ[key])
+                else:
+                    logging.info(f'Ignoring passed env, setting: {key}={value}')
+                    os.environ[key] = str(value)
+            # does the env file name match env.<bundle_name>.yaml or env.<bundle_name>.yml?
+            env_file_base_name = os.path.basename(env_file)
+            if env_file_base_name.startswith('env.') and (env_file_base_name.endswith('.yaml') or env_file_base_name.endswith('.yml')):
+                bundle_name = os.path.basename(env_file).replace('env.', '').replace('.yaml', '').replace('.yml', '')
+                # set the BUNDLEUTILS_FETCH_TARGET_DIR and BUNDLEUTILS_TRANSFORM_SOURCE_DIR to the default target/docs
+                _set_env_if_not_set('AUTOSET', BUNDLEUTILS_FETCH_TARGET_DIR, 'target/docs')
+                _set_env_if_not_set('AUTOSET', BUNDLEUTILS_TRANSFORM_SOURCE_DIR, os.environ.get(BUNDLEUTILS_FETCH_TARGET_DIR))
+                _set_env_if_not_set('AUTOSET', BUNDLEUTILS_TRANSFORM_TARGET_DIR, bundle_name)
+                _set_env_if_not_set('AUTOSET', BUNDLEUTILS_SETUP_SOURCE_DIR, os.environ.get(BUNDLEUTILS_TRANSFORM_TARGET_DIR))
+                _set_env_if_not_set('AUTOSET', BUNDLEUTILS_VALIDATE_SOURCE_DIR, os.environ.get(BUNDLEUTILS_TRANSFORM_TARGET_DIR))
     else:
         logging.info(f'No env file provided')
 
