@@ -58,6 +58,10 @@ BUNDLEUTILS_PLUGINS_JSON_PATH = 'BUNDLEUTILS_PLUGINS_JSON_PATH'
 BUNDLEUTILS_PLUGINS_JSON_ADDITIONS = 'BUNDLEUTILS_PLUGINS_JSON_ADDITIONS'
 BUNDLEUTILS_BUNDLES_DIR = 'BUNDLEUTILS_BUNDLES_DIR'
 
+def die(msg):
+    logging.error(f"{msg}\n")
+    sys.exit(1)
+
 def common_options(func):
     func = click.option('-l', '--log-level', default=os.environ.get(BUNDLEUTILS_LOG_LEVEL, ''), help=f'The log level (or use {BUNDLEUTILS_LOG_LEVEL}).')(func)
     func = click.option('-e', '--env-file', default=os.environ.get(BUNDLEUTILS_ENV, ''), type=click.Path(file_okay=True, dir_okay=False), help=f'Optional .env or .env.yaml file (or use {BUNDLEUTILS_ENV}).')(func)
@@ -172,7 +176,7 @@ def ci_setup(ctx, log_level, env_file, ci_version, ci_type, ci_server_home, sour
     ci_version, ci_type, ci_server_home = server_options_null_check(ci_version, ci_type, ci_server_home)
     source_dir = null_check(source_dir, 'source_dir', BUNDLEUTILS_SETUP_SOURCE_DIR)
     if not os.path.exists(source_dir):
-        sys.exit(f"Source directory '{source_dir}' does not exist")
+        die(f"Source directory '{source_dir}' does not exist")
     # parse the source directory bundle.yaml file and copy the files under the plugins and catalog keys to the target_jenkins_home_casc_startup_bundle directory
     bundle_yaml = os.path.join(source_dir, 'bundle.yaml')
     plugin_files = [bundle_yaml]
@@ -200,7 +204,7 @@ def ci_validate(ctx, log_level, env_file, ci_version, ci_type, ci_server_home, s
     ci_version, ci_type, ci_server_home = server_options_null_check(ci_version, ci_type, ci_server_home)
     source_dir = null_check(source_dir, 'source_dir', BUNDLEUTILS_VALIDATE_SOURCE_DIR)
     if not os.path.exists(source_dir):
-        sys.exit(f"Source directory '{source_dir}' does not exist")
+        die(f"Source directory '{source_dir}' does not exist")
     jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
     server_url, username, password = jenkins_manager.get_server_details()
     logging.debug(f"Server URL: {server_url}, Username: {username}, Password: {password}")
@@ -219,7 +223,7 @@ def ci_sanitize_plugins(ctx, log_level, env_file, ci_version, ci_type, ci_server
     ci_version, ci_type, ci_server_home = server_options_null_check(ci_version, ci_type, ci_server_home)
     source_dir = null_check(source_dir, 'source_dir', BUNDLEUTILS_TRANSFORM_TARGET_DIR)
     if not os.path.exists(source_dir):
-        sys.exit(f"Source directory '{source_dir}' does not exist")
+        die(f"Source directory '{source_dir}' does not exist")
     jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
     server_url, username, password = jenkins_manager.get_server_details()
     logging.debug(f"Server URL: {server_url}, Username: {username}, Password: {password}")
@@ -227,7 +231,7 @@ def ci_sanitize_plugins(ctx, log_level, env_file, ci_version, ci_type, ci_server
     # read the plugins.yaml file from the source directory
     plugins_file = os.path.join(source_dir, 'plugins.yaml')
     if not os.path.exists(plugins_file):
-        sys.exit(f"Plugins file '{plugins_file}' does not exist")
+        die(f"Plugins file '{plugins_file}' does not exist")
     with open(plugins_file, 'r') as f:
         plugins_data = yaml.load(f)  # Load the existing data
 
@@ -339,9 +343,9 @@ def diff(ctx, log_level, env_file, src1, src2):
         if diff2(src1, src2):
             diff_detected = True
     else:
-        sys.exit("src1 and src2 must both be either directories or files")
+        die("src1 and src2 must both be either directories or files")
     if diff_detected:
-        sys.exit("Differences detected")
+        die("Differences detected")
 
 def diff2(file1, file2):
     dict1 = yaml2dict(file1)
@@ -379,6 +383,7 @@ def find_bundle_by_url(ctx, log_level, env_file, url, ci_version, bundles_dir):
     else:
         logging.debug(f"Version: {ci_version} (taken from command line)")
     # search the bundles_dir recursively for a "env.<bundle_name>.yaml" file
+    my_bundle = None
     for env_file in glob.iglob(f'{bundles_dir}/**/env.*.yaml', recursive=True):
         with open(env_file, 'r') as f:
             env_vars = yaml.load(f)
@@ -390,10 +395,15 @@ def find_bundle_by_url(ctx, log_level, env_file, url, ci_version, bundles_dir):
                 # ensure the bundle_dir contains a bundle.yaml file
                 if os.path.exists(os.path.join(bundle_dir, 'bundle.yaml')):
                     logging.debug(f"Found {bundle_dir}")
-                    # print the bundle directory relative to the bundles_dir
-                    click.echo(os.path.relpath(bundle_dir, bundles_dir))
+                    current_bundle = os.path.relpath(bundle_dir, bundles_dir)
+                    if my_bundle:
+                        # exit with exit code 1 and text message if a second bundle is found
+                        die(f"Multiple bundles found: {my_bundle} and {current_bundle}")
+
+                    my_bundle = os.path.relpath(bundle_dir, bundles_dir)
+                    click.echo(my_bundle)
                 else:
-                    sys.exit(f"Bundle directory {bundle_dir} does not contain a bundle.yaml file")
+                    die(f"Bundle directory {bundle_dir} does not contain a bundle.yaml file")
             else:
                 logging.debug(f"Skipping {env_file} with URL {env_vars.get(BUNDLEUTILS_JENKINS_URL)} and version {env_vars.get(BUNDLEUTILS_CI_VERSION)}")
 
@@ -419,7 +429,7 @@ def null_check(obj, obj_name, obj_env_var=None, mandatory=True, default=''):
                 if default:
                     obj = default
                 elif mandatory:
-                    sys.exit(f'No {obj_name} option provided and no {obj_env_var} set')
+                    die(f'No {obj_name} option provided and no {obj_env_var} set')
     return obj
 
 @cli.command()
@@ -462,25 +472,25 @@ def _validate(url, username, password, source_dir, ignore_warnings):
     try:
         response_json = response.json()
     except json.decoder.JSONDecodeError:
-        sys.exit(f'Failed to decode JSON from response: {response.text}')
+        die(f'Failed to decode JSON from response: {response.text}')
     click.echo(json.dumps(response_json, indent=2))
     # Filter out non-info messages
     if "validation-messages" not in response_json:
         logging.warning('No validation messages found in response. Is this an old CI version?')
         # check if the valid key exists and is True
         if "valid" not in response_json or not response_json["valid"]:
-            sys.exit('Validation failed. See response for details.')
+            die('Validation failed. See response for details.')
     else:
         non_info_messages = [message for message in response_json["validation-messages"] if not message.startswith("INFO -")]
         if non_info_messages:
             # if non info messages only include warnings...
             if all("WARNING -" in message for message in non_info_messages):
                 if not ignore_warnings:
-                    sys.exit('Validation failed with warnings')
+                    die('Validation failed with warnings')
                 else:
                     logging.warning('Validation failed with warnings. Ignoring due to --ignore-warnings flag')
             else:
-                sys.exit('Validation failed with errors or critical messages')
+                die('Validation failed with errors or critical messages')
 
 @cli.command()
 @common_options
@@ -522,22 +532,22 @@ def fetch(ctx, log_level, env_file, url, path, username, password, target_dir, p
             logging.info(f'Found core-casc-export-*.zip file: {zip_files[0]}')
             path = zip_files[0]
         elif len(zip_files) > 1:
-            sys.exit('Multiple core-casc-export-*.zip files found in the current directory')
+            die('Multiple core-casc-export-*.zip files found in the current directory')
     if not plugin_json_path and not plugin_json_url:
         plugin_json_files = glob.glob('plugins*.json')
         if len(plugin_json_files) == 1:
             logging.info(f'Found plugins*.json file: {plugin_json_files[0]}')
             plugin_json_path = plugin_json_files[0]
         elif len(plugin_json_files) > 1:
-            sys.exit('Multiple plugins*.json files found in the current directory')
+            die('Multiple plugins*.json files found in the current directory')
     try:
         fetch_yaml_docs(url, path, username, password, target_dir)
     except Exception as e:
-        sys.exit(f'Failed to fetch and write YAML documents: {e}')
+        die(f'Failed to fetch and write YAML documents: {e}')
     try:
         update_plugins(plugin_json_url, plugin_json_path, username, password, target_dir, plugin_json_additions)
     except Exception as e:
-        sys.exit(f'Failed to fetch and update plugin data: {e}')
+        die(f'Failed to fetch and update plugin data: {e}')
     # TODO remove as soon as the export does not add '^' to variables
     handle_unwanted_escape_characters(target_dir)
 
@@ -547,7 +557,7 @@ def handle_unwanted_escape_characters(target_dir):
     # check in the jenkins.yaml file for the key 'cascItemsConfiguration.variableInterpolationEnabledForAdmin'
     jenkins_yaml = os.path.join(target_dir, 'jenkins.yaml')
     if not os.path.exists(jenkins_yaml):
-        sys.exit(f"Jenkins YAML file '{jenkins_yaml}' does not exist (something seriously wrong here)")
+        die(f"Jenkins YAML file '{jenkins_yaml}' does not exist (something seriously wrong here)")
     with open(jenkins_yaml, 'r') as f:
         jenkins_data = yaml.load(f)
     if 'cascItemsConfiguration' in jenkins_data['unclassified'] and 'variableInterpolationEnabledForAdmin' in jenkins_data['unclassified']['cascItemsConfiguration']:
@@ -637,7 +647,7 @@ def get_non_optional_deps(plugins, plugin, seen_dependencies=set()):
                 logging.debug(f"Dependency already seen: {dependency['shortName']}")
                 continue
             logging.error(f"Dependency not found: {dependency['shortName']}")
-            sys.exit(f"Dependency not found: {dependency['shortName']}")
+            die(f"Dependency not found: {dependency['shortName']}")
         if not dependency_details.get("bundled", True) and not dependency.get("optional", True) and dependency["shortName"] not in seen_dependencies:
             logging.debug(f"Adding non-optional dependency: {dependency['shortName']}")
             seen_dependencies.add(dependency["shortName"])
@@ -744,18 +754,18 @@ def update_plugins(plugin_json_url, plugin_json_path, username, password, target
                 api_version = bundle_yaml.get('apiVersion', '')
                 logging.info(f"Found apiVersion: {api_version}")
                 if not api_version:
-                    sys.exit('No apiVersion found in bundle.yaml file')
+                    die('No apiVersion found in bundle.yaml file')
                 elif api_version == '1':
                     plugin_json_additions = 'all'
                 elif api_version == '2':
                     plugin_json_additions = 'roots'
                 else:
-                    sys.exit(f"Invalid apiVersion found in bundle.yaml file: {api_version}")
+                    die(f"Invalid apiVersion found in bundle.yaml file: {api_version}")
 
     # additions can be one of: 'roots', 'all', 'none'
     expected_plugins = all_roots
     if plugin_json_additions not in ['roots', 'all', 'none']:
-        sys.exit(f"Invalid plugin_json_additions value: {plugin_json_additions}. Must be one of: 'roots', 'all', 'none'")
+        die(f"Invalid plugin_json_additions value: {plugin_json_additions}. Must be one of: 'roots', 'all', 'none'")
     else:
         logging.info(f"Using plugin_json_additions: {plugin_json_additions}")
         if plugin_json_additions == 'all':
@@ -856,7 +866,7 @@ def fetch_yaml_docs(url, path, username, password, target_dir):
         yaml_docs = list(yaml.load_all(response_text))
         write_all_yaml_docs_from_comments(yaml_docs, target_dir)
     else:
-        sys.exit('No path or URL provided')
+        die('No path or URL provided')
 
 def call_jenkins_api(url, username, password):
     logging.debug(f'Fetching response from URL: {url}')
@@ -1146,7 +1156,7 @@ def transform(ctx, log_level, env_file, strict, configs, source_dir, target_dir)
             logging.info('Using transform.yaml in the current directory')
             configs = ['transform.yaml']
         else:
-            sys.exit('No transformation config provided and no transform.yaml found in the current directory')
+            die('No transformation config provided and no transform.yaml found in the current directory')
     _transform(configs, source_dir, target_dir)
 
 @click.pass_context
@@ -1158,7 +1168,7 @@ def _file_check(ctx, file, strict=False):
     if not os.path.exists(file) or os.path.getsize(file) == 0:
         # if default_fail_on_missing is set, raise an exception
         if ctx.params["strict"] or strict:
-            sys.exit(f'File {file} does not exist')
+            die(f'File {file} does not exist')
         logging.warning(f'File {file} does not exist. Skipping.')
         return False
     return True

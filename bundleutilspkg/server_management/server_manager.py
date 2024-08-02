@@ -12,12 +12,17 @@ import logging
 import importlib.resources as pkg_resources
 
 class JenkinsServerManager:
+
+    def die(msg):
+        logging.error(f"{msg}\n")
+        sys.exit(1)
+
     def __init__(self, ci_type, ci_version, target_dir):
         """Initializes the Jenkins server manager with the specified ci_type, ci_version, and target directory."""
         if ci_type not in ['oc', 'oc-traditional', 'mm', 'cm']:
-            sys.exit("Invalid type. Must be one of 'oc', 'oc-traditional', 'mm', or 'cm'")
+            self.die("Invalid type. Must be one of 'oc', 'oc-traditional', 'mm', or 'cm'")
         if not re.match(r'\d+\.\d+\.\d+\.\d+', ci_version):
-            sys.exit("Invalid version. Must match the format 'W.X.Y.Z'")
+            self.die("Invalid version. Must match the format 'W.X.Y.Z'")
         # user can specify a cache directory to store the downloaded WAR files by setting the environment variable BUNDLEUTILS_CACHE_DIR
         # defaults to the users home directory if not set
         if 'BUNDLEUTILS_CACHE_DIR' in os.environ:
@@ -65,7 +70,7 @@ class JenkinsServerManager:
         elif self.ci_type == "oc-traditional":
             cb_war_download_url = f"{cb_downloads_url}/operations-center/rolling/war/{self.ci_version}/cloudbees-core-oc.war"
         else:
-            sys.exit(f"CI_TYPE '{self.ci_type}' not recognised", file=sys.stderr)
+            self.die(f"CI_TYPE '{self.ci_type}' not recognised", file=sys.stderr)
 
         return cb_docker_image, cb_war_download_url
 
@@ -92,7 +97,7 @@ class JenkinsServerManager:
                     continue
             # Check if jenkins.war was found
             if not jenkins_war_found:
-                sys.exit("jenkins.war not found after extracting the Docker image.")
+                self.die("jenkins.war not found after extracting the Docker image.")
 
     def copy_war_from_docker(self):
         """Copy the Jenkins WAR file from the Docker container to the target directory."""
@@ -121,11 +126,11 @@ class JenkinsServerManager:
                 elif shutil.which('skopeo'):
                     self.copy_war_from_skopeo()
                 else:
-                    sys.exit("Docker or Skopeo not found in path. No way of getting the WAR file from the docker image")
+                    self.die("Docker or Skopeo not found in path. No way of getting the WAR file from the docker image")
             elif self.cb_war_download_url:
                 self.download_war()
             else:
-                sys.exit("No download URL or Docker image specified")
+                self.die("No download URL or Docker image specified")
         else:
             logging.info(f"WAR file already exists at {self.war_cache_file}")
         # recreate the jenkins-home directory
@@ -145,12 +150,12 @@ class JenkinsServerManager:
                 file.write(response.content)
             logging.info(f"Downloaded WAR version {self.ci_version} to {self.war_cache_file}")
         else:
-            sys.exit(f"Failed to download WAR file from {self.cb_war_download_url}. Status code: {response.status_code}")
+            self.die(f"Failed to download WAR file from {self.cb_war_download_url}. Status code: {response.status_code}")
 
     def create_startup_bundle(self, plugin_files, validation_template):
         """Create a startup bundle from the specified source directory and bundle template."""
         if not plugin_files:
-            sys.exit(f"Plugin files not found in {plugin_files}")
+            self.die(f"Plugin files not found in {plugin_files}")
         # the validation template is a directory containing the configuration files to be used
         if not validation_template or os.path.exists(validation_template):
             # check if the validation-template directory exists in the current directory
@@ -206,9 +211,9 @@ class JenkinsServerManager:
 
         # Fail if either CASC_VALIDATION_LICENSE_KEY or CASC_VALIDATION_LICENSE_CERT are not set
         if not os.environ.get("CASC_VALIDATION_LICENSE_KEY") and not os.environ.get("IGNORE_LICENSE"):
-            sys.exit("CASC_VALIDATION_LICENSE_KEY is not set.")
+            self.die("CASC_VALIDATION_LICENSE_KEY is not set.")
         if not os.environ.get("CASC_VALIDATION_LICENSE_CERT") and not os.environ.get("IGNORE_LICENSE"):
-            sys.exit("CASC_VALIDATION_LICENSE_CERT is not set.")
+            self.die("CASC_VALIDATION_LICENSE_CERT is not set.")
 
         # Add token script to init.groovy.d
         with open(os.path.join(self.target_jenkins_home_init_scripts, "init_02_admin_token.groovy"), "w") as file:
@@ -220,7 +225,7 @@ class JenkinsServerManager:
         try:
             response = requests.get(f"http://localhost:{http_port}{self.whoami_url}")
             if response.status_code == 200:
-                sys.exit(f"Port {http_port} is already in use. Please specify a different port using the BUNDLEUTILS_HTTP_PORT environment variable.")
+                self.die(f"Port {http_port} is already in use. Please specify a different port using the BUNDLEUTILS_HTTP_PORT environment variable.")
         except requests.ConnectionError:
             pass
         # write the server URL to the jenkins_url file
@@ -229,10 +234,10 @@ class JenkinsServerManager:
         jenkins_opts = os.getenv('BUNDLEUTILS_JENKINS_OPTS', '')
         # if BUNDLEUTILS_JENKINS_OPTS contains -Dcore.casc.config.bundle, fail
         if "core.casc.config.bundle" in jenkins_opts or "core.casc.config.bundle" in java_opts:
-            sys.exit("BUNDLEUTILS_JENKINS_OPTS or BUNDLEUTILS_JAVA_OPTS contains core.casc.config.bundle. This is not allowed.")
+            self.die("BUNDLEUTILS_JENKINS_OPTS or BUNDLEUTILS_JAVA_OPTS contains core.casc.config.bundle. This is not allowed.")
         # if self.target_jenkins_home_casc_startup_bundle doesn't exist, fail
         if not os.path.exists(self.target_jenkins_home_casc_startup_bundle):
-            sys.exit(f"Startup bundle {self.target_jenkins_home_casc_startup_bundle} does not exist.")
+            self.die(f"Startup bundle {self.target_jenkins_home_casc_startup_bundle} does not exist.")
         # if java_opts not empty, add ' -Dcore.casc.config.bundle=/tmp/validation-bundle', else set it
         if java_opts:
             java_opts += f" -Dcore.casc.config.bundle={self.target_jenkins_home_casc_startup_bundle}"
@@ -273,7 +278,7 @@ class JenkinsServerManager:
         # read the envelope.json from self.target_jenkins_webroot /WEB-INF/plugins/envelope.json
         envelope_json = os.path.join(self.target_jenkins_webroot, 'WEB-INF', 'plugins', 'envelope.json')
         if not os.path.exists(envelope_json):
-            sys.exit(f"envelope.json not found in {envelope_json}")
+            self.die(f"envelope.json not found in {envelope_json}")
         with open(envelope_json, 'r') as file:
             # read as json
             envelope_json = file.read()
@@ -306,7 +311,7 @@ class JenkinsServerManager:
         response_json = response.json()
         if 'authenticated' not in response_json:
             logging.error(f"Response: {response_json}")
-            sys.exit("ERROR: Authentication failed. Please check the username and password.")
+            self.die("ERROR: Authentication failed. Please check the username and password.")
         else:
             # print the response
             logging.info(f"Authentication successful. Response: {response_json}")
@@ -333,11 +338,11 @@ class JenkinsServerManager:
                 time.sleep(5)
                 logging.info("Waiting for server to start...")
         if not server_started:
-            logging.info("ERROR: Server not started in time. Printing the Jenkins log....")
+            logging.warn("ERROR: Server not started in time. Printing the Jenkins log....")
             with open(self.target_jenkins_log, "r") as log_file:
                 logging.info(log_file.read())
             self.stop_server()
-            sys.exit(1)
+            self.die("ERROR: Server not started in time. Please check the Jenkins log for more information.")
 
     def stop_server(self):
         """Stop the Jenkins server using the PID file."""
