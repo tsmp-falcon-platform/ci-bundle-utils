@@ -4,7 +4,6 @@ services:
     # - docker pull ghcr.io/tsmp-falcon-platform/ci-bundle-utils
     # - docker inspect ghcr.io/tsmp-falcon-platform/ci-bundle-utils | grep "org.opencontainers.image.version"
     image: ${BUNDLEUTILS_IMAGE:-ghcr.io/tsmp-falcon-platform/ci-bundle-utils}
-    pull_policy: always
     # run with UID and GID of the current user
     user: "${UID:-1000}:${GID:-1000}"
     network_mode: ${NETWORK_MODE:-host}
@@ -27,6 +26,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    pull_policy: never
     image: bundleutils:dev
     entrypoint: ["sh", "-c", "echo This service is used to build the image and will not be started by default"]
 
