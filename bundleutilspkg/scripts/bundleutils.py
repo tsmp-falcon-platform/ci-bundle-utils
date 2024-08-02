@@ -1448,7 +1448,12 @@ def split_items(target_dir, filename, configs):
     new_data = {}
     removed_items = []
 
-    items = data['items']
+    # if items exist in the source file...
+    if 'items' not in data:
+        logging.info(f'No items found in {full_filename}')
+        items = []
+    else:
+        items = data['items']
     for config in configs:
         target = config['target']
         for item in items:
