@@ -406,6 +406,8 @@ def find_bundle_by_url(ctx, log_level, env_file, url, ci_version, bundles_dir):
                     die(f"Bundle directory {bundle_dir} does not contain a bundle.yaml file")
             else:
                 logging.debug(f"Skipping {env_file} with URL {env_vars.get(BUNDLEUTILS_JENKINS_URL)} and version {env_vars.get(BUNDLEUTILS_CI_VERSION)}")
+    if not my_bundle:
+        die(f"No bundle found for URL {url} and version {ci_version}")
 
 # add completion command which takes the shell as an argument
 # shell can only be bash, fish, or zsh
