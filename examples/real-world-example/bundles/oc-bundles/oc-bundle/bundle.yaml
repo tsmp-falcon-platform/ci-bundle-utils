@@ -1,0 +1,21 @@
+apiVersion: '1'
+id: oc-bundle
+description: Bundle for oc-bundle
+version: 9752f6da83e2fd1328e7058b36ead8ce
+jcasc:
+- jenkins.yaml
+- jenkins.casc.yaml
+- jenkins.credentials.yaml
+- jenkins.jenkins.clouds.yaml
+- jenkins.masterprovisioning.yaml
+- jenkins.security.yaml
+- jenkins.support.yaml
+- jenkins.views.yaml
+plugins:
+- plugins.yaml
+rbac:
+- rbac.yaml
+items:
+- items.yaml
+- items.casc-custom-jobs.yaml
+- items.casc-local-jobs.yaml

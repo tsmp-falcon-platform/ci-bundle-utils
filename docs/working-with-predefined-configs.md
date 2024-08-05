@@ -61,7 +61,7 @@ e.g. normal setting
 ❯ bundleutils fetch
 ...
 ...
-INFO:root:Setting environment variable: BUNDLEUTILS_JENKINS_URL=https://cjoc.eks.sboardwell.aws.ps.beescloud.com
+INFO:root:Setting environment variable: BUNDLEUTILS_JENKINS_URL=https://cjoc.acme.org
 ```
 
 e.g. overriding with `BUNDLEUTILS_ENV_OVERRIDE=1`
@@ -83,7 +83,7 @@ e.g. unsuccesful override without `BUNDLEUTILS_ENV_OVERRIDE=1`
   bundleutils fetch
 ...
 ...
-INFO:root:Ignoring passed env, setting: BUNDLEUTILS_JENKINS_URL=https://cjoc.eks.sboardwell.aws.ps.beescloud.com
+INFO:root:Ignoring passed env, setting: BUNDLEUTILS_JENKINS_URL=https://cjoc.acme.org
 ```
 
 ### Reusable Transformation Files
@@ -109,7 +109,7 @@ BUNDLEUTILS_JAVA_OPTS: >-
   -Djenkins.security.SystemReadPermission=true
   -Djenkins.security.ManagePermission=true
   -Dhudson.security.ExtendedReadPermission=true
-BUNDLEUTILS_JENKINS_URL: https://controller-a.eks.sboardwell.aws.ps.beescloud.com
+BUNDLEUTILS_JENKINS_URL: https://controller-a.acme.org
 BUNDLEUTILS_TRANSFORM_CONFIGS: >-
   ../transformations/remove-dynamic-stuff.yaml
   ../transformations/add-local-users.yaml
@@ -171,8 +171,8 @@ Example
 ❯ make bundles/oc-bundles/oc-bundle/transform
 cd bundles/oc-bundles/oc-bundle
 bundleutils transform
-INFO:root:Auto env file found: /home/sboardwell/Workspace/tsmp-falcon-platform/sboardwell-bundles-drift/bundles/oc-bundles/env.oc-bundle.yaml
-INFO:root:Switching directory: /home/sboardwell/Workspace/tsmp-falcon-platform/sboardwell-bundles-drift/bundles/oc-bundles
+INFO:root:Auto env file found: /path/to/your/acme-bundles-drift/bundles/oc-bundles/env.oc-bundle.yaml
+INFO:root:Switching directory: /path/to/your/acme-bundles-drift/bundles/oc-bundles
 ...
 ...
 ```

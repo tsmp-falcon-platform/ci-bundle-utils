@@ -1,0 +1,140 @@
+removeStrategy:
+  rbac: SYNC
+  items: NONE
+items:
+- kind: freeStyle
+  name: casc-local-sync-direct
+  blockBuildWhenDownstreamBuilding: false
+  blockBuildWhenUpstreamBuilding: false
+  buildDiscarder:
+    logRotator:
+      artifactDaysToKeep: -1
+      artifactNumToKeep: -1
+      daysToKeep: 30
+      numToKeep: 30
+  buildWrappers:
+  - secretBuildWrapper:
+      bindings:
+      - gitUsernamePassword:
+          gitToolName: Default
+          credentialsId: github-token-rw
+      - string:
+          variable: CASC_VALIDATION_LICENSE_KEY
+          credentialsId: casc-validation-key
+      - string:
+          variable: CASC_VALIDATION_LICENSE_CERT
+          credentialsId: casc-validation-cert
+      - usernamePassword:
+          usernameVariable: BUNDLEUTILS_USERNAME
+          passwordVariable: BUNDLEUTILS_PASSWORD
+          credentialsId: bundleutils-creds
+  builders:
+  - shell:
+      command: |
+        set -e
+        export MY_BUNDLE=$(bundleutils find-bundle-by-url)
+
+        echo "Running main target..."
+        make auto/all
+
+        echo "Running a git diff to check..."
+        make auto/git-diff || make auto/git-commit
+        make git-diff # everything should have been committed, failing if diff found
+
+        echo "Pushing changes..."
+        make git-push
+  concurrentBuild: false
+  description: "This job is generic in nature, using the local JENKINS_URL to determine
+    the bundle and CI Version.\r\n\r\nIt can be used on both OC and Controllers.\r
+    \n\r\nThe CasC bundle is exported, processed, and validated against the current
+    CI Version.\r\n\r\nAny changes are committed to the main branch."
+  disabled: false
+  displayName: ''
+  label: bundleutils
+  scm:
+    scmGit:
+      extensions:
+      - localBranch: {}
+      - cloneOption:
+          reference: ''
+          noTags: true
+          honorRefspec: false
+          shallow: false
+      - userIdentity:
+          name: bundleutils-bot
+          email: bundleutils-bot@example.org
+      - wipeWorkspace: {}
+      userRemoteConfigs:
+      - userRemoteConfig:
+          credentialsId: github-token-rw
+          url: https://github.com/acme-org/acme-bundles-drift
+      branches:
+      - branchSpec:
+          name: refs/heads/main
+  scmCheckoutStrategy:
+    standard: {}
+- kind: freeStyle
+  name: casc-local-sync-drift
+  blockBuildWhenDownstreamBuilding: false
+  blockBuildWhenUpstreamBuilding: false
+  buildDiscarder:
+    logRotator:
+      artifactDaysToKeep: -1
+      artifactNumToKeep: -1
+      daysToKeep: 30
+      numToKeep: 30
+  buildWrappers:
+  - secretBuildWrapper:
+      bindings:
+      - gitUsernamePassword:
+          gitToolName: Default
+          credentialsId: github-token-rw
+      - string:
+          variable: CASC_VALIDATION_LICENSE_KEY
+          credentialsId: casc-validation-key
+      - string:
+          variable: CASC_VALIDATION_LICENSE_CERT
+          credentialsId: casc-validation-cert
+      - usernamePassword:
+          usernameVariable: BUNDLEUTILS_USERNAME
+          passwordVariable: BUNDLEUTILS_PASSWORD
+          credentialsId: bundleutils-creds
+  builders:
+  - shell:
+      command: "set -e\nexport MY_BUNDLE=$(bundleutils find-bundle-by-url)\n\necho
+        \"Checking out drift branch...\"\nmake auto/git-handle-drift\nmake auto/git-checkout-drift\n
+        \necho \"Running main target...\"\nmake auto/all\n \necho \"Running a git
+        diff to check...\"\nmake auto/git-diff || make auto/git-commit\n\n# everything
+        should have been committed, failing if diff found\nmake git-diff\n\necho \"\
+        Pushing changes...\"\nmake git-push\n\n#export -p > $WORKSPACE_TMP/ENV\n #sleep
+        600"
+  concurrentBuild: false
+  description: "This job is generic in nature, using the local JENKINS_URL to determine
+    the bundle and CI Version.\r\n\r\nIt can be used on both OC and Controllers.\r
+    \n\r\nThe CasC bundle is exported, processed, and validated against the current
+    CI Version.\r\n\r\nAny changes are committed to THE BUNDLES OWN DRIFT BRANCH."
+  disabled: false
+  displayName: ''
+  label: bundleutils
+  scm:
+    scmGit:
+      extensions:
+      - localBranch: {}
+      - cloneOption:
+          reference: ''
+          noTags: true
+          honorRefspec: false
+          shallow: false
+      - userIdentity:
+          name: bundleutils-bot
+          email: bundleutils-bot@example.org
+      - wipeWorkspace: {}
+      userRemoteConfigs:
+      - userRemoteConfig:
+          credentialsId: github-token-rw
+          url: https://github.com/acme-org/acme-bundles-drift
+      branches:
+      - branchSpec:
+          name: refs/heads/main
+  scmCheckoutStrategy:
+    standard: {}

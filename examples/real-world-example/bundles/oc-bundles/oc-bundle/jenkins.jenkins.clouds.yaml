@@ -1,0 +1,73 @@
+jenkins:
+  clouds:
+  - kubernetes:
+      containerCap: 10
+      containerCapStr: '10'
+      name: bundleutils-cloud
+      templates:
+      - id: 75582751-5e50-403e-8c0c-961b99fd33a0
+        label: bundleutils
+        name: bundleutils
+        serviceAccount: bundle-mgr
+        showRawYaml: false
+        yaml: |-
+          apiVersion: v1
+          kind: Pod
+          metadata:
+            name: jenkins-agent-pod
+          spec:
+            containers:
+            - name: jnlp
+              image: ghcr.io/tsmp-falcon-platform/ci-bundle-utils
+              imagePullPolicy: Always
+              command: ["/usr/share/jenkins/jenkins-agent"]
+              volumeMounts:
+              - name: pseudo-jnlp
+                mountPath: /usr/share/jenkins
+              - name: bundleutils-cache
+                mountPath: /opt/bundleutils/.cache
+            initContainers:
+            - name: copy-agent-stuff
+              image: cloudbees/cloudbees-core-agent:2.452.3.2
+              command: ["sh", "-c", "cp /usr/share/jenkins/agent.jar /usr/local/bin/jenkins-agent  /pseudo-jnlp/"]
+              volumeMounts:
+              - name: pseudo-jnlp
+                mountPath: /pseudo-jnlp
+            volumes:
+            - name: pseudo-jnlp
+              emptyDir: {}
+            - name: bundleutils-cache
+              persistentVolumeClaim:
+                  claimName: bundleutils-cache-pvc
+        yamlMergeStrategy: override
+        yamls:
+        - |-
+          apiVersion: v1
+          kind: Pod
+          metadata:
+            name: jenkins-agent-pod
+          spec:
+            containers:
+            - name: jnlp
+              image: ghcr.io/tsmp-falcon-platform/ci-bundle-utils
+              imagePullPolicy: Always
+              command: ["/usr/share/jenkins/jenkins-agent"]
+              volumeMounts:
+              - name: pseudo-jnlp
+                mountPath: /usr/share/jenkins
+              - name: bundleutils-cache
+                mountPath: /opt/bundleutils/.cache
+            initContainers:
+            - name: copy-agent-stuff
+              image: cloudbees/cloudbees-core-agent:2.452.3.2
+              command: ["sh", "-c", "cp /usr/share/jenkins/agent.jar /usr/local/bin/jenkins-agent  /pseudo-jnlp/"]
+              volumeMounts:
+              - name: pseudo-jnlp
+                mountPath: /pseudo-jnlp
+            volumes:
+            - name: pseudo-jnlp
+              emptyDir: {}
+            - name: bundleutils-cache
+              persistentVolumeClaim:
+                  claimName: bundleutils-cache-pvc
+      webSocket: true
