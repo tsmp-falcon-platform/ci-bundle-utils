@@ -682,12 +682,12 @@ def _analyze_server_plugins(plugins_from_json):
             for plugin in current_plugins:
                 if plugin.get("deleted", True):
                     all_deleted_or_inactive_plugins.append(plugin['shortName'])
-                    logging.debug(f"Removing deleted plugin: {dep['shortName']}")
-                    reduced_plugins.remove(dep)
+                    logging.debug(f"Removing deleted plugin: {plugin['shortName']}")
+                    reduced_plugins.remove(plugin)
                 elif not plugin.get("enabled", True):
                     all_deleted_or_inactive_plugins.append(plugin['shortName'])
-                    logging.debug(f"Removing disabled plugin: {dep['shortName']}")
-                    reduced_plugins.remove(dep)
+                    logging.debug(f"Removing disabled plugin: {plugin['shortName']}")
+                    reduced_plugins.remove(plugin)
                 else:
                     non_optional_deps = get_non_optional_deps(current_plugins, plugin, seen_dependencies)
                     for dep in non_optional_deps:
