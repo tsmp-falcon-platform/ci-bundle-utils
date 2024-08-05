@@ -24,13 +24,13 @@ credentials:
           id: "github-token-ro"
           password: "{AQAAABAAAABgI1/kjoID6uzs9eREPTdCMgh7...}"
           scope: GLOBAL
-          username: "sboardwell"
+          username: "test-user"
       - usernamePassword:
           description: "Github Token for autocorrecting bundles"
           id: "github-token-rw"
           password: "{AQAAABAAAABgVeKUUi2dIKI4F4uHrWQP8rysz1A...}"
           scope: GLOBAL
-          username: "sboardwell"
+          username: "test-user"
       - string:
           id: "github-org-hooks"
           scope: GLOBAL
@@ -270,7 +270,7 @@ jenkins:
   viewsTabBar: "standard"
 advisor:
   acceptToS: true
-  email: "sboardwell@cloudbees.com"
+  email: "admin@acme.org"
   excludedComponents:
   - "AgentsSystemConfiguration"
   - "KubernetesMasterLogs"
@@ -343,7 +343,7 @@ masterprovisioning:
     globalJavaOptions: "-Dorg.csanchez.jenkins.plugins.kubernetes.pipeline.PodTemplateStepExecution.defaultImage=cloudbees/cloudbees-core-agent:2.440.3.7\
       \ -Dcom.cloudbees.jenkins.plugins.kube.ServiceAccountFilter.defaultServiceAccount=jenkins-agents\
       \ -Dcom.cloudbees.networking.useSubdomain=true -Dcom.cloudbees.networking.protocol=\"\
-      https\" -Dcom.cloudbees.networking.hostname=\"eks.sboardwell.aws.ps.beescloud.com\"\
+      https\" -Dcom.cloudbees.networking.hostname=\"acme.org\"\
       \ -Dcom.cloudbees.networking.port=443 -Dcom.cloudbees.networking.operationsCenterName=\"\
       cjoc\""
     javaOptions: "-XshowSettings:vm -XX:+AlwaysPreTouch -XX:+DisableExplicitGC -XX:+ParallelRefProcEnabled\
@@ -542,14 +542,14 @@ unclassified:
   gitHubPluginConfig:
     configs:
     - credentialsId: "github-org-hooks"
-    hookUrl: "https://cjoc.eks.sboardwell.aws.ps.beescloud.com/github-webhook/"
+    hookUrl: "https://cjoc.acme.org/github-webhook/"
   headerLabel:
     propagate:
       enforce: true
     text: "CASC OPERATIONS CENTER"
   location:
     adminAddress: "address not configured yet <nobody@nowhere>"
-    url: "https://cjoc.eks.sboardwell.aws.ps.beescloud.com/"
+    url: "https://cjoc.acme.org/"
   mailer:
     charset: "UTF-8"
     useSsl: false

@@ -1,0 +1,76 @@
+jenkins:
+  authorizationStrategy: cloudBeesRoleBasedAccessControl
+  securityRealm:
+    local:
+      allowsSignup: false
+      enableCaptcha: false
+      users:
+      - id: admin
+        name: Administrator
+        password: ${COMMON_PASSWORD}
+        properties:
+        - mailer:
+            emailAddress: admin@example.com
+      - id: admin-lite
+        name: Administrator Lite
+        password: ${COMMON_PASSWORD}
+        properties:
+        - mailer:
+            emailAddress: admin-lite@example.com
+      - id: developer
+        name: Developer User
+        password: ${COMMON_PASSWORD}
+        properties:
+        - mailer:
+            emailAddress: dev@example.com
+      - id: browser
+        name: Browser User
+        password: ${COMMON_PASSWORD}
+        properties:
+        - mailer:
+            emailAddress: browser@example.com
+      - id: casc-validator
+        name: CasC Validator
+        password: ${COMMON_PASSWORD}
+        properties:
+        - mailer:
+            emailAddress: validator@example.com
+      - id: ext-reader
+        name: ExtendedReader User
+        password: ${COMMON_PASSWORD}
+        properties:
+        - mailer:
+            emailAddress: ext-reader@example.com
+      - id: manager
+        name: Manager User
+        password: ${COMMON_PASSWORD}
+        properties:
+        - mailer:
+            emailAddress: manager@example.com
+      - id: swarm
+        name: Swarm User
+        password: ${COMMON_PASSWORD}
+        properties:
+        - mailer:
+            emailAddress: swarm@example.com
+
+security:
+  anonymizeSupportBundle:
+    enabled: false
+  apiToken:
+    creationOfLegacyTokenEnabled: false
+    tokenGenerationOnCreationEnabled: false
+    usageStatisticsEnabled: true
+  gitHooks:
+    allowedOnAgents: false
+    allowedOnController: false
+  gitHostKeyVerificationConfiguration:
+    sshHostKeyVerificationStrategy: knownHostsFileVerificationStrategy
+  sSHD:
+    port: -1
+  securitySettingsEnforcement:
+    global:
+      realmAndAuthorization:
+        canCustomMapping: false
+        canOverride: false
+        defaultMappingFactory: restrictedEquivalentRAMF

@@ -1,0 +1,13 @@
+apiVersion: '2'
+id: controller-a
+description: Bundle for controller-a
+version: b04aafe13f3ac3cbf6a13e4704d54d39
+jcasc:
+- jenkins.yaml
+- jenkins.beekeeper.yaml
+- jenkins.jenkins.clouds.yaml
+- jenkins.support.yaml
+plugins:
+- plugins.yaml
+items:
+- items.casc-local-jobs.yaml

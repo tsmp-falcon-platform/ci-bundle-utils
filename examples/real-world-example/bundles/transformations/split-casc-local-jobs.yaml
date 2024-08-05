@@ -1,0 +1,8 @@
+splits:
+  # Split by name on regex (auto takes each item separately)
+  items:
+    items.yaml:
+    - target: casc-local-jobs.yaml
+      patterns: ['casc-local-.*']
+    - target: casc-custom-jobs.yaml
+      patterns: ['casc-custom-.*']

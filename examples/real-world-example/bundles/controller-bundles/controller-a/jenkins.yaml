@@ -1,0 +1,156 @@
+jenkins:
+  agentProtocols:
+  - Diagnostic-Ping
+  - JNLP4-connect
+  - OperationsCenter2
+  - Ping
+  authorizationStrategy: cloudBeesRoleBasedAccessControl
+  crumbIssuer:
+    standard:
+      excludeClientIPFromCrumb: false
+  disableRememberMe: false
+  disabledAdministrativeMonitors:
+  - hudson.util.DoubleLaunchChecker
+  markupFormatter: plainText
+  mode: NORMAL
+  myViewsTabBar: standard
+  noUsageStatistics: true
+  nodeMonitors:
+  - architecture
+  - clock
+  - diskSpace:
+      freeSpaceThreshold: 1GiB
+      freeSpaceWarningThreshold: 2GiB
+  - swapSpace
+  - tmpSpace:
+      freeSpaceThreshold: 1GiB
+      freeSpaceWarningThreshold: 2GiB
+  - responseTime
+  numExecutors: 0
+  primaryView:
+    all:
+      name: all
+  projectNamingStrategy: standard
+  quietPeriod: 5
+  scmCheckoutRetryCount: 0
+  securityRealm: operationsCenter
+  views:
+  - all:
+      name: all
+  viewsTabBar: standard
+globalCredentialsConfiguration:
+  configuration:
+    providerFilter: none
+    typeFilter: none
+appearance:
+  prism:
+    theme: PRISM
+security:
+  anonymizeSupportBundle:
+    enabled: false
+  apiToken:
+    creationOfLegacyTokenEnabled: false
+    tokenGenerationOnCreationEnabled: false
+    usageStatisticsEnabled: true
+  gitHooks:
+    allowedOnAgents: false
+    allowedOnController: false
+  gitHostKeyVerificationConfiguration:
+    sshHostKeyVerificationStrategy: knownHostsFileVerificationStrategy
+  scriptApproval:
+    approvedSignatures:
+    - method groovy.lang.GroovyObject invokeMethod java.lang.String java.lang.Object
+    - new java.util.TreeMap java.util.Comparator
+    - staticMethod java.util.Comparator comparing java.util.function.Function
+unclassified:
+  buildDiscarders:
+    configuredBuildDiscarders:
+    - jobBuildDiscarder
+  bundleUpdateTiming:
+    automaticReload: true
+    automaticRestart: true
+    rejectWarnings: true
+    reloadAlwaysOnRestart: false
+    skipNewVersions: false
+  cascItemsConfiguration:
+    variableInterpolationEnabledForAdmin: false
+    variableInterpolationEnabledForNonAdmin: false
+  cloudBeesSCMReporting:
+    enabled: true
+  cloudbeesPipelineExplorer:
+    autoPollingEnabled: true
+    autoPollingIntervalSeconds: 10
+    enabled: true
+    searchMaxIndexSize: 1000
+  email-ext:
+    adminRequiredForTemplateTesting: false
+    allowUnregisteredEnabled: false
+    charset: UTF-8
+    debugMode: false
+    defaultBody: |-
+      $PROJECT_NAME - Build # $BUILD_NUMBER - $BUILD_STATUS:
+
+      Check console output at $BUILD_URL to view the results.
+    defaultContentType: text/plain
+    defaultSubject: '$PROJECT_NAME - Build # $BUILD_NUMBER - $BUILD_STATUS!'
+    defaultTriggerIds:
+    - hudson.plugins.emailext.plugins.trigger.FailureTrigger
+    maxAttachmentSize: -1
+    maxAttachmentSizeMb: -1
+    precedenceBulk: false
+    watchingEnabled: false
+  experimentalPlugins:
+    enabled: false
+  fingerprints:
+    fingerprintCleanupDisabled: false
+    storage: file
+  gitHubConfiguration:
+    apiRateLimitChecker: ThrottleForNormalize
+  gitHubPluginConfig:
+    hookUrl: https://controller-a.acme.org/github-webhook/
+  hibernationConfiguration:
+    activities:
+    - build
+    - web
+    enabled: true
+    gracePeriod: 3600
+  junitTestResultStorage:
+    storage: file
+  location:
+    adminAddress: address not configured yet <nobody@nowhere>
+    url: https://controller-a.acme.org/
+  mailer:
+    charset: UTF-8
+    useSsl: false
+    useTls: false
+  operationsCenterRootAction:
+    connectionDetails: "----- BEGIN CONNECTION DETAILS -----\nH4sIAAAAAAAA/xXNSxICIQxF0b0wFtAWbOltuIKQBH+ppouPDiz3Lk5P3Vfvo64F1qYW5SkGH4j0\r
+      \nTMlpNyFqOCDpY4DJnf1McEpqp+402r3GvLaSRbhoGNqLDL61ti3W4iOjQcmdInMdaWFTX3/qtXEx\r
+      \nkhHEjtWb4yXjk8d9Aqn8/QHS+9O5jgAAAA==\r\n----- END CONNECTION DETAILS -----\n"
+  pollSCM:
+    pollingThreadCount: 10
+  quietStartConfiguration:
+    activated: false
+  scmGit:
+    addGitTagAction: false
+    allowSecondFetch: false
+    createAccountBasedOnEmail: false
+    disableGitToolChooser: false
+    hideCredentials: false
+    showEntireCommitSummaryInChanges: false
+    useExistingAccountWithSameEmail: false
+  usageStatisticsCloudBees:
+    disabledJenkinsUsageStatistics: true
+    usageStatisticsCollected: true
+  validationVisualization:
+    quiet: false
+tool:
+  cloudbeesPluginUsageAnalyzer:
+    enabled: true
+  git:
+    installations:
+    - home: git
+      name: Default
+  mavenGlobalConfig:
+    globalSettingsProvider: standard
+    settingsProvider: standard

@@ -1,0 +1,29 @@
+# Patches based upon https://jsonpatch.com/
+patches:
+  jenkins.yaml:
+  - op: remove
+    path: /license
+  # remove rbac from the controller (provided by the OC)
+  rbac.yaml:
+  - op: remove
+    path: /roles
+  - op: remove
+    path: /groups
+splits:
+  # Split by name on regex (auto takes each item separately)
+  items:
+    items.yaml:
+    - target: delete
+      patterns: ['test-.*']
+  jcasc:
+    # Split by path (auto takes each item separately, replacing '/' with '.')
+    jenkins.yaml:
+    - target: auto
+      paths:
+      - credentials
+      - jenkins/clouds
+      - advisor
+      - beekeeper
+      - cloudBeesCasCServer
+      - controllerLifecycleNotifications
+      - support

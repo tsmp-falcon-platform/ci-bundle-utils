@@ -59,7 +59,8 @@ jenkins:
           spec:
             containers:
             - name: jnlp
-              image: ghcr.io/tsmp-falcon-platform/ci-bundle-utils:latest # TODO: check for the current version
+              image: ghcr.io/tsmp-falcon-platform/ci-bundle-utils
+              imagePullPolicy: Always
               command: ["/usr/share/jenkins/jenkins-agent"]
               volumeMounts:
               - name: pseudo-jnlp
@@ -91,7 +92,8 @@ jenkins:
           spec:
             containers:
             - name: jnlp
-              image: ghcr.io/tsmp-falcon-platform/ci-bundle-utils:latest # TODO: check for the current version
+              image: ghcr.io/tsmp-falcon-platform/ci-bundle-utils
+              imagePullPolicy: Always
               command: ["/usr/share/jenkins/jenkins-agent"]
               volumeMounts:
               - name: pseudo-jnlp
@@ -141,7 +143,7 @@ items:
   concurrentBuild: false
   description: ''
   disabled: false
-  displayName: bundleutils-test-job
+  displayName: ''
   label: bundleutils
   publishersList:
   - gitHubCommitStatusSetter:
@@ -178,6 +180,8 @@ We will need:
 
 - the CasC snippet below is setting credential values through [CasC secrets](https://github.com/jenkinsci/configuration-as-code-plugin/blob/master/docs/features/secrets.adoc#passing-secrets-through-variables) - please adjust accordingly.
 - if you use different credential ids, these will have to be change in the job spec as well.
+
+The real world example of the snippet below can found in the [real world example](../examples/real-world-example/bundles/oc-bundles/oc-bundle/jenkins.credentials.yaml)
 
 ```yaml
 credentials:
@@ -221,500 +225,49 @@ Below is a CasC Items snippet for the management jobs.
 
 If you are not using CasC, add the jobs manually according to the spec.
 
-The jobs in question are:
+The jobs in question are in two categories.
 
-- `*-direct`
-  - **checkout the `main` branch** of the bundles repository
+The local generic jobs:
+
+- `casc-local-sync-direct`
+  - generic job which
+    - does not rely on specific server names, etc
+    - relies on the local `JENKINS_URL`
+    - can be used on any operation center or controller without alterations
+  - performs:
+    - **checkout of the `main` branch** of the bundles repository
     - fetches the current config
     - transforms the current config
     - validates the current config
   - checks for and commits differences
-  - commits any changes **to the main branch**
-- `*-drift`
-  - **checkout the `<bundle_name>-drift` branch** of the bundles repository
-  - merges with the main branch before proceeding
-    - fetches the current config
-    - transforms the current config
-    - validates the current config
-  - checks for and commits differences
-  - commits any changes **to the main branch**
-- `xxxxxx-direct`
-  - similar to a `*-direct` job but...
-    - takes a regular expression
-    - runs the steps for each matching bundle
-- `xxxxxx-validate`
-  - similar to the `xxxxxx-direct` job but...
-    - takes a regular expression
-    - validates each matching bundle
+  - pushes any changes **DIRECTLY TO THE MAIN BRANCH**
+- `casc-local-sync-drift`
+  - generic job which relies on the local `JENKINS_URL`
+  - as with `casc-local-sync-direct` but checks out and rebases a drift branch
+  - commits any changes **TO THE DRIFT BRANCH**
 
-```yaml
-removeStrategy:
-  rbac: SYNC
-  items: NONE
-items:
-- kind: freeStyle
-  name: controller-a-direct
-  blockBuildWhenDownstreamBuilding: false
-  blockBuildWhenUpstreamBuilding: false
-  buildDiscarder:
-    logRotator:
-      artifactDaysToKeep: -1
-      artifactNumToKeep: -1
-      daysToKeep: 30
-      numToKeep: 30
-  buildWrappers:
-  - secretBuildWrapper:
-      bindings:
-      - gitUsernamePassword:
-          gitToolName: Default
-          credentialsId: github-token-rw
-      - string:
-          variable: CASC_VALIDATION_LICENSE_KEY
-          credentialsId: casc-validation-key
-      - string:
-          variable: CASC_VALIDATION_LICENSE_CERT
-          credentialsId: casc-validation-cert
-      - usernamePassword:
-          usernameVariable: BUNDLEUTILS_USERNAME
-          passwordVariable: BUNDLEUTILS_PASSWORD
-          credentialsId: bundleutils-creds
-  builders:
-  - shell:
-      command: "set -e\n\necho \"Running bundleutils --help...\"\nbundleutils --help\n
-        \necho \"Running main target...\"\nexport BUNDLEUTILS_PLUGINS_JSON_ADDITIONS='roots'\n
-        make bundles/controller-bundles/controller-a/all\n\necho \"Running a git diff
-        to check...\"\nif ! make bundles/controller-bundles/controller-a/git-diff;
-        then\n\tmake bundles/controller-bundles/controller-a/git-commit\nfi\n# everything
-        should have been committed, failing if diff found\nmake git-diff\n\n#export
-        -p > $WORKSPACE_TMP/ENV\n#sleep 600"
-  concurrentBuild: false
-  description: ''
-  disabled: false
-  displayName: controller-a-direct
-  label: bundleutils
-  publishersList:
-  - gitPublisher:
-      branchesToPush:
-      - branchToPush:
-          branchName: main
-          targetRepoName: origin
-          rebaseBeforePush: true
-      pushMerge: false
-      pushOnlyIfSuccess: true
-      forcePush: false
-  scm:
-    scmGit:
-      extensions:
-      - localBranch: {}
-      - cloneOption:
-          reference: ''
-          noTags: true
-          honorRefspec: false
-          shallow: false
-      - userIdentity:
-          name: bundleutils-bot
-          email: bundleutils-bot@example.org
-      userRemoteConfigs:
-      - userRemoteConfig:
-          credentialsId: github-token-rw
-          url: https://git.acme.org/my-org/my-bundles-repo # TODO - replace with your bundles repository
-      branches:
-      - branchSpec:
-          name: refs/heads/main
-  scmCheckoutStrategy:
-    standard: {}
-- kind: freeStyle
-  name: controller-a-drift
-  blockBuildWhenDownstreamBuilding: false
-  blockBuildWhenUpstreamBuilding: false
-  buildDiscarder:
-    logRotator:
-      artifactDaysToKeep: -1
-      artifactNumToKeep: -1
-      daysToKeep: 30
-      numToKeep: 30
-  buildWrappers:
-  - secretBuildWrapper:
-      bindings:
-      - gitUsernamePassword:
-          gitToolName: Default
-          credentialsId: github-token-rw
-      - string:
-          variable: CASC_VALIDATION_LICENSE_KEY
-          credentialsId: casc-validation-key
-      - string:
-          variable: CASC_VALIDATION_LICENSE_CERT
-          credentialsId: casc-validation-cert
-      - usernamePassword:
-          usernameVariable: BUNDLEUTILS_USERNAME
-          passwordVariable: BUNDLEUTILS_PASSWORD
-          credentialsId: bundleutils-creds
-  builders:
-  - shell:
-      command: "set -e\n\necho \"Running bundleutils --help...\"\nbundleutils --help\n
-        \necho \"Running main target...\"\nexport BUNDLEUTILS_PLUGINS_JSON_ADDITIONS='roots'\n
-        make bundles/controller-bundles/controller-a/all\n\necho \"Running a git diff
-        to check...\"\nif ! make bundles/controller-bundles/controller-a/git-diff;
-        then\n\tmake bundles/controller-bundles/controller-a/git-commit\nfi\n# everything
-        should have been committed, failing if diff found\nmake git-diff\n\n#export
-        -p > $WORKSPACE_TMP/ENV\n#sleep 600"
-  concurrentBuild: false
-  description: ''
-  disabled: false
-  displayName: controller-a-drift
-  label: bundleutils
-  publishersList:
-  - gitPublisher:
-      branchesToPush:
-      - branchToPush:
-          branchName: controller-a-drift
-          targetRepoName: origin
-          rebaseBeforePush: true
-      pushMerge: false
-      pushOnlyIfSuccess: true
-      forcePush: true
-  scm:
-    scmGit:
-      extensions:
-      - localBranch: {}
-      - cloneOption:
-          reference: ''
-          noTags: true
-          honorRefspec: false
-          shallow: false
-      - userIdentity:
-          name: bundleutils-bot
-          email: bundleutils-bot@example.org
-      - preBuildMerge:
-          options:
-            userMergeOptions:
-              mergeStrategy: DEFAULT
-              fastForwardMode: FF
-              mergeTarget: main
-              mergeRemote: origin
-      userRemoteConfigs:
-      - userRemoteConfig:
-          credentialsId: github-token-rw
-          url: https://git.acme.org/my-org/my-bundles-repo # TODO - replace with your bundles repository
-      branches:
-      - branchSpec:
-          name: refs/heads/controller-a-drift
-  scmCheckoutStrategy:
-    standard: {}
-- kind: freeStyle
-  name: oc-bundle-direct
-  blockBuildWhenDownstreamBuilding: false
-  blockBuildWhenUpstreamBuilding: false
-  buildDiscarder:
-    logRotator:
-      artifactDaysToKeep: -1
-      artifactNumToKeep: -1
-      daysToKeep: 30
-      numToKeep: 30
-  buildWrappers:
-  - secretBuildWrapper:
-      bindings:
-      - gitUsernamePassword:
-          gitToolName: Default
-          credentialsId: github-token-rw
-      - string:
-          variable: CASC_VALIDATION_LICENSE_KEY
-          credentialsId: casc-validation-key
-      - string:
-          variable: CASC_VALIDATION_LICENSE_CERT
-          credentialsId: casc-validation-cert
-      - usernamePassword:
-          usernameVariable: BUNDLEUTILS_USERNAME
-          passwordVariable: BUNDLEUTILS_PASSWORD
-          credentialsId: bundleutils-creds
-  builders:
-  - shell:
-      command: "set -e\n\necho \"Running bundleutils --help...\"\nbundleutils --help\n
-        \necho \"Running main target...\"\nexport BUNDLEUTILS_PLUGINS_JSON_ADDITIONS='roots'\n
-        make bundles/oc-bundles/oc-bundle/all\n\necho \"Running a git diff to check...\"\
-        \nif ! make bundles/oc-bundles/oc-bundle/git-diff; then\n\tmake bundles/oc-bundles/oc-bundle/git-commit\n
-        fi\n# everything should have been committed, failing if diff found\nmake git-diff\n
-        \n#export -p > $WORKSPACE_TMP/ENV\n#sleep 600"
-  concurrentBuild: false
-  description: ''
-  disabled: false
-  displayName: oc-bundle-direct
-  label: bundleutils
-  publishersList:
-  - gitPublisher:
-      branchesToPush:
-      - branchToPush:
-          branchName: main
-          targetRepoName: origin
-          rebaseBeforePush: true
-      pushMerge: false
-      pushOnlyIfSuccess: true
-      forcePush: false
-  scm:
-    scmGit:
-      extensions:
-      - localBranch: {}
-      - cloneOption:
-          reference: ''
-          noTags: true
-          honorRefspec: false
-          shallow: false
-      - userIdentity:
-          name: bundleutils-bot
-          email: bundleutils-bot@example.org
-      - wipeWorkspace: {}
-      userRemoteConfigs:
-      - userRemoteConfig:
-          credentialsId: github-token-rw
-          url: https://git.acme.org/my-org/my-bundles-repo # TODO - replace with your bundles repository
-      branches:
-      - branchSpec:
-          name: refs/heads/main
-  scmCheckoutStrategy:
-    standard: {}
-- kind: freeStyle
-  name: oc-bundle-drift
-  blockBuildWhenDownstreamBuilding: false
-  blockBuildWhenUpstreamBuilding: false
-  buildDiscarder:
-    logRotator:
-      artifactDaysToKeep: -1
-      artifactNumToKeep: -1
-      daysToKeep: 30
-      numToKeep: 30
-  buildWrappers:
-  - secretBuildWrapper:
-      bindings:
-      - gitUsernamePassword:
-          gitToolName: Default
-          credentialsId: github-token-rw
-      - string:
-          variable: CASC_VALIDATION_LICENSE_KEY
-          credentialsId: casc-validation-key
-      - string:
-          variable: CASC_VALIDATION_LICENSE_CERT
-          credentialsId: casc-validation-cert
-      - usernamePassword:
-          usernameVariable: BUNDLEUTILS_USERNAME
-          passwordVariable: BUNDLEUTILS_PASSWORD
-          credentialsId: bundleutils-creds
-  builders:
-  - shell:
-      command: "set -e\n\necho \"Running bundleutils --help...\"\nbundleutils --help\n
-        \necho \"Running main target...\"\nexport BUNDLEUTILS_PLUGINS_JSON_ADDITIONS='roots'\n
-        make bundles/oc-bundles/oc-bundle/all\n\necho \"Running a git diff to check...\"\
-        \nif ! make bundles/oc-bundles/oc-bundle/git-diff; then\n\tmake bundles/oc-bundles/oc-bundle/git-commit\n
-        fi\n# everything should have been committed, failing if diff found\nmake git-diff\n
-        \n#export -p > $WORKSPACE_TMP/ENV\n#sleep 600"
-  concurrentBuild: false
-  description: ''
-  disabled: false
-  displayName: oc-bundle-drift
-  label: bundleutils
-  publishersList:
-  - gitPublisher:
-      branchesToPush:
-      - branchToPush:
-          branchName: oc-bundle-drift
-          targetRepoName: origin
-          rebaseBeforePush: true
-      pushMerge: false
-      pushOnlyIfSuccess: true
-      forcePush: true
-  scm:
-    scmGit:
-      extensions:
-      - localBranch: {}
-      - cloneOption:
-          reference: ''
-          noTags: true
-          honorRefspec: false
-          shallow: false
-      - userIdentity:
-          name: bundleutils-bot
-          email: bundleutils-bot@example.org
-      - preBuildMerge:
-          options:
-            userMergeOptions:
-              mergeStrategy: DEFAULT
-              fastForwardMode: FF
-              mergeTarget: main
-              mergeRemote: origin
-      - wipeWorkspace: {}
-      userRemoteConfigs:
-      - userRemoteConfig:
-          credentialsId: github-token-rw
-          url: https://git.acme.org/my-org/my-bundles-repo # TODO - replace with your bundles repository
-      branches:
-      - branchSpec:
-          name: refs/heads/oc-bundle-drift
-  scmCheckoutStrategy:
-    standard: {}
-- kind: freeStyle
-  name: xxxxxx-direct
-  blockBuildWhenDownstreamBuilding: false
-  blockBuildWhenUpstreamBuilding: false
-  buildDiscarder:
-    logRotator:
-      artifactDaysToKeep: -1
-      artifactNumToKeep: -1
-      daysToKeep: 30
-      numToKeep: 30
-  buildWrappers:
-  - secretBuildWrapper:
-      bindings:
-      - gitUsernamePassword:
-          gitToolName: Default
-          credentialsId: github-token-rw
-      - string:
-          variable: CASC_VALIDATION_LICENSE_KEY
-          credentialsId: casc-validation-key
-      - string:
-          variable: CASC_VALIDATION_LICENSE_CERT
-          credentialsId: casc-validation-cert
-      - usernamePassword:
-          usernameVariable: BUNDLEUTILS_USERNAME
-          passwordVariable: BUNDLEUTILS_PASSWORD
-          credentialsId: bundleutils-creds
-  builders:
-  - shell:
-      command: "set -e\necho \"BUNDLE_REGEX='$BUNDLE_REGEX'\"\necho \"DRY_RUN='$DRY_RUN'\"\
-        \n\nfor bundle in $(make find BP=\"$BUNDLE_REGEX\"); do\n  echo \"Running
-        main target for '$bundle'...\"\n  make \"$bundle\"/all\n\n  echo \"Running
-        a git diff to check...\"\n  if ! make \"$bundle\"/git-diff; then\n  \tmake
-        \"$bundle\"/git-commit\n  fi\n  # everything should have been committed, failing
-        if diff found\n  make git-diff\ndone\n\nif [ \"$DRY_RUN\" = \"true\" ]; then\n\
-        \  echo \"DRY_RUN=true so resetting hard so as not to push anything...\"\n\
-        \  make git-reset\nfi\n#export -p > $WORKSPACE_TMP/ENV\n#sleep 600"
-  concurrentBuild: false
-  description: ''
-  disabled: false
-  displayName: xxxxxx-direct
-  label: bundleutils
-  parameters:
-  - booleanParam:
-      defaultValue: true
-      name: DRY_RUN
-      description: Uncheck to push changes to main
-  - string:
-      trim: false
-      defaultValue: (controller-a)
-      name: BUNDLE_REGEX
-      description: Regex to match bundle names. e.g. (oc-bundle|controller-a) or (controller-.*)
-  publishersList:
-  - gitPublisher:
-      branchesToPush:
-      - branchToPush:
-          branchName: main
-          targetRepoName: origin
-          rebaseBeforePush: true
-      pushMerge: false
-      pushOnlyIfSuccess: true
-      forcePush: false
-  scm:
-    scmGit:
-      extensions:
-      - localBranch: {}
-      - cloneOption:
-          reference: ''
-          noTags: true
-          honorRefspec: false
-          shallow: false
-      - userIdentity:
-          name: bundleutils-bot
-          email: bundleutils-bot@example.org
-      userRemoteConfigs:
-      - userRemoteConfig:
-          credentialsId: github-token-rw
-          url: https://git.acme.org/my-org/my-bundles-repo # TODO - replace with your bundles repository
-      branches:
-      - branchSpec:
-          name: refs/heads/main
-  scmCheckoutStrategy:
-    standard: {}
-- kind: freeStyle
-  name: xxxxxx-validate
-  blockBuildWhenDownstreamBuilding: false
-  blockBuildWhenUpstreamBuilding: false
-  buildDiscarder:
-    logRotator:
-      artifactDaysToKeep: -1
-      artifactNumToKeep: -1
-      daysToKeep: 30
-      numToKeep: 30
-  buildWrappers:
-  - secretBuildWrapper:
-      bindings:
-      - gitUsernamePassword:
-          gitToolName: Default
-          credentialsId: github-token-rw
-      - string:
-          variable: CASC_VALIDATION_LICENSE_KEY
-          credentialsId: casc-validation-key
-      - string:
-          variable: CASC_VALIDATION_LICENSE_CERT
-          credentialsId: casc-validation-cert
-      - usernamePassword:
-          usernameVariable: BUNDLEUTILS_USERNAME
-          passwordVariable: BUNDLEUTILS_PASSWORD
-          credentialsId: bundleutils-creds
-  builders:
-  - shell:
-      command: |-
-        set -e
-        echo "BUNDLE_REGEX='$BUNDLE_REGEX'"
-        echo "DRY_RUN='$DRY_RUN'"
+The custom jobs:
 
-        for bundle in $(make find BP="$BUNDLE_REGEX"); do
-          echo "Running main target for '$bundle'..."
-          make "$bundle"/validate
-        done
-        #export -p > $WORKSPACE_TMP/ENV
-        #sleep 600
-  concurrentBuild: false
-  description: "This job WILL NOT FETCH AND TRANSFORM bundles. It will ONLY VALIDATE
-    EXISTING bundles.\r\n\r\nThis is useful for testing feature branches for changes
-    not made through the UI."
-  disabled: false
-  displayName: xxxxxx-validate
-  label: bundleutils
-  parameters:
-  - string:
-      trim: false
-      defaultValue: (oc-bundle)
-      name: BUNDLE_REGEX
-      description: Regex to match bundle names. e.g. (oc-bundle|controller-a) or (controller-.*)
-  - string:
-      trim: true
-      defaultValue: main
-      name: VALIDATION_BRANCH
-      description: Branch to use for the bundles validation.
-  scm:
-    scmGit:
-      extensions:
-      - localBranch: {}
-      - cloneOption:
-          reference: ''
-          noTags: true
-          honorRefspec: false
-          shallow: false
-      - userIdentity:
-          name: bundleutils-bot
-          email: bundleutils-bot@example.org
-      userRemoteConfigs:
-      - userRemoteConfig:
-          credentialsId: github-token-rw
-          url: https://git.acme.org/my-org/my-bundles-repo # TODO - replace with your bundles repository
-      branches:
-      - branchSpec:
-          name: refs/heads/${VALIDATION_BRANCH}
-  scmCheckoutStrategy:
-    standard: {}
-```
+- `casc-custom-sync-direct`
+  - as with `casc-local-sync-direct` but parameterized to allow running multiple bundles
+- `casc-custom-sync-drift`
+  - as with `casc-local-sync-drift` but parameterized to allow running multiple bundles
+- `casc-custom-validate`
+  - validate any bundle on any branch
+- `casc-custom-deploy-cm`
+  - deploy bundles as config maps FROM THE MAIN BRANCH
+
+A real world example of the jobs below can be found in the real world example:
+
+- [oc-bundle/items.casc-local-jobs.yaml](../examples/real-world-example/bundles/oc-bundles/oc-bundle/items.casc-local-jobs.yaml)
+- [oc-bundle/items.casc-custom-jobs.yaml](../examples/real-world-example/bundles/oc-bundles/oc-bundle/items.casc-custom-jobs.yaml)
+- [controller-a/items.casc-local-jobs.yaml](../examples/real-world-example/bundles/controller-bundles/controller-a/items.casc-local-jobs.yaml)
 
 ### Custom View
 
 Here is an example snippet to create a view containing all your Bundle Management jobs.
+
+Again, a real world example can be found in the [real world example](../examples/real-world-example/bundles/oc-bundles/oc-bundle/jenkins.views.yaml)
 
 Add to your jenkins.yaml if required.
 
@@ -731,6 +284,6 @@ jenkins:
       - buildButton
       filterExecutors: true
       filterQueue: true
-      includeRegex: (.*-drift|.*-direct|xxxxxx-.*)
-      name: Bundles Jobs
+      includeRegex: (casc-custom-.*|casc-local-.*)
+      name: Bundles
 ```
