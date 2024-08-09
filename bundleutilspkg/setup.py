@@ -16,7 +16,7 @@ setup(
         'deepdiff',
         'requests',
         'jsonpatch',
-        'python-dotenv',
+        'packaging',
     ],
     entry_points={
         'console_scripts': [

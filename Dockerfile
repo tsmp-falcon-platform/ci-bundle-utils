@@ -28,6 +28,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && mkdir -p /opt/bundleutils/.cache /opt/bundleutils/.app /opt/bundleutils/work /workspace \
     && chmod -R 777 /opt/bundleutils/.cache /opt/bundleutils/work /workspace
 
+# Install Java 11 from Adoptium
+# Needed for CloudBees CI version 2.426.3.3 and earlier
+RUN wget -O /tmp/temurin-11.tar.gz https://github.com/adoptium/temurin11-binaries/releases/download/jdk-11.0.20.1+1/OpenJDK11U-jdk_x64_linux_hotspot_11.0.20.1_1.tar.gz \
+    && mkdir -p /usr/lib/jvm/temurin-11-jdk-amd64 \
+    && tar -xf /tmp/temurin-11.tar.gz -C /usr/lib/jvm/temurin-11-jdk-amd64 --strip-components=1 \
+    && rm /tmp/temurin-11.tar.gz
+
+# Set environment variables to use Java 11 by default
+ENV JAVA_HOME_11=/usr/lib/jvm/temurin-11-jdk-amd64
+
+# Example to make Java 11 the default Java version
+# ENV JAVA_HOME=$JAVA_HOME_11
+# ENV PATH=$JAVA_HOME/bin:$PATH
+
 # Create a virtual environment
 RUN python3 -m venv /opt/bundleutils/.venv
 ENV PATH="/opt/bundleutils/.venv/bin:$PATH" BUNDLEUTILS_CACHE_DIR="/opt/bundleutils/.cache"
