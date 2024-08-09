@@ -8,12 +8,13 @@ import os
 import re
 import sys
 import logging
+from packaging import version
 
 import importlib.resources as pkg_resources
 
 class JenkinsServerManager:
 
-    def die(msg):
+    def die(self, msg):
         logging.error(f"{msg}\n")
         sys.exit(1)
 
@@ -152,6 +153,33 @@ class JenkinsServerManager:
         else:
             self.die(f"Failed to download WAR file from {self.cb_war_download_url}. Status code: {response.status_code}")
 
+    def test_java_specification_version(self, version):
+        try:
+            # Run the `java` command to print the `java.specification.version` property
+            result = subprocess.run(
+                ['java', '-XshowSettings:properties', '-version'],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+
+            # The properties usually come in stderr, not stdout
+            output = result.stderr
+
+            # Look for the `java.specification.version` property in the output
+            for line in output.splitlines():
+                if "java.specification.version" in line:
+                    version_str = line.split('=')[1].strip()
+
+                    # The `java.specification.version` is already the major version
+                    return version_str == version
+
+            # If version information wasn't found, return None or raise an error
+            self.die("Java version could not be found. Check the output of 'java -XshowSettings:properties -version'")
+
+        except FileNotFoundError:
+            self.die("Java is not installed or not found in PATH.")
+
     def create_startup_bundle(self, plugin_files, validation_template):
         """Create a startup bundle from the specified source directory and bundle template."""
         if not plugin_files:
@@ -187,6 +215,30 @@ class JenkinsServerManager:
         if not os.path.exists(self.war_path):
             logging.info("WAR file does not exist. Getting now...")
             self.get_war()
+
+        # if the ci_version is lower than 2.440.1.3, check for a JAVA_HOME_11 variable, and set it
+        # https://docs.cloudbees.com/docs/release-notes/latest/cloudbees-ci/modern-cloud-platforms/2.440.1.3
+        required_java_version = '17'
+        if version.parse(self.ci_version) < version.parse('2.440.1.3'):
+            required_java_version = '11'
+            if 'JAVA_HOME_11' in os.environ:
+                logging.info(f"Setting JAVA_HOME to {os.environ['JAVA_HOME_11']}")
+                self.jvm_cache_dir = os.environ['JAVA_HOME_11']
+                os.environ['JAVA_HOME'] = self.jvm_cache_dir
+                os.environ['PATH'] = f"{os.environ['JAVA_HOME']}/bin:{os.environ['PATH']}"
+            else:
+                logging.info("Java 11 required but JAVA_HOME_11 not set. Defaulting to JAVA_HOME...") 
+
+        # check for JAVA_HOME and use it if set
+        if 'JAVA_HOME' in os.environ:
+            logging.info(f"JAVA_HOME is set to {os.environ['JAVA_HOME']}")
+            java = os.path.join(os.environ['JAVA_HOME'], 'bin', 'java')
+            if not os.path.exists(java):
+                self.die(f"JAVA_HOME is set to {os.environ['JAVA_HOME']} but {java} does not exist.")
+
+        self.test_java_specification_version(required_java_version)
+        # print the java -version output
+        subprocess.run([java, '-version'], check=True)
 
         token_script="""
         import hudson.model.User
@@ -244,7 +296,7 @@ class JenkinsServerManager:
         else:
             java_opts = f"-Dcore.casc.config.bundle={self.target_jenkins_home_casc_startup_bundle}"
         # create the command to start the Jenkins server by joining the elements in the list
-        command = ['java']
+        command = [java]
         command.extend(java_opts.split())
         command.extend(['-jar', self.war_path, f"--httpPort={http_port}", f"--webroot={self.target_jenkins_webroot}"])
         command.extend(jenkins_opts.split())
