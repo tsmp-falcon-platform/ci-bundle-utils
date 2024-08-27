@@ -254,7 +254,7 @@ class JenkinsServerManager:
         new File(System.getenv('JENKINS_HOME') + "/secrets/initialAdminToken").text = result
         """
         # Account for the case where the license is base64 encoded
-        if "CASC_VALIDATION_LICENSE_KEY_B64" in os.environ:
+        if os.environ.get("CASC_VALIDATION_LICENSE_KEY_B64"):
             logging.info("Decoding the license key and cert...")
             casc_validation_license_key_b64 = os.environ["CASC_VALIDATION_LICENSE_KEY_B64"]
             casc_validation_license_cert_b64 = os.environ.get("CASC_VALIDATION_LICENSE_CERT_B64", "")
