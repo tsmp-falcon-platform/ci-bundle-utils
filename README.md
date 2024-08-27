@@ -83,6 +83,8 @@ Targets:
   compose/stop           Stop the bundleutils container
   compose/enter          Enter the bundleutils container
   docker/create-volume   Create the bundleutils-cache volume
+  docker/build-dev       Build the bundleutils:dev image
+  docker/start-dev       Start the bundleutils:dev container
   docker/start           Start the bundleutils container
   docker/stop            Stop the bundleutils container
   docker/enter           Enter the bundleutils container

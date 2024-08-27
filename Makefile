@@ -1,10 +1,10 @@
-.DEFAULT_GOAL	:= help
-SHELL			:= /bin/bash
-MAKEFLAGS		+= --no-print-directory
-MKFILE_DIR		:= $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
-DOCKER_IMAGE	:= ghcr.io/tsmp-falcon-platform/ci-bundle-utils
-DOCKER_NAME		:= bundleutils
-BUNDLES_WORKSPACE ?= $(CWD)
+.DEFAULT_GOAL	  := help
+SHELL			  := /bin/bash
+MAKEFLAGS		  += --no-print-directory
+MKFILE_DIR		  := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+DOCKER_IMAGE	  ?= ghcr.io/tsmp-falcon-platform/ci-bundle-utils
+DOCKER_NAME		  ?= bundleutils
+BUNDLES_WORKSPACE ?= $(MKFILE_DIR)
 
 .PHONY: compose/start-dev
 compose/start-dev: ## Start the bundleutils container
@@ -29,15 +29,28 @@ compose/enter: ## Enter the bundleutils container
 docker/create-volume: ## Create the bundleutils-cache volume
 	@docker volume inspect bundleutils-cache > /dev/null 2>&1 || docker volume create bundleutils-cache
 
+.PHONY: docker/build-dev
+docker/build-dev: ## Build the bundleutils:dev image
+docker/build-dev:
+	@docker buildx build -t bundleutils:dev .
+
+.PHONY: docker/start-dev
+docker/start-dev: ## Start the bundleutils:dev container
+docker/start-dev: docker/remove docker/build-dev
+	DOCKER_IMAGE=bundleutils:dev $(MAKE) docker/start
+
 .PHONY: docker/start
 docker/start: ## Start the bundleutils container
 docker/start: docker/create-volume
-	@docker pull $(DOCKER_IMAGE)
 	@docker run \
 		-d \
 		-v bundleutils-cache:/opt/bundleutils/.cache \
 		--name $(DOCKER_NAME) \
 		--entrypoint bash \
+		-e BUNDLEUTILS_USERNAME="$(BUNDLEUTILS_USERNAME)" \
+		-e BUNDLEUTILS_PASSWORD="$(BUNDLEUTILS_PASSWORD)" \
+		-e CASC_VALIDATION_LICENSE_KEY="$(CASC_VALIDATION_LICENSE_KEY)" \
+		-e CASC_VALIDATION_LICENSE_CERT="$(CASC_VALIDATION_LICENSE_CERT)" \
 		-e CASC_VALIDATION_LICENSE_KEY_B64=$(CASC_VALIDATION_LICENSE_KEY_B64) \
 		-e CASC_VALIDATION_LICENSE_CERT_B64=$(CASC_VALIDATION_LICENSE_CERT_B64) \
 		-v $(BUNDLES_WORKSPACE):/workspace \
