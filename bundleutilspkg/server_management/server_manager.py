@@ -267,6 +267,10 @@ class JenkinsServerManager:
         if not os.environ.get("CASC_VALIDATION_LICENSE_CERT") and not os.environ.get("IGNORE_LICENSE"):
             self.die("CASC_VALIDATION_LICENSE_CERT is not set.")
 
+        # if CASC_VALIDATION_LICENSE_KEY contains a literal newline, replace it with a newline character
+        os.environ["CASC_VALIDATION_LICENSE_KEY"] = os.environ["CASC_VALIDATION_LICENSE_KEY"].replace("\\n", "\n")
+        os.environ["CASC_VALIDATION_LICENSE_CERT"] = os.environ["CASC_VALIDATION_LICENSE_CERT"].replace("\\n", "\n")
+
         # Add token script to init.groovy.d
         with open(os.path.join(self.target_jenkins_home_init_scripts, "init_02_admin_token.groovy"), "w") as file:
             file.write(token_script)
