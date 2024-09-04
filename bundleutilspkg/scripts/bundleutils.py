@@ -55,6 +55,7 @@ BUNDLEUTILS_FETCH_TARGET_DIR = 'BUNDLEUTILS_FETCH_TARGET_DIR'
 BUNDLEUTILS_PLUGINS_JSON_PATH = 'BUNDLEUTILS_PLUGINS_JSON_PATH'
 BUNDLEUTILS_PLUGINS_JSON_ADDITIONS = 'BUNDLEUTILS_PLUGINS_JSON_ADDITIONS'
 BUNDLEUTILS_BUNDLES_DIR = 'BUNDLEUTILS_BUNDLES_DIR'
+BUNDLEUTILS_CREDENTIAL_DELETE_SIGN = 'PLEASE_DELETE_ME'
 
 def die(msg):
     logging.error(f"{msg}\n")
@@ -957,14 +958,25 @@ def traverse_credentials(filename, obj, custom_replacements={}, path=""):
                         logging.debug(f"Matching tuple found: {matching_tuple}")
                         replacement = matching_tuple[k]
 
-                    # print the JSON Patch operation for the replacement
-                    patch = {"op": "replace", "path": f'{new_path}', "value": f'{replacement}'}
-                    apply_patch(filename, [patch])
-                    continue
+                    if replacement == BUNDLEUTILS_CREDENTIAL_DELETE_SIGN:
+                        parent_path = re.sub(r'/[^/]*$', '', path)
+                        logging.warning(f"Found a credential '{id}' string that needs to be deleted at path: {parent_path}")
+                        # print the JSON Patch operation for the deletion of the parent object
+                        patch = {"op": "remove", "path": f'{parent_path}'}
+                        apply_patch(filename, [patch])
+                        break
+                    else:
+                        # print the JSON Patch operation for the replacement
+                        patch = {"op": "replace", "path": f'{new_path}', "value": f'{replacement}'}
+                        apply_patch(filename, [patch])
+                        continue
             traverse_credentials(filename, v, custom_replacements, new_path)
     elif isinstance(obj, list):
-        for i, v in enumerate(obj):
-            new_path = f"{path}/{i}"
+        # traverse the list in reverse order to avoid index issues when deleting items
+        for i, v in enumerate(reversed(obj)):
+            # Calculate the original index by subtracting the reversed index from the length of the list minus 1
+            original_index = len(obj) - 1 - i
+            new_path = f"{path}/{original_index}"
             traverse_credentials(filename, v, custom_replacements, new_path)
     else:
         if isinstance(obj, str) and re.match(r'{.*}', obj):
