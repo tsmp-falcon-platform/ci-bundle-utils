@@ -14,6 +14,7 @@ Each yaml file can consist of 4 sections
   - written per file
   - contains a list of entries to replace
   - credentials found but not listed will be auto-replaced according to the id and field
+  - replacing any field of a credential with `PLEASE_DELETE_ME` will delete the entry completely
 - `splits`
   - contains two types of split - `items` and `jcasc`
   - `items`
@@ -57,6 +58,9 @@ patches:
 #   username: ${MY_READ_TOKEN}
 # - id: github-org-hooks-shared-secret
 #   secret: ${MY_SHARED_ORGS_HOOKS_SECRET}
+# Deleting:
+# - id: my-superfluous-cred
+#   password: PLEASE_DELETE_ME
 credentials:
   # jenkins.yaml:
   # - id: github-token-ro
