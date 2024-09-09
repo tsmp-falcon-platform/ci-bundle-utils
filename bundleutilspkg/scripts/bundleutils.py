@@ -859,24 +859,45 @@ def fetch_yaml_docs(url, path, username, password, target_dir):
                         # if file is empty, skip
                         if f.read(1):
                             f.seek(0)
+                            response_text = f.read()
+                            response_text = replace_carriage_returns(response_text)
                             logging.debug(f'Read YAML from file: {filename}')
-                            doc = yaml.load(f)
+                            doc = yaml.load(response_text)
                             write_yaml_doc(doc, target_dir, filename)
                         else:
                             logging.warning(f'Skipping empty file: {filename}')
         else:
             logging.info(f'Read YAML from path: {path}')
             with open(path, 'r') as f:
-                yaml_docs = list(yaml.load_all(f))
+                response_text = f.read()
+                response_text = replace_carriage_returns(response_text)
+                yaml_docs = list(yaml.load_all(response_text))
                 write_all_yaml_docs_from_comments(yaml_docs, target_dir)
     elif url:
         logging.info(f'Read YAML from url: {url}')
         response_text = call_jenkins_api(url, username, password)
-        # logging.debug(f'Fetched YAML from {url}:\n{response.text}')
+        response_text = replace_carriage_returns(response_text)
+        # logging.debug(f'Fetched YAML from url {url}:\n{response_text}')
         yaml_docs = list(yaml.load_all(response_text))
         write_all_yaml_docs_from_comments(yaml_docs, target_dir)
     else:
         die('No path or URL provided')
+
+def replace_carriage_returns(response_text):
+        if isinstance(response_text, bytes):
+            response_text = response_text.decode('utf-8')
+        # print any lines with carriage returns in them
+        for line in response_text.split('\n'):
+            if '\\r' in line:
+                logging.debug(f'Carriage return found in line: {line}')
+        # remove any '\r' characters from the response
+        logging.info('Removing carriage returns from the response')
+        response_text = response_text.replace('\\r', '')
+        # print any lines with carriage returns in them
+        for line in response_text.split('\n'):
+            if '\\r' in line:
+                logging.warn(f'Carriage return found in line still: {line}')
+        return response_text
 
 def call_jenkins_api(url, username, password):
     logging.debug(f'Fetching response from URL: {url}')
@@ -893,6 +914,7 @@ def call_jenkins_api(url, username, password):
 def write_all_yaml_docs_from_comments(yaml_docs, target_dir):
     # create a new file for each YAML document
     for i, doc in enumerate(yaml_docs):
+        logging.info(f'Creating YAML file {i}')
         # read the header from the original YAML doc
         filename = doc.ca.comment[1][0].value.strip().strip("# ")
         # remove comments from the YAML doc
@@ -919,6 +941,7 @@ def write_yaml_doc(doc, target_dir, filename):
     with open(filename, 'w') as f:
         f.writelines(lines)
 
+# TODO: remove after testing with normalising
 def normalize_yaml(data):
     """Normalize a nested dictionary."""
     if isinstance(data, dict):
@@ -927,9 +950,9 @@ def normalize_yaml(data):
         return [normalize_yaml(v) for v in data]
     elif isinstance(data, str):
         # Normalize strings that contain newline characters
-        if '\\n' in data:
-            return '|\n' + data.replace('\\n', '\n')
-        else:
+        # if '\\n' in data:
+        #     return '|\n' + data.replace('\\n', '\n')
+        # else:
             return data
     else:
         return data
@@ -1449,7 +1472,7 @@ def split_jcasc(target_dir, filename, configs):
         os.rename(full_filename, new_filename)
 
 def split_items(target_dir, filename, configs):
-    logging.debug('Loading YAML object')
+    logging.debug(f'Loading YAML object from {filename}')
 
     full_filename = os.path.join(target_dir, filename)
     if not _file_check(full_filename):
