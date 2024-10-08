@@ -35,10 +35,10 @@ Start a shell in the container. e.g.
 
 ```sh
 # with docker
-docker exec -it bundleutils bash
+docker exec -it bundleutils bash # or 'make docker/enter'
 
 # with docker-compose
-docker compose exec bundleutils bash
+docker compose exec bundleutils bash # or 'make docker-compose/enter'
 
 # with kubectl
 kubectl exec -it bundleutils -- bash
