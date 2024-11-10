@@ -53,11 +53,11 @@ else
     echo "NOTE:  - This bundle is also using the SystemReadPermission and ManagePermission Java options, so we need to set those as well"
     export BUNDLEUTILS_CI_VERSION="${BUNDLEUTILS_CI_VERSION:-2.452.2.3}"
     export BUNDLEUTILS_CI_TYPE=oc
-    export BUNDLEUTILS_JAVA_OPTS='-Djenkins.security.SystemReadPermission=true -Djenkins.security.ManagePermission=true'
+    export BUNDLEUTILS_CI_JAVA_OPTS='-Djenkins.security.SystemReadPermission=true -Djenkins.security.ManagePermission=true'
     echo "NOTE: We will now fetch the bundle using the following parameters:"
     echo "NOTE:  - BUNDLEUTILS_PATH=$BUNDLEUTILS_PATH"
     echo "NOTE:  - BUNDLEUTILS_CI_TYPE=$BUNDLEUTILS_CI_TYPE"
-    echo "NOTE:  - BUNDLEUTILS_JAVA_OPTS=$BUNDLEUTILS_JAVA_OPTS"
+    echo "NOTE:  - BUNDLEUTILS_CI_JAVA_OPTS=$BUNDLEUTILS_CI_JAVA_OPTS"
     echo "NOTE:  - BUNDLEUTILS_CI_VERSION=$BUNDLEUTILS_CI_VERSION"
     # wait for user to press enter
     read -rp "Press enter to continue"

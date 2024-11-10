@@ -268,14 +268,14 @@ class JenkinsServerManager:
             self.die("CASC_VALIDATION_LICENSE_CERT is not set.")
 
         # if CASC_VALIDATION_LICENSE_KEY contains a literal newline, replace it with a newline character
-        os.environ["CASC_VALIDATION_LICENSE_KEY"] = os.environ["CASC_VALIDATION_LICENSE_KEY"].replace("\\n", "\n")
-        os.environ["CASC_VALIDATION_LICENSE_CERT"] = os.environ["CASC_VALIDATION_LICENSE_CERT"].replace("\\n", "\n")
+        os.environ["CASC_VALIDATION_LICENSE_KEY"] = os.getenv('CASC_VALIDATION_LICENSE_KEY','').replace("\\n", "\n")
+        os.environ["CASC_VALIDATION_LICENSE_CERT"] = os.getenv('CASC_VALIDATION_LICENSE_CERT','').replace("\\n", "\n")
 
         # Add token script to init.groovy.d
         with open(os.path.join(self.target_jenkins_home_init_scripts, "init_02_admin_token.groovy"), "w") as file:
             file.write(token_script)
 
-        java_opts = os.getenv('BUNDLEUTILS_JAVA_OPTS', '')
+        java_opts = os.getenv('BUNDLEUTILS_CI_JAVA_OPTS', '')
         http_port = os.getenv('BUNDLEUTILS_HTTP_PORT', '8080')
         # if port is already in use, fail
         try:
@@ -290,7 +290,7 @@ class JenkinsServerManager:
         jenkins_opts = os.getenv('BUNDLEUTILS_JENKINS_OPTS', '')
         # if BUNDLEUTILS_JENKINS_OPTS contains -Dcore.casc.config.bundle, fail
         if "core.casc.config.bundle" in jenkins_opts or "core.casc.config.bundle" in java_opts:
-            self.die("BUNDLEUTILS_JENKINS_OPTS or BUNDLEUTILS_JAVA_OPTS contains core.casc.config.bundle. This is not allowed.")
+            self.die("BUNDLEUTILS_JENKINS_OPTS or BUNDLEUTILS_CI_JAVA_OPTS contains core.casc.config.bundle. This is not allowed.")
         # if self.target_jenkins_home_casc_startup_bundle doesn't exist, fail
         if not os.path.exists(self.target_jenkins_home_casc_startup_bundle):
             self.die(f"Startup bundle {self.target_jenkins_home_casc_startup_bundle} does not exist.")

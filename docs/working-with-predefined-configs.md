@@ -4,21 +4,15 @@ Imagine the structure found in [../example-bundles-repo/bundles](../examples/exa
 
 ```sh
 ├── bundles
+│   ├── bundle-profiles.yaml
 │   ├── controller-bundles
-│   │   ├── controller-a
-│   │   │   ├── bundle.yaml
-│   │   │   ├── jenkins.yaml
-│   │   │   └── plugins.yaml
-│   │   └── env.controller-a.yaml
+│   │   ├── controller-bundle
+│   │   │   └── bundle.yaml
+│   │   └── Makefile
 │   ├── oc-bundles
-│   │   ├── env.oc-bundle
-│   │   ├── env.oc-bundle.yaml
-│   │   ├── oc-bundle
-│   │   │   ├── bundle.yaml
-│   │   │   ├── items.yaml
-│   │   │   ├── jenkins.yaml
-│   │   │   └── plugins.yaml
-│   │   └── oc-bundle.transform.yaml
+│   │   ├── Makefile
+│   │   └── oc-bundle
+│   │       └── bundle.yaml
 │   └── transformations
 │       ├── add-local-users.yaml
 │       ├── controllers-common.yaml
@@ -29,24 +23,79 @@ Imagine the structure found in [../example-bundles-repo/bundles](../examples/exa
 
 ### Config Auto Discovery
 
-The `bundleutils` tool will try to discover a predefined config.
+The `bundleutils` tool will look for a `bundle-profiles.yaml` containing your predefined configuration.
 
-A prefefined config is like a `.env` file for the bundleutils script.
+- Predefined config is like a `.env` file for the bundleutils script.
+- Provides values for the various steps (no need to pass cli options)
+- Expected in any of the previous 5 parent directories of the CWD
 
-- provides values for the various steps (no need to pass cli options)
-- expected in the parent directory of the CWD
-- has two the possible formats:
-  - `env.<cwd-basename>.yaml` (env vars using a YAML `KEY: VAL` format)
-  - `env.<cwd-basename>` (env var in the normal `KEY=VAL` format)
-
-This allows us to have the configuration for `controller-a` next to the bundle for `controller-a`
+e.g. navigate to `/example-bundles-repo/bundles/controller-bundles/controller-bundle/` and call `bundleutils config`
 
 ```sh
-├── controller-a
-│   ├── bundle.yaml
-│   ├── jenkins.yaml
-│   └── plugins.yaml
-└── env.controller-a.yaml
+❯ cd /example-bundles-repo/bundles/controller-bundles/controller-bundle
+```
+
+Call `bundleutils config`
+
+```sh
+❯ bundleutils config
+INFO:root:Found bundle config for controller-bundle
+INFO:root:Setting environment variable: BUNDLEUTILS_JENKINS_URL=https://cjoc.acme.org/controller-a
+INFO:root:Setting environment variable: BUNDLEUTILS_CI_TYPE=mm
+INFO:root:Setting environment variable: BUNDLEUTILS_CI_VERSION=2.452.3.2
+INFO:root:Setting environment variable: BUNDLEUTILS_CI_JAVA_OPTS=-Djenkins.security.SystemReadPermission=true -Djenkins.security.ManagePermission=true -Dhudson.security.ExtendedReadPermission=true
+INFO:root:Setting environment variable: BUNDLEUTILS_TRANSFORM_CONFIGS=transformations/remove-dynamic-stuff.yaml transformations/controllers-common.yaml
+INFO:root:AUTOSET environment variable: BUNDLEUTILS_FETCH_TARGET_DIR=target/docs-controller-bundle
+INFO:root:AUTOSET environment variable: BUNDLEUTILS_TRANSFORM_SOURCE_DIR=target/docs-controller-bundle
+INFO:root:AUTOSET environment variable: BUNDLEUTILS_TRANSFORM_TARGET_DIR=controller-bundles/controller-bundle
+INFO:root:AUTOSET environment variable: BUNDLEUTILS_SETUP_SOURCE_DIR=controller-bundles/controller-bundle
+INFO:root:AUTOSET environment variable: BUNDLEUTILS_VALIDATE_SOURCE_DIR=controller-bundles/controller-bundle
+INFO:root:Evaluated configuration:
+BUNDLEUTILS_CI_JAVA_OPTS=-Djenkins.security.SystemReadPermission=true -Djenkins.security.ManagePermission=true -Dhudson.security.ExtendedReadPermission=true
+BUNDLEUTILS_CI_TYPE=mm
+BUNDLEUTILS_CI_VERSION=2.452.3.2
+BUNDLEUTILS_ENV=/example-bundles-repo/bundles/bundle-profiles.yaml
+BUNDLEUTILS_FETCH_TARGET_DIR=target/docs-controller-bundle
+BUNDLEUTILS_JENKINS_URL=https://cjoc.acme.org/controller-a
+BUNDLEUTILS_SETUP_SOURCE_DIR=controller-bundles/controller-bundle
+BUNDLEUTILS_TRANSFORM_CONFIGS=transformations/remove-dynamic-stuff.yaml transformations/controllers-common.yaml
+BUNDLEUTILS_TRANSFORM_SOURCE_DIR=target/docs-controller-bundle
+BUNDLEUTILS_TRANSFORM_TARGET_DIR=controller-bundles/controller-bundle
+BUNDLEUTILS_VALIDATE_SOURCE_DIR=controller-bundles/controller-bundle
+```
+
+Calling with `DEBUG` shows how the config is found:
+
+```sh
+❯ bundleutils --log-level DEBUG config
+DEBUG:root:Set log level to: DEBUG
+DEBUG:root:Searching for auto env file bundle-profiles.yaml in parent directories
+DEBUG:root:Checking for env file: /example-bundles-repo/bundles/controller-bundles/controller-bundle/bundle-profiles.yaml
+DEBUG:root:Checking for env file: /example-bundles-repo/bundles/controller-bundles/bundle-profiles.yaml
+DEBUG:root:Checking for env file: /example-bundles-repo/bundles/bundle-profiles.yaml
+DEBUG:root:Auto env file found: /example-bundles-repo/bundles/bundle-profiles.yaml
+DEBUG:root:Using auto env file: /example-bundles-repo/bundles/bundle-profiles.yaml
+DEBUG:root:Loading config file: /example-bundles-repo/bundles/bundle-profiles.yaml
+DEBUG:root:Current working directory: /example-bundles-repo/bundles/controller-bundles/controller-bundle
+DEBUG:root:Switching to the base directory of env file: /example-bundles-repo/bundles
+INFO:root:Found bundle config for controller-bundle
+...
+...
+```
+
+This allows us to have the configuration for `controller-a` separate from the bundle `controller-a`.
+
+```sh
+└── bundles
+    ├── bundle-profiles.yaml          # <-- config
+    ├── controller-bundles
+    │   └── controller-a              # <-- bundle
+    │       └── bundle.yaml
+    └── transformations               # <-- transformations
+        ├── add-local-users.yaml
+        ├── controllers-common.yaml
+        ├── oc-common.yaml
+        └── remove-dynamic-stuff.yaml
 ```
 
 ### Overriding Config Values
@@ -100,26 +149,24 @@ transformations
 
 ### Config Example
 
-Take a look at `env.controller-a.yaml`
+Take a look the exploded config `controller-a.yaml`
 
 ```yaml
+❯ yq 'explode(.)|.bundles."controller-a"' bundle-profiles.yaml
 BUNDLEUTILS_CI_TYPE: mm
 BUNDLEUTILS_CI_VERSION: 2.452.3.2
-BUNDLEUTILS_JAVA_OPTS: >-
-  -Djenkins.security.SystemReadPermission=true
-  -Djenkins.security.ManagePermission=true
-  -Dhudson.security.ExtendedReadPermission=true
-BUNDLEUTILS_JENKINS_URL: https://controller-a.acme.org
+BUNDLEUTILS_CI_JAVA_OPTS: >-
+  -Djenkins.security.SystemReadPermission=true -Djenkins.security.ManagePermission=true -Dhudson.security.ExtendedReadPermission=true
 BUNDLEUTILS_TRANSFORM_CONFIGS: >-
-  ../transformations/remove-dynamic-stuff.yaml
-  ../transformations/add-local-users.yaml
-  ../transformations/controllers-common.yaml
-
-# BUNDLEUTILS_FETCH_TARGET_DIR: target/docs                 # <--- THESE ARE AUTOMATICALLY DEDUCED IF NOT SPECIFIED
-# BUNDLEUTILS_TRANSFORM_SOURCE_DIR: target/docs             # <--- THESE ARE AUTOMATICALLY DEDUCED IF NOT SPECIFIED
-# BUNDLEUTILS_TRANSFORM_TARGET_DIR: &src_dir controller-a   # <--- THESE ARE AUTOMATICALLY DEDUCED IF NOT SPECIFIED
-# BUNDLEUTILS_SETUP_SOURCE_DIR: *src_dir                    # <--- THESE ARE AUTOMATICALLY DEDUCED IF NOT SPECIFIED
-# BUNDLEUTILS_VALIDATE_SOURCE_DIR: *src_dir                 # <--- THESE ARE AUTOMATICALLY DEDUCED IF NOT SPECIFIED
+  transformations/remove-dynamic-stuff.yaml transformations/controllers-common.yaml
+BUNDLEUTILS_JENKINS_URL: https://cjoc.acme.org/controller-a
+# These are directories to use when running fetch, transform, setup, and validate
+# They are automatically deduced from the bundle if not provided
+# BUNDLEUTILS_FETCH_TARGET_DIR: target/docs-controller-bundle
+# BUNDLEUTILS_TRANSFORM_SOURCE_DIR: target/docs-controller-bundle
+# BUNDLEUTILS_TRANSFORM_TARGET_DIR: &src_dir controller-bundles/controller-bundle
+# BUNDLEUTILS_SETUP_SOURCE_DIR: *src_dir
+# BUNDLEUTILS_VALIDATE_SOURCE_DIR: *src_dir
 ```
 
 This would be the equivalent of running commands like...
@@ -158,21 +205,23 @@ Usage:
   make <target>
 
 Targets:
-  %/fetch                Run bundleutils fetch in the directory '%'
-  %/transform            Run bundleutils fetch in the directory '%'
-  %/validate             Run all validation steps in the directory '%'
-  %/process              Run all validation steps in the directory '%'
-  help                   Makefile Help Page
+  run/%/update-bundle        Run bundleutils update-bundle in the directory '%'
+  run/%/fetch                Run bundleutils fetch in the directory '%'
+  run/%/transform            Run bundleutils fetch in the directory '%'
+  run/%/refresh              Run bundleutils fetch and transform in the directory '%'
+
+...
+...
 ```
 
 Example
 
 ```sh
-❯ make bundles/oc-bundles/oc-bundle/transform
+❯ make run/bundles/oc-bundles/oc-bundle/config
 cd bundles/oc-bundles/oc-bundle
-bundleutils transform
-INFO:root:Auto env file found: /path/to/your/acme-bundles-drift/bundles/oc-bundles/env.oc-bundle.yaml
-INFO:root:Switching directory: /path/to/your/acme-bundles-drift/bundles/oc-bundles
+bundleutils config
+INFO:root:Found bundle config for oc-bundle
+INFO:root:Setting environment variable: BUNDLEUTILS_JENKINS_URL=https://cjoc.acme.org/cjoc
 ...
 ...
 ```

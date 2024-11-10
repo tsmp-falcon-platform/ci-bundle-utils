@@ -8,29 +8,31 @@ The following gives provides an example for one operations center and one contro
 
 Copy the [../examples/example-bundles-repo](../examples/example-bundles-repo) to a repository of your choice.
 
-**NOTE:** You can also use the template repository at https://github.com/tsmp-falcon-platform/example-bundles-drift
+Notice the structure:
 
-Notice the structure and the `env.<bundle_name>.yaml` configuration file in the parent directory.
+- the `bundle-profiles.yaml` configuration file in the parent directory
+- the `transformations` directory
 
 ```sh
-oc-bundles
-├── oc-bundle
-│   └── bundle.yaml
-└── env.oc-bundle.yaml
+bundles
+├── bundle-profiles.yaml
+├── controller-bundles
+│   └── controller-bundle
+│       └── bundle.yaml
+├── oc-bundles
+│   └── oc-bundle
+│       └── bundle.yaml
+└── transformations
+    ├── add-local-users.yaml
+    ├── controllers-common.yaml
+    ├── oc-common.yaml
+    └── remove-dynamic-stuff.yaml
 ```
 
-```sh
-controller-bundles/
-├── controller-bundle
-│   └── bundle.yaml
-└── env.controller-bundle.yaml
-```
-
-Edit the configuration files, adding the values for your instances (search for `TODO`):
+Edit the configuration file, adding the values for your instances (search for `TODO`):
 
 ```sh
-vim bundles/oc-bundles/env.oc-bundle.yaml
-vim bundles/controller-bundles/env.controller-bundle.yaml
+vim bundles/bundle-profiles.yaml
 ```
 
 Commit your changes.

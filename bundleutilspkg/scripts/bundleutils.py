@@ -33,14 +33,17 @@ validate_url_path = '/casc-bundle-mgnt/casc-bundle-validate'
 
 default_target = 'target/docs'
 default_normalized = default_target + '-normalized'
+default_auto_env_file = 'bundle-profiles.yaml'
 
 # environment variables
 BUNDLEUTILS_CI_VERSION = 'BUNDLEUTILS_CI_VERSION'
 BUNDLEUTILS_CI_TYPE = 'BUNDLEUTILS_CI_TYPE'
 BUNDLEUTILS_CI_SERVER_HOME = 'BUNDLEUTILS_CI_SERVER_HOME'
 BUNDLEUTILS_LOG_LEVEL = 'BUNDLEUTILS_LOG_LEVEL'
+BUNDLEUTILS_AUTO_ENV_FILE = 'BUNDLEUTILS_AUTO_ENV_FILE'
 BUNDLEUTILS_ENV = 'BUNDLEUTILS_ENV'
 BUNDLEUTILS_ENV_OVERRIDE = 'BUNDLEUTILS_ENV_OVERRIDE'
+BUNDLEUTILS_USE_PROFILE = 'BUNDLEUTILS_USE_PROFILE'
 BUNDLEUTILS_SETUP_SOURCE_DIR = 'BUNDLEUTILS_SETUP_SOURCE_DIR'
 BUNDLEUTILS_VALIDATE_SOURCE_DIR = 'BUNDLEUTILS_VALIDATE_SOURCE_DIR'
 BUNDLEUTILS_TRANSFORM_SOURCE_DIR = 'BUNDLEUTILS_TRANSFORM_SOURCE_DIR'
@@ -57,32 +60,53 @@ BUNDLEUTILS_PLUGINS_JSON_ADDITIONS = 'BUNDLEUTILS_PLUGINS_JSON_ADDITIONS'
 BUNDLEUTILS_BUNDLES_DIR = 'BUNDLEUTILS_BUNDLES_DIR'
 BUNDLEUTILS_CREDENTIAL_DELETE_SIGN = 'PLEASE_DELETE_ME'
 
+# context object keys
+BUNDLE_PROFILES = 'BUNDLE_PROFILES'
+ORIGINAL_CWD = 'ORIGINAL_CWD'
+
+# click ctx object keys
+ENV_FILE_ARG = 'env_file'
+BUNDLES_DIR_ARG = 'bundles_dir'
+CI_VERSION_ARG = 'ci_version'
+CI_TYPE_ARG = 'ci_type'
+CI_SERVER_HOME_ARG = 'ci_server_home'
+SOURCE_DIR_ARG = 'source_dir'
+TARGET_DIR_ARG = 'target_dir'
+PLUGIN_JSON_ADDITIONS_ARG = 'plugin_json_additions'
+PLUGIN_JSON_URL_ARG = 'plugin_json_url'
+PLUGIN_JSON_PATH_ARG = 'plugin_json_path'
+PATH_ARG = 'path'
+URL_ARG = 'url'
+USERNAME_ARG = 'username'
+PASSWORD_ARG = 'password'
+
+
 def die(msg):
     logging.error(f"{msg}\n")
     sys.exit(1)
 
 def common_options(func):
-    func = click.option('-l', '--log-level', default=os.environ.get(BUNDLEUTILS_LOG_LEVEL, ''), help=f'The log level (or use {BUNDLEUTILS_LOG_LEVEL}).')(func)
-    func = click.option('-e', '--env-file', default=os.environ.get(BUNDLEUTILS_ENV, ''), type=click.Path(file_okay=True, dir_okay=False), help=f'Optional .env or .env.yaml file (or use {BUNDLEUTILS_ENV}).')(func)
+    func = click.option('-l', '--log-level', default=os.environ.get(BUNDLEUTILS_LOG_LEVEL, 'INFO'), help=f'The log level (or use {BUNDLEUTILS_LOG_LEVEL}).')(func)
+    func = click.option('-e', '--env-file', default=os.environ.get(BUNDLEUTILS_ENV, ''), type=click.Path(file_okay=True, dir_okay=False), help=f'Optional bundle profiles file (or use {BUNDLEUTILS_ENV}).')(func)
     return func
 
 def server_options(func):
-    func = click.option('-v', '--ci-version', 'ci_version', type=click.STRING, help=f'The version of the CloudBees WAR file.')(func)
-    func = click.option('-t', '--ci-type', 'ci_type', type=click.STRING, help=f'The type of the CloudBees server.')(func)
-    func = click.option('-H', '--ci-server-home', 'ci_server_home', required=False, help=f'Defaults to /tmp/ci_server_home/<ci_type>/<ci_version>.')(func)
+    func = click.option('-v', '--ci-version', type=click.STRING, help=f'The version of the CloudBees WAR file.')(func)
+    func = click.option('-t', '--ci-type', type=click.STRING, help=f'The type of the CloudBees server.')(func)
+    func = click.option('-H', '--ci-server-home', required=False, help=f'Defaults to /tmp/ci_server_home/<ci_type>/<ci_version>.')(func)
     return func
 
 def server_options_null_check(ci_version, ci_type, ci_server_home):
-    ci_version = null_check(ci_version, 'ci_version', BUNDLEUTILS_CI_VERSION)
-    ci_type = null_check(ci_type, 'ci_type', BUNDLEUTILS_CI_TYPE)
-    ci_server_home = null_check(ci_server_home, 'ci_server_home', BUNDLEUTILS_CI_SERVER_HOME, False)
+    ci_version = null_check(ci_version, CI_VERSION_ARG, BUNDLEUTILS_CI_VERSION)
+    ci_type = null_check(ci_type, CI_TYPE_ARG, BUNDLEUTILS_CI_TYPE)
+    ci_server_home = null_check(ci_server_home, CI_SERVER_HOME_ARG, BUNDLEUTILS_CI_SERVER_HOME, False)
     return ci_version, ci_type, ci_server_home
 
 def transform_options(func):
-    func = click.option('-S', '--strict', default=False, is_flag=True, help=f'Fail when refrencing non-existent files - warn otherwise.')(func)
+    func = click.option('-S', '--strict', default=False, is_flag=True, help=f'Fail when referencing non-existent files - warn otherwise.')(func)
     func = click.option('-c', '--config', 'configs', multiple=True, help=f'The transformation config(s).')(func)
-    func = click.option('-s', '--source-dir', 'source_dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The source directory for the YAML documents.')(func)
-    func = click.option('-t', '--target-dir', 'target_dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The target directory for the YAML documents. Defaults to the source directory suffixed with -transformed.')(func)
+    func = click.option('-s', '--source-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The source directory for the YAML documents.')(func)
+    func = click.option('-t', '--target-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The target directory for the YAML documents. Defaults to the source directory suffixed with -transformed.')(func)
     return func
 
 def _set_env_if_not_set(prefix, env_var, value):
@@ -90,61 +114,134 @@ def _set_env_if_not_set(prefix, env_var, value):
         logging.info(f'{prefix} environment variable: {env_var}={value}')
         os.environ[env_var] = value
 
-def set_logging(ctx, log_level, env_file, default=''):
-    if log_level:
-        ctx.obj['LOG_LEVEL'] = log_level
-    elif default:
-        ctx.obj['LOG_LEVEL'] = default
-    logging.getLogger().setLevel(ctx.obj.get('LOG_LEVEL', 'INFO'))
-    logging.debug(f"Set log level to: {ctx.obj.get('LOG_LEVEL', 'INFO')}")
+def _check_for_env_file(ctx):
+    if ctx.obj.get(BUNDLEUTILS_ENV, ''):
+        # we have an env file, no need to check for auto vars
+        return
 
-    if not ctx.obj.get(BUNDLEUTILS_ENV, ''):
-        # auto env based on current directory
-        current_parent_dir = os.path.dirname(os.getcwd())
-        current_dir_base_name = os.path.basename(os.getcwd())
-        logging.debug("Checking for possible env files in parent directory: " + current_parent_dir)
-        auto_env_files = [f"env.{current_dir_base_name}.yaml", f"env.{current_dir_base_name}.yml"]
-        for auto_env_file in auto_env_files:
-            auto_env_file_path = os.path.join(current_parent_dir, auto_env_file)
-            logging.debug("Checking for env file: " + auto_env_file_path)
-            if os.path.exists(auto_env_file_path):
-                logging.info(f'Auto env file found: {auto_env_file_path}')
-                env_file = auto_env_file_path
-                logging.info(f'Switching directory: {current_parent_dir}')
-                os.chdir(current_parent_dir)
-                break
-        logging.debug(f'Using env file: {env_file}')
+    # try to find an env file
+    env_file = ''
+    if ctx.obj.get(ENV_FILE_ARG):
+        env_file = ctx.obj.get(ENV_FILE_ARG)
+        logging.debug(f'Using env file from the command line: {env_file}')
     else:
-        logging.debug(f'Using existing env file: {env_file}')
+        # if the BUNDLEUTILS_ENV env var is set, use it
+        if os.environ.get(BUNDLEUTILS_ENV, ''):
+            env_file = os.environ.get(BUNDLEUTILS_ENV)
+            if not os.path.exists(env_file):
+                die(f'Env var {BUNDLEUTILS_ENV} passed does not exist: {env_file}')
+            logging.debug(f'Using env file from environment variable: {env_file}')
+        else:
+            # search upwards recursively for an env file, max depth of 5
+            default_env_file = os.environ.get(BUNDLEUTILS_AUTO_ENV_FILE, default_auto_env_file)
+            logging.debug(f'Searching for auto env file {default_env_file} in parent directories')
+            auto_env_file_path_dir = os.getcwd()
+            for i in range(5):
+                if auto_env_file_path_dir == '/':
+                    break
+                auto_env_file_path = os.path.join(auto_env_file_path_dir, default_env_file)
+                logging.debug(f'Checking for env file: {auto_env_file_path}')
+                if os.path.exists(auto_env_file_path):
+                    logging.debug(f'Auto env file found: {auto_env_file_path}')
+                    env_file = auto_env_file_path
+                    break
+                auto_env_file_path_dir = os.path.dirname(auto_env_file_path_dir)
+            if env_file:
+                logging.debug(f'Using auto env file: {env_file}')
+            else:
+                logging.debug(f'No auto env file found')
 
-    if env_file and not ctx.obj.get(BUNDLEUTILS_ENV, ''):
+    if env_file:
         ctx.obj[BUNDLEUTILS_ENV] = env_file
-        # parse boolean value from an env var called BUNDLEUTILS_ENV_OVERRIDE
-        should_override = os.environ.get(BUNDLEUTILS_ENV_OVERRIDE, 'false').lower() in ['true', '1', 't', 'y', 'yes']
-        logging.info(f'Loading config file: {env_file}')
+        os.environ[BUNDLEUTILS_ENV] = env_file
+
+        logging.debug(f'Loading config file: {env_file}')
         with open(env_file, 'r') as f:
-            env_vars = yaml.load(f)
-            for key, value in env_vars.items():
-                if key not in os.environ:
-                    logging.info(f'Setting environment variable: {key}={value}')
-                    os.environ[key] = str(value)
-                elif should_override:
-                    logging.info(f'Overriding with env, setting: {key}=' + os.environ[key])
-                else:
-                    logging.info(f'Ignoring passed env, setting: {key}={value}')
-                    os.environ[key] = str(value)
-            # does the env file name match env.<bundle_name>.yaml or env.<bundle_name>.yml?
-            env_file_base_name = os.path.basename(env_file)
-            if env_file_base_name.startswith('env.') and (env_file_base_name.endswith('.yaml') or env_file_base_name.endswith('.yml')):
-                bundle_name = os.path.basename(env_file).replace('env.', '').replace('.yaml', '').replace('.yml', '')
-                # set the BUNDLEUTILS_FETCH_TARGET_DIR and BUNDLEUTILS_TRANSFORM_SOURCE_DIR to the default target/docs
-                _set_env_if_not_set('AUTOSET', BUNDLEUTILS_FETCH_TARGET_DIR, 'target/docs')
-                _set_env_if_not_set('AUTOSET', BUNDLEUTILS_TRANSFORM_SOURCE_DIR, os.environ.get(BUNDLEUTILS_FETCH_TARGET_DIR))
-                _set_env_if_not_set('AUTOSET', BUNDLEUTILS_TRANSFORM_TARGET_DIR, bundle_name)
-                _set_env_if_not_set('AUTOSET', BUNDLEUTILS_SETUP_SOURCE_DIR, os.environ.get(BUNDLEUTILS_TRANSFORM_TARGET_DIR))
-                _set_env_if_not_set('AUTOSET', BUNDLEUTILS_VALIDATE_SOURCE_DIR, os.environ.get(BUNDLEUTILS_TRANSFORM_TARGET_DIR))
+            bundle_profiles = yaml.load(f)
+            # sanity checks
+            if not isinstance(bundle_profiles, dict):
+                die(f'Invalid bundle profiles file - should be a dict: {env_file}')
+            if 'profiles' not in bundle_profiles:
+                die(f'Invalid bundle profiles file - should contain a key called "profiles": {env_file}')
+            elif not isinstance(bundle_profiles['profiles'], dict):
+                die(f'Invalid bundle profiles file - profiles should be a dict: {env_file}')
+            if 'bundles' not in bundle_profiles:
+                die(f'Invalid bundle profiles file - should contain a key called "bundles": {env_file}')
+            elif not isinstance(bundle_profiles['bundles'], dict):
+                die(f'Invalid bundle profiles file - bundles should be a dict: {env_file}')
+            # set the object in the context
+            ctx.obj[BUNDLE_PROFILES] = bundle_profiles
     else:
-        logging.info(f'No env file provided')
+        ctx.obj[BUNDLEUTILS_ENV] = ''
+        logging.debug(f'No env file provided or found')
+
+def _check_cwd_for_bundle_auto_vars(ctx):
+    """Check the current working directory for a bundle.yaml file and set the auto vars if found"""
+    # no bundle_profiles found, no need to check
+    if not ctx.obj.get(BUNDLE_PROFILES, ''):
+        logging.debug('No bundle profiles found. No need to check for auto vars')
+        return
+    # if the cwd contains a file bundle.yaml
+    if not os.path.exists('bundle.yaml'):
+        logging.debug('No bundle.yaml found in current directory. No need to check for auto vars')
+        return
+
+    env_vars = {}
+    cwd = os.getcwd()
+    if not ctx.obj.get(ORIGINAL_CWD, ''):
+        ctx.obj[ORIGINAL_CWD] = cwd
+
+    # if the BUNDLE_PROFILES exists, then the BUNDLEUTILS_ENV must also exist
+    auto_env_file_path_dir = os.path.dirname(ctx.obj.get(BUNDLEUTILS_ENV))
+    bundle_profiles = ctx.obj.get(BUNDLE_PROFILES)
+    bundle_name = os.path.basename(cwd)
+
+    # if the cwd is a subdirectory of auto_env_file_path_dir, create a relative path
+    bundle_target_dir = cwd
+    if cwd.startswith(auto_env_file_path_dir):
+        bundle_target_dir = os.path.relpath(cwd, auto_env_file_path_dir)
+    logging.debug(f'Current working directory: {cwd}')
+    logging.debug(f'Switching to the base directory of env file: {auto_env_file_path_dir}')
+    os.chdir(auto_env_file_path_dir)
+
+    # if the cwd contains a file bundle.yaml
+    adhoc_profile = os.environ.get(BUNDLEUTILS_USE_PROFILE, '')
+    if adhoc_profile:
+        logging.info(f'Found env var {BUNDLEUTILS_USE_PROFILE}: {adhoc_profile}')
+        if adhoc_profile in bundle_profiles['profiles']:
+            logging.info(f'Using adhoc bundle config for {bundle_name}')
+            env_vars = bundle_profiles['profiles'][adhoc_profile]
+        else:
+            die(f'No bundle profile found for {adhoc_profile}')
+    else:
+        if bundle_name in bundle_profiles['bundles']:
+            logging.info(f'Found bundle config for {bundle_name}')
+            env_vars = bundle_profiles['bundles'][bundle_name]
+        else:
+            logging.info(f'No bundle config found for {bundle_name} and no {BUNDLEUTILS_USE_PROFILE} set')
+
+    if env_vars:
+        # check if the BUNDLEUTILS_ENV_OVERRIDE is set to true, if so, override the env vars
+        should_env_vars_override_others = os.environ.get(BUNDLEUTILS_ENV_OVERRIDE, 'false').lower() in ['true', '1', 't', 'y', 'yes']
+        for key, value in env_vars.items():
+            if key not in os.environ:
+                logging.info(f'Setting environment variable: {key}={value}')
+                os.environ[key] = str(value)
+            elif should_env_vars_override_others:
+                logging.info(f'Overriding with env, setting: {key}=' + os.environ[key])
+            else:
+                logging.info(f'Ignoring passed env, setting: {key}={value}')
+                os.environ[key] = str(value)
+        # set the BUNDLEUTILS_FETCH_TARGET_DIR and BUNDLEUTILS_TRANSFORM_SOURCE_DIR to the default target/docs
+        _set_env_if_not_set('AUTOSET', BUNDLEUTILS_FETCH_TARGET_DIR, f'target/docs-{bundle_name}')
+        _set_env_if_not_set('AUTOSET', BUNDLEUTILS_TRANSFORM_SOURCE_DIR, os.environ.get(BUNDLEUTILS_FETCH_TARGET_DIR))
+        _set_env_if_not_set('AUTOSET', BUNDLEUTILS_TRANSFORM_TARGET_DIR, bundle_target_dir)
+        _set_env_if_not_set('AUTOSET', BUNDLEUTILS_SETUP_SOURCE_DIR, os.environ.get(BUNDLEUTILS_TRANSFORM_TARGET_DIR))
+        _set_env_if_not_set('AUTOSET', BUNDLEUTILS_VALIDATE_SOURCE_DIR, os.environ.get(BUNDLEUTILS_TRANSFORM_TARGET_DIR))
+
+def set_logging(ctx):
+    _check_for_env_file(ctx)
+    _check_cwd_for_bundle_auto_vars(ctx)
 
 @click.group(invoke_without_command=True)
 @common_options
@@ -152,8 +249,14 @@ def set_logging(ctx, log_level, env_file, default=''):
 def cli(ctx, log_level, env_file):
     """A tool to fetch and transform YAML documents."""
     ctx.ensure_object(dict)
+    ctx.obj[ENV_FILE_ARG] = env_file
+    if not ctx.obj.get(BUNDLEUTILS_LOG_LEVEL, ''):
+        ctx.obj[BUNDLEUTILS_LOG_LEVEL] = log_level
+        logging.getLogger().setLevel(log_level)
+        logging.debug(f"Set log level to: {log_level}")
+    if not ctx.obj.get(ORIGINAL_CWD, ''):
+        ctx.obj[ORIGINAL_CWD] = os.getcwd()
     if ctx.invoked_subcommand is None:
-        set_logging(ctx, log_level, env_file, 'INFO')
         click.echo(ctx.get_help())
 
 
@@ -176,11 +279,10 @@ def compare_func(x, y, level=None):
 @server_options
 @click.option('-s', '--source-dir', 'source_dir',  type=click.Path(file_okay=False, dir_okay=True), help=f'The bundle to be validated (startup will use the plugins from here).')
 @click.option('-T', '--ci-bundle-template', 'bundle_template', type=click.Path(file_okay=False, dir_okay=True), required=False, help=f'Path to a template bundle used to start the test server (defaults to in-built tempalte).')
-@common_options
 @click.pass_context
-def ci_setup(ctx, log_level, env_file, ci_version, ci_type, ci_server_home, source_dir, bundle_template):
+def ci_setup(ctx, ci_version, ci_type, ci_server_home, source_dir, bundle_template):
     """Download CloudBees WAR file, and setup the starter bundle"""
-    set_logging(ctx, log_level, env_file)
+    set_logging(ctx)
     ci_version, ci_type, ci_server_home = server_options_null_check(ci_version, ci_type, ci_server_home)
     source_dir = null_check(source_dir, 'source_dir', BUNDLEUTILS_SETUP_SOURCE_DIR)
     if not os.path.exists(source_dir):
@@ -204,11 +306,10 @@ def ci_setup(ctx, log_level, env_file, ci_version, ci_type, ci_server_home, sour
 @server_options
 @click.option('-s', '--source-dir', 'source_dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The bundle to be validated.')
 @click.option('-w', '--ignore-warnings', default=False, is_flag=True, help=f'Do not fail if warnings are found.')
-@common_options
 @click.pass_context
-def ci_validate(ctx, log_level, env_file, ci_version, ci_type, ci_server_home, source_dir, ignore_warnings):
+def ci_validate(ctx, ci_version, ci_type, ci_server_home, source_dir, ignore_warnings):
     """Validate bundle against controller started with ci-start."""
-    set_logging(ctx, log_level, env_file)
+    set_logging(ctx)
     ci_version, ci_type, ci_server_home = server_options_null_check(ci_version, ci_type, ci_server_home)
     source_dir = null_check(source_dir, 'source_dir', BUNDLEUTILS_VALIDATE_SOURCE_DIR)
     if not os.path.exists(source_dir):
@@ -223,11 +324,10 @@ def ci_validate(ctx, log_level, env_file, ci_version, ci_type, ci_server_home, s
 @click.option('-s', '--source-dir', 'source_dir',  required=False, type=click.Path(file_okay=False, dir_okay=True), help=f'The bundle of the plugins to be sanitized.')
 @click.option('-p', '--pin-plugins', default=False, is_flag=True, help=f'Add versions to 3rd party plugins (only available for apiVersion 2).')
 @click.option('-c', '--custom-url', help=f'Add a custom URL, e.g. http://plugins-repo/plugins/PNAME/PVERSION/PNAME.hpi')
-@common_options
 @click.pass_context
-def ci_sanitize_plugins(ctx, log_level, env_file, ci_version, ci_type, ci_server_home, source_dir, pin_plugins, custom_url):
+def ci_sanitize_plugins(ctx, ci_version, ci_type, ci_server_home, source_dir, pin_plugins, custom_url):
     """Sanitizes plugins (needs ci-start)."""
-    set_logging(ctx, log_level, env_file)
+    set_logging(ctx)
     ci_version, ci_type, ci_server_home = server_options_null_check(ci_version, ci_type, ci_server_home)
     source_dir = null_check(source_dir, 'source_dir', BUNDLEUTILS_TRANSFORM_TARGET_DIR)
     if not os.path.exists(source_dir):
@@ -300,22 +400,20 @@ def ci_sanitize_plugins(ctx, log_level, env_file, ci_version, ci_type, ci_server
 
 @cli.command()
 @server_options
-@common_options
 @click.pass_context
-def ci_start(ctx, log_level, env_file, ci_version, ci_type, ci_server_home):
+def ci_start(ctx, ci_version, ci_type, ci_server_home):
     """Start CloudBees Server"""
-    set_logging(ctx, log_level, env_file)
+    set_logging(ctx)
     ci_version, ci_type, ci_server_home = server_options_null_check(ci_version, ci_type, ci_server_home)
     jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
     jenkins_manager.start_server()
 
 @cli.command()
 @server_options
-@common_options
 @click.pass_context
-def ci_stop(ctx, log_level, env_file, ci_version, ci_type, ci_server_home):
+def ci_stop(ctx, ci_version, ci_type, ci_server_home):
     """Stop CloudBees Server"""
-    set_logging(ctx, log_level, env_file)
+    set_logging(ctx)
     ci_version, ci_type, ci_server_home = server_options_null_check(ci_version, ci_type, ci_server_home)
     jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
     jenkins_manager.stop_server()
@@ -324,11 +422,10 @@ def ci_stop(ctx, log_level, env_file, ci_version, ci_type, ci_server_home):
 @cli.command()
 @click.argument('src1', type=click.Path(exists=True))
 @click.argument('src2', type=click.Path(exists=True))
-@common_options
 @click.pass_context
-def diff(ctx, log_level, env_file, src1, src2):
+def diff(ctx, src1, src2):
     """Diff two YAML directories or files."""
-    set_logging(ctx, log_level, env_file)
+    set_logging(ctx)
     diff_detected = False
     # if src1 is a directory, ensure src2 is also directory
     if os.path.isdir(src1) and os.path.isdir(src2):
@@ -368,52 +465,69 @@ def diff2(file1, file2):
         return False
 
 @cli.command()
-@common_options
-@click.option('-U', '--url', 'url', help=f'The controller URL to test for (or use JENKINS_URL).')
-@click.option('-v', '--ci-version', 'ci_version', type=click.STRING, help=f'Optional version (taken from the remote instance otherwise).')
-@click.option('-b', '--bundles-dir', 'bundles_dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The directory to search for bundles. Defaults to PWD.')
 @click.pass_context
-def find_bundle_by_url(ctx, log_level, env_file, url, ci_version, bundles_dir):
-    """Find a bundle by Jenkins URL."""
-    set_logging(ctx, log_level, env_file)
-    bundles_dir = null_check(bundles_dir, 'bundles_dir', BUNDLEUTILS_BUNDLES_DIR, False, os.getcwd())
-    url = null_check(url, 'url', 'JENKINS_URL')
+def config(ctx):
+    """List evaluated config based on cwd and env file."""
+
+    set_logging(ctx)
+    # loop through all the environment variables, sorted alphabetically, starting with BUNDLEUTILS_ and print them as a single multiline string
+    logging.info("Evaluated configuration:")
+    lines = []
+    for key, value in sorted(os.environ.items()):
+        if key.startswith('BUNDLEUTILS_'):
+            lines.append(f'{key}={value}')
+    click.echo('\n'.join(lines))
+
+@cli.command()
+@click.option('-U', '--url', help=f'The controller URL to test for (or use JENKINS_URL).')
+@click.option('-v', '--ci-version', type=click.STRING, help=f'Optional version (taken from the remote instance otherwise).')
+@click.option('-b', '--bundles-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The directory containing the bundles.')
+@click.pass_context
+def find_bundle_by_url(ctx, url, ci_version, bundles_dir):
+    """Find a bundle by Jenkins URL and CI Version."""
+    set_logging(ctx)
+    if not ctx.obj.get(BUNDLE_PROFILES, ''):  # if no bundle profiles are found, exit
+        logging.error("No bundle profiles found. Exiting.")
+        return
+    bundles_dir = null_check(bundles_dir, BUNDLES_DIR_ARG, BUNDLEUTILS_BUNDLES_DIR, False, ctx.obj.get(ORIGINAL_CWD))
+    url = null_check(url, URL_ARG, 'JENKINS_URL')
     if not ci_version:
         whoami_url = f'{url}/whoAmI/api/json?tree=authenticated'
-        # get headers from the whoami_url
-        response = requests.get(whoami_url)
-        response.raise_for_status()
-        headers = response.headers
-        logging.debug(f"Headers: {headers}")
-        # get the x-jenkins header ignoring case and removing any carriage returns
-        ci_version = headers.get('x-jenkins', headers.get('X-Jenkins', '')).replace('\r', '')
-        logging.debug(f"Version: {ci_version} (taken from remote)")
+        try:
+            response = requests.get(whoami_url, timeout=5)
+            if response.status_code == 200:
+                # get headers from the whoami_url
+                headers = response.headers
+                logging.debug(f"Headers: {headers}")
+                # get the x-jenkins header ignoring case and removing any carriage returns
+                ci_version = headers.get('x-jenkins', headers.get('X-Jenkins', '')).replace('\r', '')
+                logging.debug(f"Version: {ci_version} (taken from remote)")
+            else:
+                die(f"URL {url} returned a non-OK status code: {response.status_code}")
+        except requests.exceptions.RequestException as e:
+            die(f"URL {url} is not reachable. Reason: {e}")
     else:
         logging.debug(f"Version: {ci_version} (taken from command line)")
-    # search the bundles_dir recursively for a "env.<bundle_name>.yaml" file
+    # search the profiles for a bundle with the given URL and version
     my_bundle = None
-    for env_file in glob.iglob(f'{bundles_dir}/**/env.*.yaml', recursive=True):
-        with open(env_file, 'r') as f:
-            env_vars = yaml.load(f)
-            # if string contains the URL with or without a trailing slash and the ci_version matches
-            if env_vars.get(BUNDLEUTILS_JENKINS_URL, '').strip().rstrip('/') == url.strip().rstrip('/') and env_vars.get(BUNDLEUTILS_CI_VERSION, '') == ci_version:
-                # env. and .yaml from the file base name and add it to the parent directory path
-                bundle_name = os.path.basename(env_file).replace('env.', '').replace('.yaml', '')
-                bundle_dir = os.path.join(os.path.dirname(env_file), bundle_name)
-                # ensure the bundle_dir contains a bundle.yaml file
-                if os.path.exists(os.path.join(bundle_dir, 'bundle.yaml')):
-                    logging.debug(f"Found {bundle_dir}")
-                    current_bundle = os.path.relpath(bundle_dir, bundles_dir)
-                    if my_bundle:
-                        # exit with exit code 1 and text message if a second bundle is found
-                        die(f"Multiple bundles found: {my_bundle} and {current_bundle}")
+    bundle_profiles = ctx.obj.get(BUNDLE_PROFILES)
+    for bundle_name, bundle_env_vars in bundle_profiles['bundles'].items():
+        if bundle_env_vars.get(BUNDLEUTILS_JENKINS_URL, '').strip().rstrip('/') == url.strip().rstrip('/') and bundle_env_vars.get(BUNDLEUTILS_CI_VERSION, '') == ci_version:
+            logging.debug(f"Found bundle: {bundle_name}. Checking for bundle.yaml in {bundles_dir}")
+            bundles_found = []
+            for bundle_found in glob.iglob(f'{bundles_dir}/**/{bundle_name}/bundle.yaml', recursive=True):
+                logging.debug(f"Found bundle.yaml: {bundle_found}")
+                bundles_found.append(bundle_found)
+                if my_bundle:
+                    # exit with exit code 1 and text message if a second bundle is found
+                    die(f"Multiple bundles found matching the criteria: {my_bundle} and {bundle_found}")
 
-                    my_bundle = os.path.relpath(bundle_dir, bundles_dir)
-                    click.echo(my_bundle)
-                else:
-                    die(f"Bundle directory {bundle_dir} does not contain a bundle.yaml file")
-            else:
-                logging.debug(f"Skipping {env_file} with URL {env_vars.get(BUNDLEUTILS_JENKINS_URL)} and version {env_vars.get(BUNDLEUTILS_CI_VERSION)}")
+            if len(bundles_found) > 1:
+                die(f"Multiple bundles found: {bundles_found}")
+            if len(bundles_found) == 1:
+                # echo the parent directory of the bundle.yaml file
+                click.echo(os.path.dirname(bundles_found[0]))
+                my_bundle = bundle_name
     if not my_bundle:
         die(f"No bundle found for URL {url} and version {ci_version}")
 
@@ -443,16 +557,15 @@ def null_check(obj, obj_name, obj_env_var=None, mandatory=True, default=''):
     return obj
 
 @cli.command()
-@common_options
-@click.option('-U', '--url', 'url', help=f'The controller URL to validate agianst (or use {BUNDLEUTILS_JENKINS_URL}).')
-@click.option('-u', '--username', 'username', help=f'Username for basic authentication (or use {BUNDLEUTILS_USERNAME}).')
-@click.option('-p', '--password', 'password', help=f'Password for basic authentication (or use {BUNDLEUTILS_PASSWORD}).')
-@click.option('-s', '--source-dir', 'source_dir', required=True, type=click.Path(file_okay=False, dir_okay=True), help=f'The source directory for the YAML documents (or use {BUNDLEUTILS_VALIDATE_SOURCE_DIR}).')
+@click.option('-U', '--url', help=f'The controller URL to validate agianst (or use {BUNDLEUTILS_JENKINS_URL}).')
+@click.option('-u', '--username', help=f'Username for basic authentication (or use {BUNDLEUTILS_USERNAME}).')
+@click.option('-p', '--password', help=f'Password for basic authentication (or use {BUNDLEUTILS_PASSWORD}).')
+@click.option('-s', '--source-dir', required=True, type=click.Path(file_okay=False, dir_okay=True), help=f'The source directory for the YAML documents (or use {BUNDLEUTILS_VALIDATE_SOURCE_DIR}).')
 @click.option('-w', '--ignore-warnings', default=False, is_flag=True, help=f'Do not fail if warnings are found.')
 @click.pass_context
-def validate(ctx, log_level, env_file, url, username, password, source_dir, ignore_warnings):
+def validate(ctx, url, username, password, source_dir, ignore_warnings):
     """Validate bundle in source dir against URL."""
-    set_logging(ctx, log_level, env_file)
+    set_logging(ctx)
     _validate(url, username, password, source_dir, ignore_warnings)
 
 def _validate(url, username, password, source_dir, ignore_warnings):
@@ -503,7 +616,6 @@ def _validate(url, username, password, source_dir, ignore_warnings):
                 die('Validation failed with errors or critical messages')
 
 @cli.command()
-@common_options
 @click.option('-m', '--plugin-json-additions', 'plugin_json_additions', help=f'Strategy for adding missing plugins (or use {BUNDLEUTILS_PLUGINS_JSON_ADDITIONS}).')
 @click.option('-m', '--plugin-json-url', 'plugin_json_url', help=f'The URL to fetch plugins info (or use {BUNDLEUTILS_JENKINS_URL}).')
 @click.option('-M', '--plugin-json-path', 'plugin_json_path', help=f'The path to fetch JSON file from (found at {plugin_json_url_path}).')
@@ -513,9 +625,9 @@ def _validate(url, username, password, source_dir, ignore_warnings):
 @click.option('-p', '--password', 'password', help=f'Password for basic authentication (or use {BUNDLEUTILS_PASSWORD}).')
 @click.option('-t', '--target-dir', 'target_dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The target directory for the YAML documents (or use {BUNDLEUTILS_FETCH_TARGET_DIR}).')
 @click.pass_context
-def fetch(ctx, log_level, env_file, url, path, username, password, target_dir, plugin_json_url, plugin_json_path, plugin_json_additions):
+def fetch(ctx, url, path, username, password, target_dir, plugin_json_url, plugin_json_path, plugin_json_additions):
     """Fetch YAML documents from a URL or path."""
-    set_logging(ctx, log_level, env_file)
+    set_logging(ctx)
     url = null_check(url, 'url', BUNDLEUTILS_JENKINS_URL, False)
     if url or plugin_json_url:
         # we'll need username and password for this
@@ -1161,12 +1273,11 @@ def recursive_merge(obj1, obj2):
 
 
 @cli.command()
-@common_options
 @transform_options
 @click.pass_context
-def normalize(ctx, log_level, env_file, strict, configs, source_dir, target_dir):
+def normalize(ctx, strict, configs, source_dir, target_dir):
     """Transform using the normalize.yaml for better comparison."""
-    set_logging(ctx, log_level, env_file)
+    set_logging(ctx)
     if not source_dir:
         source_dir = default_target
     if not target_dir:
@@ -1182,12 +1293,11 @@ def normalize(ctx, log_level, env_file, strict, configs, source_dir, target_dir)
     _transform(configs, source_dir, target_dir)
 
 @cli.command()
-@common_options
 @transform_options
 @click.pass_context
-def transform(ctx, log_level, env_file, strict, configs, source_dir, target_dir):
+def transform(ctx, strict, configs, source_dir, target_dir):
     """Transform using a custom transformation config."""
-    set_logging(ctx, log_level, env_file)
+    set_logging(ctx)
     source_dir = null_check(source_dir, 'source_dir', BUNDLEUTILS_TRANSFORM_SOURCE_DIR)
     target_dir = null_check(target_dir, 'target_dir', BUNDLEUTILS_TRANSFORM_TARGET_DIR)
     configs = null_check(configs, 'configs', BUNDLEUTILS_TRANSFORM_CONFIGS, False)
@@ -1274,13 +1384,12 @@ def remove_empty_keys(data):
         return data
 
 @cli.command()
-@common_options
 @click.option('-t', '--target-dir', 'target_dir', required=True, type=click.Path(file_okay=False, dir_okay=True), help=f'The target directory to update the bundle.yaml file.')
 @click.option('-d', '--description', 'description', help=f'Optional description for the bundle (also {BUNDLEUTILS_BUNDLE_DESCRIPTION}).')
 @click.pass_context
-def update_bundle(ctx, log_level, env_file, target_dir, description):
+def update_bundle(ctx, target_dir, description):
     """Update the bundle.yaml file in the target directory."""
-    set_logging(ctx, log_level, env_file)
+    set_logging(ctx)
     _update_bundle(target_dir, description)
 
 def _update_bundle(target_dir, description=None):
