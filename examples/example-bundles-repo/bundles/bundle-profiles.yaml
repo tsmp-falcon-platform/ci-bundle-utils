@@ -1,0 +1,52 @@
+profiles:
+  oc-common: &oc-common
+    BUNDLEUTILS_CI_TYPE: oc
+    BUNDLEUTILS_CI_VERSION: 2.452.3.2 # TODO: Enter your version
+    # These system properties are required to introduce special permissions to read and manage system configuration
+    # Delete these properties if you don't need them
+    BUNDLEUTILS_CI_JAVA_OPTS: >-
+      -Djenkins.security.SystemReadPermission=true
+      -Djenkins.security.ManagePermission=true
+      -Dhudson.security.ExtendedReadPermission=true
+    # This is the list of transformations to apply to the bundle
+    BUNDLEUTILS_TRANSFORM_CONFIGS: >-
+      transformations/remove-dynamic-stuff.yaml
+      transformations/add-local-users.yaml
+      transformations/oc-common.yaml
+
+  controller-common: &controller-common
+    BUNDLEUTILS_CI_TYPE: mm
+    BUNDLEUTILS_CI_VERSION: 2.452.3.2 # TODO: Enter your version
+    # These system properties are required to introduce special permissions to read and manage system configuration
+    # Delete these properties if you don't need them
+    BUNDLEUTILS_CI_JAVA_OPTS: >-
+      -Djenkins.security.SystemReadPermission=true
+      -Djenkins.security.ManagePermission=true
+      -Dhudson.security.ExtendedReadPermission=true
+    # This is the list of transformations to apply to the bundle
+    BUNDLEUTILS_TRANSFORM_CONFIGS: >-
+      transformations/remove-dynamic-stuff.yaml
+      transformations/controllers-common.yaml
+
+bundles:
+  oc-bundle:
+    <<: *oc-common
+    BUNDLEUTILS_JENKINS_URL: https://cjoc.acme.org/cjoc # TODO: Enter your operations center URL
+    # These are directories to use when running fetch, transform, setup, and validate
+    # They are deduced from the name of the file if not provided
+    # BUNDLEUTILS_FETCH_TARGET_DIR: target/docs
+    # BUNDLEUTILS_TRANSFORM_SOURCE_DIR: target/docs
+    # BUNDLEUTILS_TRANSFORM_TARGET_DIR: &src_dir oc-bundle
+    # BUNDLEUTILS_SETUP_SOURCE_DIR: *src_dir
+    # BUNDLEUTILS_VALIDATE_SOURCE_DIR: *src_dir
+  controller-bundle:
+    <<: *controller-common
+    BUNDLEUTILS_JENKINS_URL: https://cjoc.acme.org/controller-a # TODO: Enter your controller URL
+    # These are directories to use when running fetch, transform, setup, and validate
+    # They are automatically deduced from the bundle if not provided
+    # BUNDLEUTILS_FETCH_TARGET_DIR: target/docs-controller-bundle
+    # BUNDLEUTILS_TRANSFORM_SOURCE_DIR: target/docs-controller-bundle
+    # BUNDLEUTILS_TRANSFORM_TARGET_DIR: &src_dir controller-bundles/controller-bundle
+    # BUNDLEUTILS_SETUP_SOURCE_DIR: *src_dir
+    # BUNDLEUTILS_VALIDATE_SOURCE_DIR: *src_dir
+

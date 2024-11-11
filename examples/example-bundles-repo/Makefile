@@ -11,6 +11,11 @@ run/%/update-bundle: ## Run bundleutils update-bundle in the directory '%'
 run/%/update-bundle: run/%/check
 	bundleutils update-bundle -t $*
 
+.PHONY: run/%/config
+run/%/config: ## Run bundleutils config in the directory '%'
+	cd $*
+	bundleutils config
+
 .PHONY: run/%/fetch
 run/%/fetch: ## Run bundleutils fetch in the directory '%'
 	cd $*
