@@ -44,6 +44,9 @@ BUNDLEUTILS_AUTO_ENV_FILE = 'BUNDLEUTILS_AUTO_ENV_FILE'
 BUNDLEUTILS_ENV = 'BUNDLEUTILS_ENV'
 BUNDLEUTILS_ENV_OVERRIDE = 'BUNDLEUTILS_ENV_OVERRIDE'
 BUNDLEUTILS_USE_PROFILE = 'BUNDLEUTILS_USE_PROFILE'
+BUNDLEUTILS_BOOTSTRAP_SOURCE_DIR = 'BUNDLEUTILS_BOOTSTRAP_SOURCE_DIR'
+BUNDLEUTILS_BOOTSTRAP_PROFILE = 'BUNDLEUTILS_BOOTSTRAP_PROFILE'
+BUNDLEUTILS_BOOTSTRAP_UPDATE = 'BUNDLEUTILS_BOOTSTRAP_UPDATE'
 BUNDLEUTILS_SETUP_SOURCE_DIR = 'BUNDLEUTILS_SETUP_SOURCE_DIR'
 BUNDLEUTILS_VALIDATE_SOURCE_DIR = 'BUNDLEUTILS_VALIDATE_SOURCE_DIR'
 BUNDLEUTILS_TRANSFORM_SOURCE_DIR = 'BUNDLEUTILS_TRANSFORM_SOURCE_DIR'
@@ -275,6 +278,100 @@ def compare_func(x, y, level=None):
     except Exception:
         raise CannotCompare() from None
 
+def null_check(obj, obj_name, obj_env_var=None, mandatory=True, default=''):
+    if not obj:
+        if obj_env_var:
+            obj = os.environ.get(obj_env_var, '')
+            if not obj:
+                if default:
+                    obj = default
+                elif mandatory:
+                    die(f'No {obj_name} option provided and no {obj_env_var} set')
+    return obj
+
+def lookup_url_and_version(url, ci_version):
+    url = null_check(url, URL_ARG, 'JENKINS_URL')
+    ci_version = null_check(ci_version, CI_VERSION_ARG, BUNDLEUTILS_CI_VERSION)
+    if not ci_version:
+        whoami_url = f'{url}/whoAmI/api/json?tree=authenticated'
+        try:
+            response = requests.get(whoami_url, timeout=5)
+            if response.status_code == 200:
+                # get headers from the whoami_url
+                headers = response.headers
+                logging.debug(f"Headers: {headers}")
+                # get the x-jenkins header ignoring case and removing any carriage returns
+                ci_version = headers.get('x-jenkins', headers.get('X-Jenkins', '')).replace('\r', '')
+                logging.debug(f"Version: {ci_version} (taken from remote)")
+            else:
+                die(f"URL {url} returned a non-OK status code: {response.status_code}")
+        except requests.exceptions.RequestException as e:
+            die(f"URL {url} is not reachable. Reason: {e}")
+    else:
+        logging.debug(f"Version: {ci_version} (taken from command line)")
+    return url, ci_version
+
+@cli.command()
+@click.pass_context
+@click.option('-s', '--source-dir', 'source_dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The bundle to be bootstrapped.')
+@click.option('-p', '--profile', 'profile', help=f'The bundle profile to use.')
+@click.option('-u', '--update', 'update', help=f'Should the bundle be updated if present.')
+@click.option('-U', '--url', help=f'The controller URL to bootstrap (or use JENKINS_URL).')
+@click.option('-v', '--ci-version', type=click.STRING, help=f'Optional version (taken from the remote instance otherwise).')
+def bootstrap(ctx, source_dir, profile, update, url, ci_version):
+    """Bootstrap a bundle"""
+    _check_for_env_file(ctx)
+    # no bundle_profiles found, no need to check
+    if not ctx.obj.get(BUNDLE_PROFILES, ''):
+        logging.debug('No bundle profiles found. Nothing to add the bundle to.')
+        return
+
+    source_dir = null_check(source_dir, 'source_dir', BUNDLEUTILS_BOOTSTRAP_SOURCE_DIR)
+    bootstrap_profile = null_check(profile, 'profile', BUNDLEUTILS_BOOTSTRAP_PROFILE)
+    bootstrap_update = null_check(update, 'update', BUNDLEUTILS_BOOTSTRAP_UPDATE, False, 'false')
+    if bootstrap_profile:
+        bundle_profiles = ctx.obj.get(BUNDLE_PROFILES)
+        bundle_name = os.path.basename(source_dir)
+        if bootstrap_profile in bundle_profiles['profiles']:
+            if bundle_name in bundle_profiles['bundles']:
+                if bootstrap_update in ['true', '1', 't', 'y', 'yes']:
+                    logging.info(f'Bundle config for {bundle_name} already exists. Updating it.')
+                else:
+                    die(f'Bundle config for {bundle_name} already exists. Please check, then either use update or remove it first.')
+            else:
+                logging.info(f'No bundle config found for {bundle_name}. Adding it to the bundles')
+            bundle_yaml = os.path.join(source_dir, 'bundle.yaml')
+            url, ci_version = lookup_url_and_version(url, ci_version)
+            if not os.path.exists(bundle_yaml):
+                logging.info(f"Creating an empty {bundle_yaml}")
+                os.makedirs(source_dir)
+                with open(bundle_yaml, 'w') as file:
+                    file.write('')
+            else:
+                logging.info(f"The bundle yaml already exists {bundle_yaml}")
+            # Define the new controller entry
+            new_entry = {
+                f"{bundle_name}": {
+                    "<<": f"*{bootstrap_profile}",
+                    "BUNDLEUTILS_JENKINS_URL": f"{url}",
+                    "BUNDLEUTILS_CI_VERSION": f"{ci_version}",
+                }
+            }
+            # Add the new entry to the bundles section
+            bundle_profiles["bundles"].update(new_entry)
+            # if the BUNDLE_PROFILES exists, then the BUNDLEUTILS_ENV must also exist
+            with open(ctx.obj.get(BUNDLEUTILS_ENV), "w") as file:
+                yaml.dump(bundle_profiles, file)
+            # remove the single quotes in the file
+            with open(ctx.obj.get(BUNDLEUTILS_ENV), 'r') as file:
+                filedata = file.read()
+            filedata = filedata.replace("'<<'", '<<')
+            filedata = filedata.replace(f"'*{bootstrap_profile}'", f"*{bootstrap_profile}")
+            with open(ctx.obj.get(BUNDLEUTILS_ENV), 'w') as file:
+                file.write(filedata)
+        else:
+            die(f'No bundle profile found for {bootstrap_profile}')
+
 @cli.command()
 @server_options
 @click.option('-s', '--source-dir', 'source_dir',  type=click.Path(file_okay=False, dir_okay=True), help=f'The bundle to be validated (startup will use the plugins from here).')
@@ -490,25 +587,7 @@ def find_bundle_by_url(ctx, url, ci_version, bundles_dir):
         logging.error("No bundle profiles found. Exiting.")
         return
     bundles_dir = null_check(bundles_dir, BUNDLES_DIR_ARG, BUNDLEUTILS_BUNDLES_DIR, False, ctx.obj.get(ORIGINAL_CWD))
-    url = null_check(url, URL_ARG, 'JENKINS_URL')
-    ci_version = null_check(ci_version, CI_VERSION_ARG, BUNDLEUTILS_CI_VERSION)
-    if not ci_version:
-        whoami_url = f'{url}/whoAmI/api/json?tree=authenticated'
-        try:
-            response = requests.get(whoami_url, timeout=5)
-            if response.status_code == 200:
-                # get headers from the whoami_url
-                headers = response.headers
-                logging.debug(f"Headers: {headers}")
-                # get the x-jenkins header ignoring case and removing any carriage returns
-                ci_version = headers.get('x-jenkins', headers.get('X-Jenkins', '')).replace('\r', '')
-                logging.debug(f"Version: {ci_version} (taken from remote)")
-            else:
-                die(f"URL {url} returned a non-OK status code: {response.status_code}")
-        except requests.exceptions.RequestException as e:
-            die(f"URL {url} is not reachable. Reason: {e}")
-    else:
-        logging.debug(f"Version: {ci_version} (taken from command line)")
+    url, ci_version = lookup_url_and_version(url, ci_version)
     # search the profiles for a bundle with the given URL and version
     my_bundle = None
     bundle_profiles = ctx.obj.get(BUNDLE_PROFILES)

@@ -21,6 +21,14 @@ Imagine the structure found in [../example-bundles-repo/bundles](../examples/exa
 └── Makefile
 ```
 
+### Bundle Profiles
+
+See [Bundle Profiles](./bundle-profiles.md) for more information on the `bundle-profiles.yaml` file.
+
+### Bundle Bootstrapping
+
+See [Bootstrapping](./bundle-bootstrapping.md) for more information on adding bundles to the `bundle-profiles.yaml` file.
+
 ### Config Auto Discovery
 
 The `bundleutils` tool will look for a `bundle-profiles.yaml` containing your predefined configuration.
