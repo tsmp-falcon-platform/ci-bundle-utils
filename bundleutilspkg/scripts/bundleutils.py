@@ -491,6 +491,7 @@ def find_bundle_by_url(ctx, url, ci_version, bundles_dir):
         return
     bundles_dir = null_check(bundles_dir, BUNDLES_DIR_ARG, BUNDLEUTILS_BUNDLES_DIR, False, ctx.obj.get(ORIGINAL_CWD))
     url = null_check(url, URL_ARG, 'JENKINS_URL')
+    ci_version = null_check(ci_version, CI_VERSION_ARG, BUNDLEUTILS_CI_VERSION)
     if not ci_version:
         whoami_url = f'{url}/whoAmI/api/json?tree=authenticated'
         try:
