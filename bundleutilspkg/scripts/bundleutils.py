@@ -291,7 +291,7 @@ def null_check(obj, obj_name, obj_env_var=None, mandatory=True, default=''):
 
 def lookup_url_and_version(url, ci_version):
     url = null_check(url, URL_ARG, 'JENKINS_URL')
-    ci_version = null_check(ci_version, CI_VERSION_ARG, BUNDLEUTILS_CI_VERSION)
+    ci_version = null_check(ci_version, CI_VERSION_ARG, BUNDLEUTILS_CI_VERSION, False, '')
     if not ci_version:
         whoami_url = f'{url}/whoAmI/api/json?tree=authenticated'
         try:
