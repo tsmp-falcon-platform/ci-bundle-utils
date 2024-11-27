@@ -335,9 +335,9 @@ def bootstrap(ctx, source_dir, profile, update, url, ci_version):
         if bootstrap_profile in bundle_profiles['profiles']:
             if bundle_name in bundle_profiles['bundles']:
                 if bootstrap_update in ['true', '1', 't', 'y', 'yes']:
-                    logging.info(f'Bundle config for {bundle_name} already exists. Updating it.')
+                    logging.info(f'The bundle config for {bundle_name} already exists. Updating it.')
                 else:
-                    die(f'Bundle config for {bundle_name} already exists. Please check, then either use update or remove it first.')
+                    die(f'The bundle config for {bundle_name} already exists. Please check, then either use {BUNDLEUTILS_BOOTSTRAP_UPDATE} or remove it first.')
             else:
                 logging.info(f'No bundle config found for {bundle_name}. Adding it to the bundles')
             bundle_yaml = os.path.join(source_dir, 'bundle.yaml')
