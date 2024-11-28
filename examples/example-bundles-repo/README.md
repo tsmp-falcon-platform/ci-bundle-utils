@@ -9,6 +9,7 @@ This is a template repository to be used as an example for the [bundleutils](htt
 ❯ cp -r ../ci-bundle-utils/examples/example-bundles-repo/bundles .
 ❯ cp -r ../ci-bundle-utils/examples/example-bundles-repo/Makefile .
 
-
-
+# add a profile and empty bundle.yaml
+touch bundles/controller-bundles/controller-a/bundle.yaml
+vi bundle-profiles.yaml
 ```
