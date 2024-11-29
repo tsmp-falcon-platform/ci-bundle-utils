@@ -69,6 +69,7 @@ ORIGINAL_CWD = 'ORIGINAL_CWD'
 
 # click ctx object keys
 ENV_FILE_ARG = 'env_file'
+INTERACTIVE_ARG = 'interactive'
 BUNDLES_DIR_ARG = 'bundles_dir'
 CI_VERSION_ARG = 'ci_version'
 CI_TYPE_ARG = 'ci_type'
@@ -91,6 +92,7 @@ def die(msg):
 def common_options(func):
     func = click.option('-l', '--log-level', default=os.environ.get(BUNDLEUTILS_LOG_LEVEL, 'INFO'), help=f'The log level (or use {BUNDLEUTILS_LOG_LEVEL}).')(func)
     func = click.option('-e', '--env-file', default=os.environ.get(BUNDLEUTILS_ENV, ''), type=click.Path(file_okay=True, dir_okay=False), help=f'Optional bundle profiles file (or use {BUNDLEUTILS_ENV}).')(func)
+    func = click.option('-i', '--interactive', default=False, is_flag=True, help=f'Run in interactive mode.')(func)
     return func
 
 def server_options(func):
@@ -249,10 +251,11 @@ def set_logging(ctx):
 @click.group(invoke_without_command=True)
 @common_options
 @click.pass_context
-def cli(ctx, log_level, env_file):
+def cli(ctx, log_level, env_file, interactive):
     """A tool to fetch and transform YAML documents."""
     ctx.ensure_object(dict)
     ctx.obj[ENV_FILE_ARG] = env_file
+    ctx.obj[INTERACTIVE_ARG] = interactive
     if not ctx.obj.get(BUNDLEUTILS_LOG_LEVEL, ''):
         ctx.obj[BUNDLEUTILS_LOG_LEVEL] = log_level
         logging.getLogger().setLevel(log_level)
@@ -625,14 +628,24 @@ def completion(ctx, shell):
     click.echo(f'  2. echo "$(_{script_name_upper}_COMPLETE={shell}_source {script_name})" > {script_name}-complete.{shell}')
     click.echo(f'     source {script_name}-complete.{shell}')
 
-def null_check(obj, obj_name, obj_env_var=None, mandatory=True, default=''):
+@click.pass_context
+def null_check(ctx, obj, obj_name, obj_env_var=None, mandatory=True, default=''):
     if not obj:
         if obj_env_var:
             obj = os.environ.get(obj_env_var, '')
             if not obj:
                 if default:
                     obj = default
-                elif mandatory:
+                if ctx.obj.get(INTERACTIVE_ARG):
+                    if obj_env_var:
+                        msg = f'Please provide the {obj_name} or set the {obj_env_var}'
+                    else:
+                        msg = f'Please provide the {obj_name}'
+                    if obj:
+                        obj = click.prompt(msg, default=obj)
+                    else:
+                        obj = click.prompt(msg)
+                if mandatory and not obj:
                     die(f'No {obj_name} option provided and no {obj_env_var} set')
     return obj
 
@@ -652,7 +665,7 @@ def _validate(url, username, password, source_dir, ignore_warnings):
     username = null_check(username, 'username', BUNDLEUTILS_USERNAME)
     password = null_check(password, 'password', BUNDLEUTILS_PASSWORD)
     source_dir = null_check(source_dir, 'source directory', BUNDLEUTILS_VALIDATE_SOURCE_DIR)
-    url = null_check(url, 'url', BUNDLEUTILS_JENKINS_URL)
+    url = null_check(url, URL_ARG, BUNDLEUTILS_JENKINS_URL)
     # if the url does end with /casc-bundle-mgnt/casc-bundle-validate, append it
     if validate_url_path not in url:
         url = url + validate_url_path
