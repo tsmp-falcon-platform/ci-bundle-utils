@@ -292,7 +292,7 @@ def null_check(obj, obj_name, obj_env_var=None, mandatory=True, default=''):
                     die(f'No {obj_name} option provided and no {obj_env_var} set')
     return obj
 
-def lookup_url_and_version(url, ci_version, default_url, default_ci_version):
+def lookup_url_and_version(url, ci_version, default_url = '', default_ci_version = ''):
     url = null_check(url, URL_ARG, 'JENKINS_URL', True, default_url)
     ci_version = null_check(ci_version, CI_VERSION_ARG, BUNDLEUTILS_CI_VERSION, False, default_ci_version)
     if not ci_version:
