@@ -341,8 +341,9 @@ def bootstrap(ctx, source_dir, profile, update, url, ci_version):
             if bundle_name in bundle_profiles['bundles']:
                 if bootstrap_update in ['true', '1', 't', 'y', 'yes']:
                     logging.info(f'The bundle config for {bundle_name} already exists. Updating it.')
-                    default_url = bundle_profiles['bundles'][bundle_name].get(BUNDLEUTILS_JENKINS_URL, '')
-                    default_ci_version = bundle_profiles['bundles'][bundle_name].get(BUNDLEUTILS_CI_VERSION, '')
+                    if ctx.obj.get(INTERACTIVE_ARG):
+                        default_url = bundle_profiles['bundles'][bundle_name].get(BUNDLEUTILS_JENKINS_URL, '')
+                        default_ci_version = bundle_profiles['bundles'][bundle_name].get(BUNDLEUTILS_CI_VERSION, '')
                 else:
                     die(f'The bundle config for {bundle_name} already exists. Please check, then either use {BUNDLEUTILS_BOOTSTRAP_UPDATE} or remove it first.')
             else:
