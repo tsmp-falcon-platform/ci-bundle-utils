@@ -356,26 +356,24 @@ def bootstrap(ctx, source_dir, profile, update, url, ci_version):
                     file.write('')
             else:
                 logging.info(f"The bundle yaml already exists {bundle_yaml}")
-            # Define the new controller entry
-            new_entry = {
-                f"{bundle_name}": {
-                    "<<": f"*{bootstrap_profile}",
-                    "BUNDLEUTILS_JENKINS_URL": f"{url}",
-                    "BUNDLEUTILS_CI_VERSION": f"{ci_version}",
-                }
-            }
-            # Add the new entry to the bundles section
-            bundle_profiles["bundles"].update(new_entry)
-            # if the BUNDLE_PROFILES exists, then the BUNDLEUTILS_ENV must also exist
-            with open(ctx.obj.get(BUNDLEUTILS_ENV), "w") as file:
-                yaml.dump(bundle_profiles, file)
-            # remove the single quotes in the file
-            with open(ctx.obj.get(BUNDLEUTILS_ENV), 'r') as file:
-                filedata = file.read()
-            filedata = filedata.replace("'<<'", '<<')
-            filedata = filedata.replace(f"'*{bootstrap_profile}'", f"*{bootstrap_profile}")
-            with open(ctx.obj.get(BUNDLEUTILS_ENV), 'w') as file:
-                file.write(filedata)
+
+            # open for reading
+            with open(ctx.obj.get(BUNDLEUTILS_ENV)) as ifp:
+                data = yaml.load(ifp)
+            # Loop through the profiles and reapply anchors dynamically since they get lost when loading the file
+            for key, value in data['profiles'].items():
+                if isinstance(value, dict):
+                    value.yaml_set_anchor(key, always_dump=True)
+            # Create a new bundle entry
+            upd = CommentedMap()
+            upd.add_yaml_merge([(0, data['profiles'][bootstrap_profile])])
+            data['bundles'][bundle_name] = upd
+            data['bundles'][bundle_name]['BUNDLEUTILS_JENKINS_URL'] = f"{url}"
+            data['bundles'][bundle_name]['BUNDLEUTILS_CI_VERSION'] = f"{ci_version}"
+            # write the updated file
+            with open(ctx.obj.get(BUNDLEUTILS_ENV), 'w') as ofp:
+                yaml.dump(data, ofp)
+            logging.info(f"Added/updated bundle {bundle_name} with profile {bootstrap_profile}, URL {url}, and version {ci_version}")
         else:
             die(f'No bundle profile found for {bootstrap_profile}')
 
