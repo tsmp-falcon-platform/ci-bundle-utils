@@ -292,9 +292,9 @@ def null_check(obj, obj_name, obj_env_var=None, mandatory=True, default=''):
                     die(f'No {obj_name} option provided and no {obj_env_var} set')
     return obj
 
-def lookup_url_and_version(url, ci_version):
-    url = null_check(url, URL_ARG, 'JENKINS_URL')
-    ci_version = null_check(ci_version, CI_VERSION_ARG, BUNDLEUTILS_CI_VERSION, False, '')
+def lookup_url_and_version(url, ci_version, default_url, default_ci_version):
+    url = null_check(url, URL_ARG, 'JENKINS_URL', True, default_url)
+    ci_version = null_check(ci_version, CI_VERSION_ARG, BUNDLEUTILS_CI_VERSION, False, default_ci_version)
     if not ci_version:
         whoami_url = f'{url}/whoAmI/api/json?tree=authenticated'
         try:
@@ -316,9 +316,9 @@ def lookup_url_and_version(url, ci_version):
 
 @cli.command()
 @click.pass_context
-@click.option('-s', '--source-dir', 'source_dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The bundle to be bootstrapped.')
-@click.option('-p', '--profile', 'profile', help=f'The bundle profile to use.')
-@click.option('-u', '--update', 'update', help=f'Should the bundle be updated if present.')
+@click.option('-s', '--source-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The bundle to be bootstrapped.')
+@click.option('-p', '--profile', help=f'The bundle profile to use.')
+@click.option('-u', '--update', help=f'Should the bundle be updated if present.')
 @click.option('-U', '--url', help=f'The controller URL to bootstrap (or use JENKINS_URL).')
 @click.option('-v', '--ci-version', type=click.STRING, help=f'Optional version (taken from the remote instance otherwise).')
 def bootstrap(ctx, source_dir, profile, update, url, ci_version):
@@ -329,22 +329,26 @@ def bootstrap(ctx, source_dir, profile, update, url, ci_version):
         logging.debug('No bundle profiles found. Nothing to add the bundle to.')
         return
 
-    source_dir = null_check(source_dir, 'source_dir', BUNDLEUTILS_BOOTSTRAP_SOURCE_DIR)
+    source_dir = null_check(source_dir, SOURCE_DIR_ARG, BUNDLEUTILS_BOOTSTRAP_SOURCE_DIR)
     bootstrap_profile = null_check(profile, 'profile', BUNDLEUTILS_BOOTSTRAP_PROFILE)
     bootstrap_update = null_check(update, 'update', BUNDLEUTILS_BOOTSTRAP_UPDATE, False, 'false')
     if bootstrap_profile:
         bundle_profiles = ctx.obj.get(BUNDLE_PROFILES)
         bundle_name = os.path.basename(source_dir)
         if bootstrap_profile in bundle_profiles['profiles']:
+            default_url = ''
+            default_ci_version = ''
             if bundle_name in bundle_profiles['bundles']:
                 if bootstrap_update in ['true', '1', 't', 'y', 'yes']:
                     logging.info(f'The bundle config for {bundle_name} already exists. Updating it.')
+                    default_url = bundle_profiles['bundles'][bundle_name].get(BUNDLEUTILS_JENKINS_URL, '')
+                    default_ci_version = bundle_profiles['bundles'][bundle_name].get(BUNDLEUTILS_CI_VERSION, '')
                 else:
                     die(f'The bundle config for {bundle_name} already exists. Please check, then either use {BUNDLEUTILS_BOOTSTRAP_UPDATE} or remove it first.')
             else:
                 logging.info(f'No bundle config found for {bundle_name}. Adding it to the bundles')
             bundle_yaml = os.path.join(source_dir, 'bundle.yaml')
-            url, ci_version = lookup_url_and_version(url, ci_version)
+            url, ci_version = lookup_url_and_version(url, ci_version, default_url, default_ci_version)
             if not os.path.exists(bundle_yaml):
                 logging.info(f"Creating an empty {bundle_yaml}")
                 os.makedirs(source_dir)
@@ -377,14 +381,14 @@ def bootstrap(ctx, source_dir, profile, update, url, ci_version):
 
 @cli.command()
 @server_options
-@click.option('-s', '--source-dir', 'source_dir',  type=click.Path(file_okay=False, dir_okay=True), help=f'The bundle to be validated (startup will use the plugins from here).')
-@click.option('-T', '--ci-bundle-template', 'bundle_template', type=click.Path(file_okay=False, dir_okay=True), required=False, help=f'Path to a template bundle used to start the test server (defaults to in-built tempalte).')
+@click.option('-s', '--source-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The bundle to be validated (startup will use the plugins from here).')
+@click.option('-T', '--ci-bundle-template', type=click.Path(file_okay=False, dir_okay=True), required=False, help=f'Path to a template bundle used to start the test server (defaults to in-built tempalte).')
 @click.pass_context
-def ci_setup(ctx, ci_version, ci_type, ci_server_home, source_dir, bundle_template):
+def ci_setup(ctx, ci_version, ci_type, ci_server_home, source_dir, ci_bundle_template):
     """Download CloudBees WAR file, and setup the starter bundle"""
     set_logging(ctx)
     ci_version, ci_type, ci_server_home = server_options_null_check(ci_version, ci_type, ci_server_home)
-    source_dir = null_check(source_dir, 'source_dir', BUNDLEUTILS_SETUP_SOURCE_DIR)
+    source_dir = null_check(source_dir, SOURCE_DIR_ARG, BUNDLEUTILS_SETUP_SOURCE_DIR)
     if not os.path.exists(source_dir):
         die(f"Source directory '{source_dir}' does not exist")
     # parse the source directory bundle.yaml file and copy the files under the plugins and catalog keys to the target_jenkins_home_casc_startup_bundle directory
@@ -399,19 +403,19 @@ def ci_setup(ctx, ci_version, ci_type, ci_server_home, source_dir, bundle_templa
                     plugin_files.append(os.path.join(source_dir, plugin_file))
     jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
     jenkins_manager.get_war()
-    jenkins_manager.create_startup_bundle(plugin_files, bundle_template)
+    jenkins_manager.create_startup_bundle(plugin_files, ci_bundle_template)
     _update_bundle(jenkins_manager.target_jenkins_home_casc_startup_bundle)
 
 @cli.command()
 @server_options
-@click.option('-s', '--source-dir', 'source_dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The bundle to be validated.')
+@click.option('-s', '--source-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The bundle to be validated.')
 @click.option('-w', '--ignore-warnings', default=False, is_flag=True, help=f'Do not fail if warnings are found.')
 @click.pass_context
 def ci_validate(ctx, ci_version, ci_type, ci_server_home, source_dir, ignore_warnings):
     """Validate bundle against controller started with ci-start."""
     set_logging(ctx)
     ci_version, ci_type, ci_server_home = server_options_null_check(ci_version, ci_type, ci_server_home)
-    source_dir = null_check(source_dir, 'source_dir', BUNDLEUTILS_VALIDATE_SOURCE_DIR)
+    source_dir = null_check(source_dir, SOURCE_DIR_ARG, BUNDLEUTILS_VALIDATE_SOURCE_DIR)
     if not os.path.exists(source_dir):
         die(f"Source directory '{source_dir}' does not exist")
     jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
@@ -421,7 +425,7 @@ def ci_validate(ctx, ci_version, ci_type, ci_server_home, source_dir, ignore_war
 
 @cli.command()
 @server_options
-@click.option('-s', '--source-dir', 'source_dir',  required=False, type=click.Path(file_okay=False, dir_okay=True), help=f'The bundle of the plugins to be sanitized.')
+@click.option('-s', '--source-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The bundle of the plugins to be sanitized.')
 @click.option('-p', '--pin-plugins', default=False, is_flag=True, help=f'Add versions to 3rd party plugins (only available for apiVersion 2).')
 @click.option('-c', '--custom-url', help=f'Add a custom URL, e.g. http://plugins-repo/plugins/PNAME/PVERSION/PNAME.hpi')
 @click.pass_context
@@ -429,7 +433,7 @@ def ci_sanitize_plugins(ctx, ci_version, ci_type, ci_server_home, source_dir, pi
     """Sanitizes plugins (needs ci-start)."""
     set_logging(ctx)
     ci_version, ci_type, ci_server_home = server_options_null_check(ci_version, ci_type, ci_server_home)
-    source_dir = null_check(source_dir, 'source_dir', BUNDLEUTILS_TRANSFORM_TARGET_DIR)
+    source_dir = null_check(source_dir, SOURCE_DIR_ARG, BUNDLEUTILS_TRANSFORM_TARGET_DIR)
     if not os.path.exists(source_dir):
         die(f"Source directory '{source_dir}' does not exist")
     jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
@@ -617,7 +621,7 @@ def find_bundle_by_url(ctx, url, ci_version, bundles_dir):
 # add completion command which takes the shell as an argument
 # shell can only be bash, fish, or zsh
 @cli.command()
-@click.option('-s', '--shell', 'shell', required=True, type=click.Choice(['bash', 'fish', 'zsh']), help=f'The shell to generate completion script for.')
+@click.option('-s', '--shell', required=True, type=click.Choice(['bash', 'fish', 'zsh']), help=f'The shell to generate completion script for.')
 @click.pass_context
 def completion(ctx, shell):
     """Print the shell completion script"""
@@ -709,14 +713,14 @@ def _validate(url, username, password, source_dir, ignore_warnings):
                 die('Validation failed with errors or critical messages')
 
 @cli.command()
-@click.option('-m', '--plugin-json-additions', 'plugin_json_additions', help=f'Strategy for adding missing plugins (or use {BUNDLEUTILS_PLUGINS_JSON_ADDITIONS}).')
-@click.option('-m', '--plugin-json-url', 'plugin_json_url', help=f'The URL to fetch plugins info (or use {BUNDLEUTILS_JENKINS_URL}).')
-@click.option('-M', '--plugin-json-path', 'plugin_json_path', help=f'The path to fetch JSON file from (found at {plugin_json_url_path}).')
+@click.option('-m', '--plugin-json-additions', help=f'Strategy for adding missing plugins (or use {BUNDLEUTILS_PLUGINS_JSON_ADDITIONS}).')
+@click.option('-m', '--plugin-json-url', help=f'The URL to fetch plugins info (or use {BUNDLEUTILS_JENKINS_URL}).')
+@click.option('-M', '--plugin-json-path', help=f'The path to fetch JSON file from (found at {plugin_json_url_path}).')
 @click.option('-P', '--path', 'path', type=click.Path(file_okay=True, dir_okay=False), help=f'The path to fetch YAML from (or use {BUNDLEUTILS_PATH}).')
 @click.option('-U', '--url', 'url', help=f'The URL to fetch YAML from (or use {BUNDLEUTILS_JENKINS_URL}).')
-@click.option('-u', '--username', 'username', help=f'Username for basic authentication (or use {BUNDLEUTILS_USERNAME}).')
-@click.option('-p', '--password', 'password', help=f'Password for basic authentication (or use {BUNDLEUTILS_PASSWORD}).')
-@click.option('-t', '--target-dir', 'target_dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The target directory for the YAML documents (or use {BUNDLEUTILS_FETCH_TARGET_DIR}).')
+@click.option('-u', '--username', help=f'Username for basic authentication (or use {BUNDLEUTILS_USERNAME}).')
+@click.option('-p', '--password', help=f'Password for basic authentication (or use {BUNDLEUTILS_PASSWORD}).')
+@click.option('-t', '--target-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The target directory for the YAML documents (or use {BUNDLEUTILS_FETCH_TARGET_DIR}).')
 @click.pass_context
 def fetch(ctx, url, path, username, password, target_dir, plugin_json_url, plugin_json_path, plugin_json_additions):
     """Fetch YAML documents from a URL or path."""
@@ -724,17 +728,17 @@ def fetch(ctx, url, path, username, password, target_dir, plugin_json_url, plugi
     url = null_check(url, 'url', BUNDLEUTILS_JENKINS_URL, False)
     if url or plugin_json_url:
         # we'll need username and password for this
-        username = null_check(username, 'username', BUNDLEUTILS_USERNAME)
-        password = null_check(password, 'password', BUNDLEUTILS_PASSWORD)
+        username = null_check(username, USERNAME_ARG, BUNDLEUTILS_USERNAME)
+        password = null_check(password, PASSWORD_ARG, BUNDLEUTILS_PASSWORD)
     if url:
         plugin_json_url = url
     else:
-        plugin_json_url = null_check(plugin_json_url, 'plugin_json_url', BUNDLEUTILS_JENKINS_URL, False)
-    path = null_check(path, 'path', BUNDLEUTILS_PATH, False)
-    plugin_json_path = null_check(plugin_json_path, 'plugin_json_path', BUNDLEUTILS_PLUGINS_JSON_PATH, False)
-    plugin_json_additions = null_check(plugin_json_additions, 'plugin_json_additions', BUNDLEUTILS_PLUGINS_JSON_ADDITIONS, False, '')
+        plugin_json_url = null_check(plugin_json_url, PLUGIN_JSON_URL_ARG, BUNDLEUTILS_JENKINS_URL, False)
+    path = null_check(path, PATH_ARG, BUNDLEUTILS_PATH, False)
+    plugin_json_path = null_check(plugin_json_path, PLUGIN_JSON_PATH_ARG, BUNDLEUTILS_PLUGINS_JSON_PATH, False)
+    plugin_json_additions = null_check(plugin_json_additions, PLUGIN_JSON_ADDITIONS_ARG, BUNDLEUTILS_PLUGINS_JSON_ADDITIONS, False, '')
 
-    target_dir = null_check(target_dir, 'target directory', BUNDLEUTILS_FETCH_TARGET_DIR, False, default_target)
+    target_dir = null_check(target_dir, TARGET_DIR_ARG, BUNDLEUTILS_FETCH_TARGET_DIR, False, default_target)
     if url and fetch_url_path not in url:
         url = url + fetch_url_path
     if plugin_json_url and plugin_json_url_path not in url:
@@ -1391,8 +1395,8 @@ def normalize(ctx, strict, configs, source_dir, target_dir):
 def transform(ctx, strict, configs, source_dir, target_dir):
     """Transform using a custom transformation config."""
     set_logging(ctx)
-    source_dir = null_check(source_dir, 'source_dir', BUNDLEUTILS_TRANSFORM_SOURCE_DIR)
-    target_dir = null_check(target_dir, 'target_dir', BUNDLEUTILS_TRANSFORM_TARGET_DIR)
+    source_dir = null_check(source_dir, SOURCE_DIR_ARG, BUNDLEUTILS_TRANSFORM_SOURCE_DIR)
+    target_dir = null_check(target_dir, TARGET_DIR_ARG, BUNDLEUTILS_TRANSFORM_TARGET_DIR)
     configs = null_check(configs, 'configs', BUNDLEUTILS_TRANSFORM_CONFIGS, False)
     # if the configs is a string, split it by space
     if isinstance(configs, str):
