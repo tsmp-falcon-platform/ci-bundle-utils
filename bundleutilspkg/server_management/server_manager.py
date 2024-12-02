@@ -330,6 +330,17 @@ class JenkinsServerManager:
                     logging.warn(line)
         logging.info("Jenkins server - Finished checking the Jenkins log")
 
+    def get_envelope_json_from_war(self):
+        # read the envelope.json from self. /WEB-INF/plugins/envelope.json
+        self.get_war()
+        # extract the /WEB-INF/plugins/envelope.json from the WAR file
+        with subprocess.Popen(['unzip', '-p', self.war_path, 'WEB-INF/plugins/envelope.json'], stdout=subprocess.PIPE, stderr=subprocess.PIPE) as process:
+            envelope_json, _ = process.communicate()
+            envelope_json = envelope_json.decode('utf-8')
+        if not envelope_json:
+            self.die(f"WEB-INF/plugins/envelope.json not found in {self.war_cache_file}")
+        return envelope_json
+
     def get_envelope_json(self):
         # read the envelope.json from self.target_jenkins_webroot /WEB-INF/plugins/envelope.json
         envelope_json = os.path.join(self.target_jenkins_webroot, 'WEB-INF', 'plugins', 'envelope.json')
