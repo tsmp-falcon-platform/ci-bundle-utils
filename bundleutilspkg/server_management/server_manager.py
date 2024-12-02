@@ -133,7 +133,7 @@ class JenkinsServerManager:
             else:
                 self.die("No download URL or Docker image specified")
         else:
-            logging.info(f"WAR file already exists at {self.war_cache_file}")
+            logging.debug(f"WAR file already exists at {self.war_cache_file}")
         # recreate the jenkins-home directory
         logging.info(f"Recreating {self.target_jenkins_home}")
         if os.path.exists(self.target_jenkins_home):

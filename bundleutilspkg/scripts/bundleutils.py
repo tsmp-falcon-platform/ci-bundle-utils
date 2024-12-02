@@ -1,3 +1,4 @@
+from enum import Enum, auto
 import json
 import jsonpatch
 import jsonpointer
@@ -13,6 +14,7 @@ import logging
 import re
 import sys
 import importlib.resources as pkg_resources
+from collections import defaultdict
 from deepdiff import DeepDiff
 from deepdiff.helper import CannotCompare
 from ruamel.yaml import YAML
@@ -58,8 +60,11 @@ BUNDLEUTILS_USERNAME = 'BUNDLEUTILS_USERNAME'
 BUNDLEUTILS_PASSWORD = 'BUNDLEUTILS_PASSWORD'
 BUNDLEUTILS_PATH = 'BUNDLEUTILS_PATH'
 BUNDLEUTILS_FETCH_TARGET_DIR = 'BUNDLEUTILS_FETCH_TARGET_DIR'
+BUNDLEUTILS_FETCH_OFFLINE = 'BUNDLEUTILS_FETCH_OFFLINE'
+BUNDLEUTILS_FETCH_USE_CAP = 'BUNDLEUTILS_FETCH_USE_CAP'
 BUNDLEUTILS_PLUGINS_JSON_PATH = 'BUNDLEUTILS_PLUGINS_JSON_PATH'
-BUNDLEUTILS_PLUGINS_JSON_ADDITIONS = 'BUNDLEUTILS_PLUGINS_JSON_ADDITIONS'
+BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY = 'BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY'
+BUNDLEUTILS_PLUGINS_JSON_MERGE_STRATEGY = 'BUNDLEUTILS_PLUGINS_JSON_MERGE_STRATEGY'
 BUNDLEUTILS_BUNDLES_DIR = 'BUNDLEUTILS_BUNDLES_DIR'
 BUNDLEUTILS_CREDENTIAL_DELETE_SIGN = 'PLEASE_DELETE_ME'
 
@@ -88,6 +93,26 @@ PASSWORD_ARG = 'password'
 def die(msg):
     logging.error(f"{msg}\n")
     sys.exit(1)
+
+class PluginJsonMergeStrategy(Enum):
+    DO_NOTHING = auto()
+    ADD_ONLY = auto()
+    ADD_DELETE = auto()
+
+class PluginJsonListStrategy(Enum):
+    ROOTS = auto()
+    ROOTS_AND_DEPS = auto()
+    ALL = auto()
+
+def get_value_from_enum(value, my_enum):
+    try:
+        return my_enum[value]
+    except KeyError:
+        die(f"Invalid value: {value}. Must be one of {[e.name for e in my_enum]}")
+
+def get_name_from_enum(my_enum):
+    return [x.name for x in my_enum]
+
 
 def common_options(func):
     func = click.option('-l', '--log-level', default=os.environ.get(BUNDLEUTILS_LOG_LEVEL, 'INFO'), help=f'The log level (or use {BUNDLEUTILS_LOG_LEVEL}).')(func)
@@ -500,7 +525,6 @@ def ci_sanitize_plugins(ctx, ci_version, ci_type, ci_server_home, source_dir, pi
         yaml.dump(plugins_data, f)  # Write the updated data back to the file
     _update_bundle(source_dir)
 
-
 @cli.command()
 @server_options
 @click.pass_context
@@ -712,7 +736,10 @@ def _validate(url, username, password, source_dir, ignore_warnings):
                 die('Validation failed with errors or critical messages')
 
 @cli.command()
-@click.option('-m', '--plugin-json-additions', help=f'Strategy for adding missing plugins (or use {BUNDLEUTILS_PLUGINS_JSON_ADDITIONS}).')
+@click.option('-c', '--cap', default=False, is_flag=True, help=f'Use the envelope.json from the war file to remove CAP plugin dependencies (or use {BUNDLEUTILS_FETCH_USE_CAP}).')
+@click.option('-O', '--offline', default=False, is_flag=True, help=f'Save the export and plugin data to <target-dir>-offline (or use {BUNDLEUTILS_FETCH_OFFLINE}).')
+@click.option('-j', '--plugin-json-list-strategy', help=f'Strategy for creating list from the plugins json (or use {BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY}).')
+@click.option('-J', '--plugin-json-merge-strategy', help=f'Strategy for merging plugins from list into the bundle (or use {BUNDLEUTILS_PLUGINS_JSON_MERGE_STRATEGY}).')
 @click.option('-m', '--plugin-json-url', help=f'The URL to fetch plugins info (or use {BUNDLEUTILS_JENKINS_URL}).')
 @click.option('-M', '--plugin-json-path', help=f'The path to fetch JSON file from (found at {plugin_json_url_path}).')
 @click.option('-P', '--path', 'path', type=click.Path(file_okay=True, dir_okay=False), help=f'The path to fetch YAML from (or use {BUNDLEUTILS_PATH}).')
@@ -721,10 +748,21 @@ def _validate(url, username, password, source_dir, ignore_warnings):
 @click.option('-p', '--password', help=f'Password for basic authentication (or use {BUNDLEUTILS_PASSWORD}).')
 @click.option('-t', '--target-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The target directory for the YAML documents (or use {BUNDLEUTILS_FETCH_TARGET_DIR}).')
 @click.pass_context
-def fetch(ctx, url, path, username, password, target_dir, plugin_json_url, plugin_json_path, plugin_json_additions):
+def fetch(ctx, url, path, username, password, target_dir, plugin_json_url, plugin_json_path, plugin_json_list_strategy, plugin_json_merge_strategy, offline, cap):
     """Fetch YAML documents from a URL or path."""
     set_logging(ctx)
+    cap = null_check(cap, 'cap', BUNDLEUTILS_FETCH_USE_CAP, False, '')
+    offline = null_check(offline, 'offline', BUNDLEUTILS_FETCH_OFFLINE, False, '')
     url = null_check(url, 'url', BUNDLEUTILS_JENKINS_URL, False)
+
+    # fail fast if any strategy is passed explicitly
+    plugin_json_list_strategy = null_check(plugin_json_list_strategy, 'plugin_json_list_strategy', BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY, False, '')
+    plugin_json_merge_strategy = null_check(plugin_json_merge_strategy, 'plugin_json_merge_strategy', BUNDLEUTILS_PLUGINS_JSON_MERGE_STRATEGY, False, '')
+    if plugin_json_list_strategy:
+        plugin_json_list_strategy = get_value_from_enum(plugin_json_list_strategy,PluginJsonListStrategy)
+    if plugin_json_list_strategy:
+        plugin_json_merge_strategy = get_value_from_enum(plugin_json_merge_strategy,PluginJsonMergeStrategy)
+
     if url or plugin_json_url:
         # we'll need username and password for this
         username = null_check(username, USERNAME_ARG, BUNDLEUTILS_USERNAME)
@@ -735,7 +773,6 @@ def fetch(ctx, url, path, username, password, target_dir, plugin_json_url, plugi
         plugin_json_url = null_check(plugin_json_url, PLUGIN_JSON_URL_ARG, BUNDLEUTILS_JENKINS_URL, False)
     path = null_check(path, PATH_ARG, BUNDLEUTILS_PATH, False)
     plugin_json_path = null_check(plugin_json_path, PLUGIN_JSON_PATH_ARG, BUNDLEUTILS_PLUGINS_JSON_PATH, False)
-    plugin_json_additions = null_check(plugin_json_additions, PLUGIN_JSON_ADDITIONS_ARG, BUNDLEUTILS_PLUGINS_JSON_ADDITIONS, False, '')
 
     target_dir = null_check(target_dir, TARGET_DIR_ARG, BUNDLEUTILS_FETCH_TARGET_DIR, False, default_target)
     if url and fetch_url_path not in url:
@@ -759,13 +796,14 @@ def fetch(ctx, url, path, username, password, target_dir, plugin_json_url, plugi
         elif len(plugin_json_files) > 1:
             die('Multiple plugins*.json files found in the current directory')
     try:
-        fetch_yaml_docs(url, path, username, password, target_dir)
+        fetch_yaml_docs(url, path, username, password, target_dir, offline)
     except Exception as e:
         die(f'Failed to fetch and write YAML documents: {e}')
     try:
-        update_plugins(plugin_json_url, plugin_json_path, username, password, target_dir, plugin_json_additions)
+        update_plugins(plugin_json_url, plugin_json_path, username, password, target_dir, plugin_json_list_strategy, plugin_json_merge_strategy, offline, cap)
     except Exception as e:
-        die(f'Failed to fetch and update plugin data: {e}')
+        logging.error(f'Failed to fetch and update plugin data: {e}')
+        raise e
     # TODO remove as soon as the export does not add '^' to variables
     handle_unwanted_escape_characters(target_dir)
 
@@ -819,7 +857,6 @@ def replace_display_name_if_necessary(data):
                 data[i] = replace_display_name_if_necessary(value)
     return data
 
-
 def replace_string_in_dict(data, pattern, replacement):
     if isinstance(data, dict):
         for key, value in data.items():
@@ -847,96 +884,197 @@ def replace_string_in_list(data, pattern, replacement):
                 data[i] = re.sub(pattern, replacement, value)
     return data
 
-def find_plugin_by_shortname(plugins, short_name):
-    logging.debug(f"Finding plugin by short name: {short_name}")
-    for plugin in plugins:
-        if plugin.get('shortName') == short_name:
-            return plugin
-    return None
+def hline(text):
+    logging.info("-" * 80)
+    logging.info(text)
+    logging.info("-" * 80)
 
-def get_non_optional_deps(plugins, plugin, seen_dependencies=set()):
-    logging.debug(f"Checking dependencies for {plugin}")
-    non_optional_deps = []
-    for dependency in plugin.get("dependencies", []):
-        logging.debug(f"Checking dependency: {dependency}")
-        dependency_details = find_plugin_by_shortname(plugins, dependency["shortName"])
-        if dependency_details is None:
-            if dependency["shortName"] in seen_dependencies:
-                logging.debug(f"Dependency already seen: {dependency['shortName']}")
+def _analyze_server_plugins(plugins_from_json, plugins_json_list_strategy, cap):
+    logging.debug("Plugin Analysis - Analyzing server plugins...")
+    # Setup the dependency graphs
+    graphs = {}
+    graph_type_all = 'all'
+    graph_type_minus_bootstrap = 'minus-bootstrap'
+    graph_type_minus_deleted_disabled = 'minus-deleted-disabled'
+    graph_types = [graph_type_all, graph_type_minus_bootstrap, graph_type_minus_deleted_disabled]
+    for graph_type in graph_types:
+        graphs[graph_type] = {}
+        dependency_graph = defaultdict(lambda: {"non_optional": [], "optional": [], "entry": {}})
+        reverse_dependencies = defaultdict(list)
+        graphs[graph_type]["dependency_graph"] = dependency_graph
+        graphs[graph_type]["reverse_dependencies"] = reverse_dependencies
+        # Build the dependency graph from the json data
+        for plugin in plugins_from_json:
+            if (graph_type in [graph_type_minus_bootstrap, graph_type_minus_deleted_disabled]) and plugin.get("bundled", True):
                 continue
-            logging.error(f"Dependency not found: {dependency['shortName']}")
-            die(f"Dependency not found: {dependency['shortName']}")
-        if not dependency_details.get("bundled", True) and not dependency.get("optional", True) and dependency["shortName"] not in seen_dependencies:
-            logging.debug(f"Adding non-optional dependency: {dependency['shortName']}")
-            seen_dependencies.add(dependency["shortName"])
-            non_optional_deps.append(dependency_details)
-            # Recursively fetch and add non-optional dependencies of the current dependency
-            non_optional_deps.extend(get_non_optional_deps(plugins, dependency_details, seen_dependencies))
-    return non_optional_deps
-
-def _analyze_server_plugins(plugins_from_json):
-        logging.debug("Plugin Analysis - Analyzing server plugins...")
-        # copy the list of plugins
-        original_plugins = plugins_from_json.copy()
-        reduced_plugins = plugins_from_json.copy()
-        all_deleted_or_inactive_plugins = []
-        all_bootstrap_plugins = []
-        # while 100 max iterations is not reached
-        max = 100
-        seen_dependencies = set()
-        while max > 0:
-            max -= 1
-            # start equal
-            current_plugins = reduced_plugins.copy()
-            for plugin in current_plugins:
-                if plugin.get("deleted", True):
-                    all_deleted_or_inactive_plugins.append(plugin['shortName'])
-                    logging.debug(f"Removing deleted plugin: {plugin['shortName']}")
-                    reduced_plugins.remove(plugin)
-                elif not plugin.get("enabled", True):
-                    all_deleted_or_inactive_plugins.append(plugin['shortName'])
-                    logging.debug(f"Removing disabled plugin: {plugin['shortName']}")
-                    reduced_plugins.remove(plugin)
+            if graph_type == graph_type_minus_deleted_disabled and (not plugin.get("enabled", True) or plugin.get("deleted", True)):
+                continue
+            plugin_name = plugin.get("shortName")
+            dependency_graph[plugin_name]["entry"] = plugin
+            plugin_dependencies = plugin.get("dependencies", [])
+            for dependency in plugin_dependencies:
+                dep_name = dependency.get("shortName")
+                if dependency.get("optional", False):
+                    dependency_graph[plugin_name]["optional"].append(dep_name)
                 else:
-                    non_optional_deps = get_non_optional_deps(current_plugins, plugin, seen_dependencies)
-                    for dep in non_optional_deps:
-                        logging.debug(f"Removing non-optional dep {dep['shortName']} - {dep['version']} - {dep['bundled']}")
-                        reduced_plugins.remove(dep)
-                # remove bundled plugins
-                if plugin.get("bundled", True):
-                    all_bootstrap_plugins.append(plugin['shortName'])
-                    logging.debug(f"Removing bootstrap plugin: {plugin['shortName']} - {plugin['version']} - {plugin['bundled']}")
-                    reduced_plugins.remove(plugin)
-                    seen_dependencies.add(plugin["shortName"])
+                    dependency_graph[plugin_name]["non_optional"].append(dep_name)
+                    # Add the parent plugin to the for non-optional dependencies only
+                    reverse_dependencies[dep_name].append(plugin_name)
+    logging.debug("Plugin Analysis - Finished building dependency graphs")
 
-            # break if no change
-            logging.debug(f"Iteration {100 - max}")
-            if current_plugins == reduced_plugins:
-                break
+    # Function to recursively get all non-optional dependencies
+    def get_non_optional_dependencies(graph_type, plugin_name, visited=None):
+        dependency_graph = graphs[graph_type]["dependency_graph"]
+        if visited is None:
+            visited = set()
+        if plugin_name in visited:
+            return set()  # Avoid infinite loops in cyclic graphs
+        visited.add(plugin_name)
+        non_optional_deps = set(dependency_graph[plugin_name]["non_optional"])
+        for dep in dependency_graph[plugin_name]["non_optional"]:
+            non_optional_deps.update(get_non_optional_dependencies(graph_type, dep, visited))
+        return non_optional_deps
 
+    # Function to find root plugins (those NOT listed as dependencies of any other plugin)
+    def find_root_plugins(graph_type):
+        dependency_graph = graphs[graph_type]["dependency_graph"]
+        reverse_dependencies = graphs[graph_type]["reverse_dependencies"]
+        all_plugins = set(dependency_graph.keys())
+        all_dependencies = set(reverse_dependencies.keys())
+        root_plugins = all_plugins - all_dependencies  # Plugins that are not dependencies
+        return root_plugins
 
-        all_roots = reduced_plugins.copy()
-        all_non_bootstrap = original_plugins.copy()
-        for plugin in original_plugins:
-            if plugin.get("bundled", True) or plugin in reduced_plugins:
-                all_non_bootstrap.remove(plugin)
-        all_roots_and_deps = reduced_plugins.copy()
-        all_roots_and_deps.extend(all_non_bootstrap)
-        all_roots_and_deps = sorted(all_roots_and_deps, key=lambda x: x['shortName'])
+    # Function to recursively build a dependency tree as a list
+    def build_dependency_list(graph_type, plugin_name, parent_line=None, output_list=None):
+        dependency_graph = graphs[graph_type]["dependency_graph"]
+        if parent_line is None:
+            parent_line = []
+        if output_list is None:
+            output_list = []
 
-        logging.info("Plugin Analysis - Non-optional dependencies which can be removed with apiVersion 2:")
-        for plugin in all_non_bootstrap:
-            logging.info(f" -> {plugin['shortName']} - {plugin['version']} - {plugin['bundled']}")
-        logging.info("Plugin Analysis - Root plugins which should be kept with apiVersion 2:")
-        for plugin in all_roots:
-            logging.info(f" -> {plugin['shortName']} - {plugin['version']} - {plugin['bundled']}")
-        logging.info("Plugin Analysis - all non-bootstrap:")
-        # sort the list by shortName
-        for plugin in all_roots_and_deps:
-            logging.info(f" -> {plugin['shortName']} - {plugin['version']} - {plugin['bundled']}")
+        # Add this plugin to the parent line
+        parent_line = parent_line + [plugin_name]
 
-        logging.info("Plugin Analysis - finished analysis.")
-        return all_roots, all_bootstrap_plugins, all_non_bootstrap, all_roots_and_deps, all_deleted_or_inactive_plugins
+        for dep in dependency_graph[plugin_name]["non_optional"]:
+            if dep in parent_line:  # Cyclical dependency check
+                die(f"Cyclic dependency detected: {parent_line} -> {dep}")
+            else:
+                output_list.append(parent_line + [dep])  # Add the full path as a list
+                build_dependency_list(graph_type, dep, parent_line, output_list)
+
+        return output_list
+
+    # Function to render the dependency list with a given separator
+    def render_dependency_list(dependency_list, separator=" -> "):
+        return [separator.join(path) for path in dependency_list]
+
+    # Function to find all plugins with `pluginX` in their dependency tree
+    def plugins_with_plugin_in_tree(graph_type, target_plugin):
+        reverse_dependency_graph = graphs[graph_type]["reverse_dependencies"]
+        result = set()
+        to_visit = {target_plugin}
+
+        # Traverse the reverse dependency graph
+        while to_visit:
+            current = to_visit.pop()
+            if current in result:
+                continue
+            result.add(current)
+            to_visit.update(reverse_dependency_graph[current])  # Add plugins that depend on `current`
+
+        result.discard(target_plugin)  # Exclude the target plugin itself from the result
+        return result
+
+    dgall = graphs[graph_type_all]["dependency_graph"]
+    for graph_type in graph_types:
+        graphs[graph_type]["roots"] = find_root_plugins(graph_type)
+        # render the dependency tree for each root plugin
+        for plugin in graphs[graph_type]["roots"]:
+            logging.debug(f"Dependency tree for root plugin: {plugin}")
+            dependency_list = build_dependency_list(graph_type, plugin)
+            for line in render_dependency_list(dependency_list):
+                logging.debug(line)
+    for graph_type in graph_types:
+        # create a list of all roots and their non-optional dependencies
+        result = set()
+        for plugin in graphs[graph_type]["roots"]:
+            result.add(plugin)
+            result.update(get_non_optional_dependencies(graph_type_all, plugin))
+        graphs[graph_type]["roots-and-deps"] = result
+    dgmbr = graphs[graph_type_minus_bootstrap]["roots"]
+    dgmdr = graphs[graph_type_minus_deleted_disabled]["roots"]
+
+    def show_diff(title, plugins, col1, col2):
+        hline(f"DIFF: {title}")
+        for plugin in plugins:
+            if plugin not in col1 and plugin not in col2:
+                continue
+            # print fixed width columns for the plugin name in each graph
+            # in the format plugin_name | < or > or = | plugin_name
+            str = ""
+            if plugin not in col2:
+                logging.info(f"{plugin:40} < {str:40}")
+            elif plugin not in col1:
+                logging.info(f"{str:40} > {plugin:40}")
+            else:
+                logging.info(f"{plugin:40} | {plugin:40}")
+
+    show_diff("Expected root plugins vs expected root plugins after deleted/disabled removed (any new roots on the right side are candidates for removal)", dgall.keys(), dgmbr, dgmdr)
+
+    # handle the list strategy
+    if plugins_json_list_strategy == PluginJsonListStrategy.ROOTS:
+        expected_plugins = graphs[graph_type_minus_deleted_disabled]["roots"]
+    elif plugins_json_list_strategy == PluginJsonListStrategy.ROOTS_AND_DEPS:
+        expected_plugins = graphs[graph_type_minus_deleted_disabled]["roots-and-deps"]
+    elif plugins_json_list_strategy == PluginJsonListStrategy.ALL:
+        expected_plugins = dgall.keys()
+    else:
+        die(f"Invalid plugins json list strategy: {plugins_json_list_strategy}. Expected one of: {PluginJsonListStrategy}")
+
+    # handle the removal of CAP plugin dependencies removal
+    if cap:
+        logging.info(f"{BUNDLEUTILS_FETCH_USE_CAP} option detected. Removing CAP plugin dependencies...")
+        expected_plugins_copy = expected_plugins.copy()
+        url, ci_version = lookup_url_and_version('', '')
+        if not url:
+            die("No URL provided for CAP plugin removal")
+        ci_version, ci_type, ci_server_home = server_options_null_check(ci_version, '', '')
+        jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
+        envelope_json = jenkins_manager.get_envelope_json_from_war()
+        envelope_json = json.loads(envelope_json)
+        for plugin_id, plugin_info in envelope_json['plugins'].items():
+            if plugin_info.get('scope') != 'bootstrap':
+                for dep in get_non_optional_dependencies(graph_type_all, plugin_id):
+                    if dep in expected_plugins:
+                        logging.debug(f"Removing dependency of {plugin_id}: {dep}")
+                        expected_plugins.remove(dep)
+        show_diff("Expected root plugins vs expected root plugins after CAP dependencies removed", dgall.keys(), expected_plugins_copy, expected_plugins)
+
+    logging.info("Plugin Analysis - finished analysis.")
+
+    # Sanity check:
+    # reduced_plugins (and all non_optional_dependencies) + all_bootstrap_plugins (and all non_optional_dependencies) should be equal to original_plugins
+    logging.debug("Plugin Analysis - Performing sanity check...")
+    logging.debug("Plugin Analysis - Expecting expected_plugins + bootstrap_plugins + deleted_plugins (+ their non_optional_dependencies) should be equal to original_plugins")
+    all_bootstrap_plugins = graphs[graph_type_all]["dependency_graph"].keys() - graphs[graph_type_minus_bootstrap]["dependency_graph"].keys()
+    all_deleted_or_inactive_plugins = graphs[graph_type_all]["dependency_graph"].keys() - graphs[graph_type_minus_deleted_disabled]["dependency_graph"].keys()
+    sanity_check = set()
+    for plugin in expected_plugins:
+        sanity_check.add(plugin)
+        sanity_check.update(get_non_optional_dependencies(graph_type_all, plugin))
+    for plugin in all_bootstrap_plugins:
+        sanity_check.add(plugin)
+        sanity_check.update(get_non_optional_dependencies(graph_type_all, plugin))
+    for plugin in all_deleted_or_inactive_plugins:
+        sanity_check.add(plugin)
+    if sanity_check != graphs[graph_type_all]["dependency_graph"].keys():
+        logging.error("Sanity check failed. Reduced plugins and bootstrap plugins do not match original plugins.")
+        die("Sanity check failed. Reduced plugins and bootstrap plugins do not match original plugins.")
+    else:
+        logging.debug("Plugin Analysis - Sanity check passed.")
+
+    expected_plugins = sorted(expected_plugins)
+    return expected_plugins, all_bootstrap_plugins, all_deleted_or_inactive_plugins
 
 def find_plugin_by_id(plugins, plugin_id):
     logging.debug(f"Finding plugin by id: {plugin_id}")
@@ -945,51 +1083,65 @@ def find_plugin_by_id(plugins, plugin_id):
             return plugin
     return None
 
-def update_plugins(plugin_json_url, plugin_json_path, username, password, target_dir, plugin_json_additions):
-    if plugin_json_url:
-        logging.debug(f'Loading plugin JSON from URL: {plugin_json_url}')
-        response_text = call_jenkins_api(plugin_json_url, username, password)
-        # parse text as JSON
-        data = json.loads(response_text)
-        plugins_from_json = data.get("plugins", [])
-        all_roots, all_bootstrap_plugins, all_non_bootstrap, all_roots_and_deps, all_deleted_or_inactive_plugins = _analyze_server_plugins(plugins_from_json)
-    elif plugin_json_path:
-        logging.debug(f'Loading plugin JSON from path: {plugin_json_path}')
-        with open(plugin_json_path, 'r') as f:
-            data = json.load(f)
-        plugins_from_json = data.get("plugins", [])
-        all_roots, all_bootstrap_plugins, all_non_bootstrap, all_roots_and_deps, all_deleted_or_inactive_plugins = _analyze_server_plugins(plugins_from_json)
+def update_plugins(plugin_json_url, plugin_json_path, username, password, target_dir, plugin_json_list_strategy, plugin_json_merge_strategy, offline, cap):
+    target_dir_offline = target_dir + '-offline'
+    # handle offline mode
+    if offline:
+        if plugin_json_path:
+            die('Offline mode is not supported with the path option')
+        os.makedirs(target_dir_offline, exist_ok=True)
+        export_json = os.path.join(target_dir_offline, 'export.json')
+        if os.path.exists(export_json):
+            logging.info(f'Offline export plugins.json file exists. Skipping fetch and using it instead.')
+            plugin_json_path = export_json
+            plugin_json_url = None
     else:
-        logging.info('No plugin JSON URL or path provided. Cannot determine if disabled/deleted plugins present in list.')
-        return
-    if not plugin_json_additions:
-        logging.info('No plugin_json_additions provided. Setting based on apiVersion in bundle.yaml')
+        remove_files_from_dir(target_dir_offline)
+
+    # if no plugin_json_list_strategy is provided, determine it based on the apiVersion in the bundle.yaml file
+    if not plugin_json_list_strategy:
         # find the apiVersion from the bundle.yaml file
         bundle_yaml = os.path.join(target_dir, 'bundle.yaml')
         if os.path.exists(bundle_yaml):
             with open(bundle_yaml, 'r') as f:
                 bundle_yaml = yaml.load(f)
                 api_version = bundle_yaml.get('apiVersion', '')
-                logging.info(f"Found apiVersion: {api_version}")
                 if not api_version:
                     die('No apiVersion found in bundle.yaml file')
                 elif api_version == '1':
-                    plugin_json_additions = 'all'
+                    plugin_json_list_strategy = PluginJsonListStrategy.ROOTS_AND_DEPS
                 elif api_version == '2':
-                    plugin_json_additions = 'roots'
+                    plugin_json_list_strategy = PluginJsonListStrategy.ROOTS
                 else:
                     die(f"Invalid apiVersion found in bundle.yaml file: {api_version}")
+                logging.info(f'No plugin_json_list_strategy provided. Setting plugin_json_list_strategy to {plugin_json_list_strategy.name} from {get_name_from_enum(PluginJsonListStrategy)} based on apiVersion {api_version} in bundle.yaml')
+    if not plugin_json_merge_strategy:
+        plugin_json_merge_strategy = PluginJsonMergeStrategy.ADD_DELETE
+        logging.info(f'No plugin_json_merge_strategy provided. Setting to {plugin_json_merge_strategy.name} from {get_name_from_enum(PluginJsonMergeStrategy)}')
 
-    # additions can be one of: 'roots', 'all', 'none'
-    expected_plugins = all_roots
-    if plugin_json_additions not in ['roots', 'all', 'none']:
-        die(f"Invalid plugin_json_additions value: {plugin_json_additions}. Must be one of: 'roots', 'all', 'none'")
+    # load the plugin JSON from the URL or path
+    data = None
+    if plugin_json_url:
+        logging.debug(f'Loading plugin JSON from URL: {plugin_json_url}')
+        response_text = call_jenkins_api(plugin_json_url, username, password)
+        if offline:
+            with open(export_json, 'w') as f:
+                f.write(response_text)
+        # parse text as JSON
+        data = json.loads(response_text)
+    elif plugin_json_path:
+        logging.debug(f'Loading plugin JSON from path: {plugin_json_path}')
+        with open(plugin_json_path, 'r') as f:
+            data = json.load(f)
     else:
-        logging.info(f"Using plugin_json_additions: {plugin_json_additions}")
-        if plugin_json_additions == 'all':
-            expected_plugins = all_roots_and_deps
-        elif plugin_json_additions == 'roots':
-            expected_plugins = all_roots
+        logging.info('No plugin JSON URL or path provided. Cannot determine if disabled/deleted plugins present in list.')
+        return
+    plugins_from_json = data.get("plugins", [])
+    expected_plugins, all_bootstrap_plugins, all_deleted_or_inactive_plugins = _analyze_server_plugins(plugins_from_json, plugin_json_list_strategy, cap)
+
+    # handle the merge strategy
+    if plugin_json_merge_strategy == 'ADD_ONLY':
+        logging.info(f"Using merge strategy: ADD_ONLY")
 
     # removing from the plugins.yaml file
     plugins_file = os.path.join(target_dir, 'plugins.yaml')
@@ -997,32 +1149,37 @@ def update_plugins(plugin_json_url, plugin_json_path, username, password, target
         with open(plugins_file, 'r') as f:
             plugins_data = yaml.load(f)  # Load the existing data
 
+        current_plugins = []
         updated_plugins = []
-        current_plugins = plugins_data.get("plugins", [])
-        # check for plugins that are installed and necessary but not in the plugins.yaml file
-        # if the plugin is not in the plugins.yaml file, add it
-        for plugin in expected_plugins:
-            found_plugin = find_plugin_by_id(current_plugins, plugin['shortName'])
-            if found_plugin is None:
-                if plugin_json_additions == 'none':
-                    logging.warn(f"Skipping plugin installed on server but not in bundle (according to strategy: {plugin_json_additions}) : {plugin['shortName']}")
-                else:
-                    logging.info(f"Adding expected plugin (according to strategy: {plugin_json_additions}) : {plugin['shortName']}")
-                    updated_plugins.append({'id': plugin['shortName']})
-
-        logging.info(f"Looking for disabled/deleted plugins to remove from plugins.yaml")
         # Check if 'plugins' key exists and it's a list
         if 'plugins' in plugins_data and isinstance(plugins_data['plugins'], list):
-            for plugin in plugins_data['plugins']:
-                if plugin['id'] in all_deleted_or_inactive_plugins:
-                    logging.info(f" -> removing deleted or inactive: {plugin['id']}")
-                elif plugin['id'] in all_bootstrap_plugins:
-                    logging.info(f" -> removing bootstrap: {plugin['id']}")
+            current_plugins = plugins_data['plugins']
+
+        # check for plugins that are installed and necessary but not in the plugins.yaml file
+        # if the plugin is not in the plugins.yaml file, add it
+        logging.info(f"Looking for plugins that are installed but not in the current plugins.yaml")
+        for plugin in expected_plugins:
+            found_plugin = find_plugin_by_id(current_plugins, plugin)
+            if found_plugin is None:
+                if plugin_json_merge_strategy == PluginJsonMergeStrategy.DO_NOTHING:
+                    logging.warning(f" -> found plugin installed on server but not present in bundle (skipping according to merge strategy: {plugin_json_merge_strategy}) : {plugin}")
                 else:
+                    logging.info(f" -> adding plugin expected but not present (according to strategy: {plugin_json_merge_strategy}) : {plugin}")
+                    updated_plugins.append({'id': plugin})
+
+        logging.info(f"Looking for disabled/deleted plugins to remove from current plugins.yaml")
+        for plugin in current_plugins:
+            if plugin['id'] in all_bootstrap_plugins:
+                logging.debug(f" -> removing unexpected bootstrap plugin {plugin['id']}")
+            if not plugin['id'] in expected_plugins:
+                if plugin_json_merge_strategy == PluginJsonMergeStrategy.ADD_DELETE:
+                    logging.info(f" -> removing unexpected plugin {plugin['id']} according to merge strategy: {plugin_json_merge_strategy}")
+                else:
+                    logging.warning(f" -> unexpected plugin {plugin['id']} found but not removed according to merge strategy: {plugin_json_merge_strategy}")
                     updated_plugins.append(plugin)
 
-            updated_plugins = sorted(updated_plugins, key=lambda x: x['id'])
-            plugins_data['plugins'] = updated_plugins
+        updated_plugins = sorted(updated_plugins, key=lambda x: x['id'])
+        plugins_data['plugins'] = updated_plugins
         with open(plugins_file, 'w') as f:
             yaml.dump(plugins_data, f)  # Write the updated data back to the file
 
@@ -1044,16 +1201,34 @@ def update_plugins(plugin_json_url, plugin_json_path, username, password, target
         with open(plugin_catalog, 'w') as file:
             yaml.dump(catalog_data, file) # Write the updated data back to the file
 
-def fetch_yaml_docs(url, path, username, password, target_dir):
+def remove_files_from_dir(dir):
+    if os.path.exists(dir):
+        logging.debug(f'Removing files from directory: {dir}')
+        for filename in os.listdir(dir):
+            filename = os.path.join(dir, filename)
+            os.remove(filename)
+
+def fetch_yaml_docs(url, path, username, password, target_dir, offline):
     # place each document in a separate file under a target directory
     logging.debug(f'Creating target directory: {target_dir}')
     os.makedirs(target_dir, exist_ok=True)
 
+    # handle offline mode
+    target_dir_offline = target_dir + '-offline'
+    if offline:
+        if path:
+            die('Offline mode is not supported with the path option')
+        os.makedirs(target_dir_offline, exist_ok=True)
+        export_yaml = os.path.join(target_dir_offline, 'export.yaml')
+        if os.path.exists(export_yaml):
+            logging.info(f'Offline export YAML file exists. Skipping fetch and using it instead.')
+            path = export_yaml
+            url = None
+    else:
+        remove_files_from_dir(target_dir_offline)
+
     # remove any existing files
-    logging.debug(f'Removing files in {target_dir}')
-    for filename in os.listdir(target_dir):
-        filename = os.path.join(target_dir, filename)
-        os.remove(filename)
+    remove_files_from_dir(target_dir)
 
     if path:
         # if the path points to a zip file, extract the YAML from the zip file
@@ -1084,6 +1259,9 @@ def fetch_yaml_docs(url, path, username, password, target_dir):
     elif url:
         logging.info(f'Read YAML from url: {url}')
         response_text = call_jenkins_api(url, username, password)
+        if offline:
+            with open(export_yaml, 'w') as f:
+                f.write(response_text)
         response_text = replace_carriage_returns(response_text)
         # logging.debug(f'Fetched YAML from url {url}:\n{response_text}')
         yaml_docs = list(yaml.load_all(response_text))
@@ -1122,7 +1300,6 @@ def call_jenkins_api(url, username, password):
 def write_all_yaml_docs_from_comments(yaml_docs, target_dir):
     # create a new file for each YAML document
     for i, doc in enumerate(yaml_docs):
-        logging.info(f'Creating YAML file {i}')
         # read the header from the original YAML doc
         filename = doc.ca.comment[1][0].value.strip().strip("# ")
         # remove comments from the YAML doc
