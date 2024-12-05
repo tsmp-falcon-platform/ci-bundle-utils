@@ -14,6 +14,7 @@ import logging
 import re
 import sys
 import importlib.resources as pkg_resources
+from importlib.metadata import version as app_version, PackageNotFoundError
 from collections import defaultdict
 from deepdiff import DeepDiff
 from deepdiff.helper import CannotCompare
@@ -620,6 +621,16 @@ def config(ctx):
         if key.startswith('BUNDLEUTILS_'):
             lines.append(f'{key}={value}')
     click.echo('\n'.join(lines))
+
+@cli.command()
+def version():
+    """Show the app version."""
+    try:
+        package_name = 'bundleutilspkg'
+        pkg_version = app_version(package_name)
+        click.echo(f"Built with commit: {pkg_version}")
+    except PackageNotFoundError:
+        click.echo("Package is not installed. Please ensure it's built and installed correctly.")
 
 @cli.command()
 @click.option('-U', '--url', help=f'The controller URL to test for (or use JENKINS_URL).')
