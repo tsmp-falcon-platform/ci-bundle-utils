@@ -14,6 +14,7 @@ import logging
 import re
 import sys
 import importlib.resources as pkg_resources
+from importlib.metadata import metadata, PackageNotFoundError
 from collections import defaultdict
 from deepdiff import DeepDiff
 from deepdiff.helper import CannotCompare
@@ -61,7 +62,7 @@ BUNDLEUTILS_PASSWORD = 'BUNDLEUTILS_PASSWORD'
 BUNDLEUTILS_PATH = 'BUNDLEUTILS_PATH'
 BUNDLEUTILS_FETCH_TARGET_DIR = 'BUNDLEUTILS_FETCH_TARGET_DIR'
 BUNDLEUTILS_FETCH_OFFLINE = 'BUNDLEUTILS_FETCH_OFFLINE'
-BUNDLEUTILS_FETCH_USE_CAP = 'BUNDLEUTILS_FETCH_USE_CAP'
+BUNDLEUTILS_FETCH_USE_CAP_ENVELOPE = 'BUNDLEUTILS_FETCH_USE_CAP_ENVELOPE'
 BUNDLEUTILS_PLUGINS_JSON_PATH = 'BUNDLEUTILS_PLUGINS_JSON_PATH'
 BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY = 'BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY'
 BUNDLEUTILS_PLUGINS_JSON_MERGE_STRATEGY = 'BUNDLEUTILS_PLUGINS_JSON_MERGE_STRATEGY'
@@ -98,8 +99,14 @@ class PluginJsonMergeStrategy(Enum):
     DO_NOTHING = auto()
     ADD_ONLY = auto()
     ADD_DELETE = auto()
+    ADD_DELETE_SKIP_PINNED = auto()
+    def should_delete(self):
+        return self == PluginJsonMergeStrategy.ADD_DELETE or self == PluginJsonMergeStrategy.ADD_DELETE_SKIP_PINNED
+    def skip_pinned(self):
+        return self == PluginJsonMergeStrategy.ADD_DELETE_SKIP_PINNED
 
 class PluginJsonListStrategy(Enum):
+    AUTO = auto()
     ROOTS = auto()
     ROOTS_AND_DEPS = auto()
     ALL = auto()
@@ -108,7 +115,7 @@ def get_value_from_enum(value, my_enum):
     try:
         return my_enum[value]
     except KeyError:
-        die(f"Invalid value: {value}. Must be one of {[e.name for e in my_enum]}")
+        die(f"Invalid value: {value} for {my_enum}. Must be one of {[e.name for e in my_enum]}")
 
 def get_name_from_enum(my_enum):
     return [x.name for x in my_enum]
@@ -125,6 +132,20 @@ def server_options(func):
     func = click.option('-t', '--ci-type', type=click.STRING, help=f'The type of the CloudBees server.')(func)
     func = click.option('-H', '--ci-server-home', required=False, help=f'Defaults to /tmp/ci_server_home/<ci_type>/<ci_version>.')(func)
     return func
+
+def fetch_options(func):
+    func = click.option('-M', '--plugin-json-path', help=f'The path to fetch JSON file from (found at {plugin_json_url_path}).')(func)
+    func = click.option('-P', '--path', 'path', type=click.Path(file_okay=True, dir_okay=False), help=f'The path to fetch YAML from (or use {BUNDLEUTILS_PATH}).')(func)
+    func = click.option('-c', '--cap', default=False, is_flag=True, help=f'Use the envelope.json from the war file to remove CAP plugin dependencies (or use {BUNDLEUTILS_FETCH_USE_CAP_ENVELOPE}).')(func)
+    func = click.option('-O', '--offline', default=False, is_flag=True, help=f'Save the export and plugin data to <target-dir>-offline (or use {BUNDLEUTILS_FETCH_OFFLINE}).')(func)
+    func = click.option('-j', '--plugins-json-list-strategy', help=f'Strategy for creating list from the plugins json (or use {BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY}).')(func)
+    func = click.option('-J', '--plugins-json-merge-strategy', help=f'Strategy for merging plugins from list into the bundle (or use {BUNDLEUTILS_PLUGINS_JSON_MERGE_STRATEGY}).')(func)
+    func = click.option('-U', '--url', 'url', help=f'The URL to fetch YAML from (or use {BUNDLEUTILS_JENKINS_URL}).')(func)
+    func = click.option('-u', '--username', help=f'Username for basic authentication (or use {BUNDLEUTILS_USERNAME}).')(func)
+    func = click.option('-p', '--password', help=f'Password for basic authentication (or use {BUNDLEUTILS_PASSWORD}).')(func)
+    func = click.option('-t', '--target-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The target directory for the YAML documents (or use {BUNDLEUTILS_FETCH_TARGET_DIR}).')(func)
+    return func
+
 
 def server_options_null_check(ci_version, ci_type, ci_server_home):
     ci_version = null_check(ci_version, CI_VERSION_ARG, BUNDLEUTILS_CI_VERSION)
@@ -318,7 +339,10 @@ def null_check(obj, obj_name, obj_env_var=None, mandatory=True, default=''):
     return obj
 
 def lookup_url_and_version(url, ci_version, default_url = '', default_ci_version = ''):
-    url = null_check(url, URL_ARG, 'JENKINS_URL', True, default_url)
+    url_env = 'JENKINS_URL'
+    if os.environ.get(BUNDLEUTILS_JENKINS_URL):
+        url_env = BUNDLEUTILS_JENKINS_URL
+    url = null_check(url, URL_ARG, url_env, True, default_url)
     ci_version = null_check(ci_version, CI_VERSION_ARG, BUNDLEUTILS_CI_VERSION, False, default_ci_version)
     if not ci_version:
         whoami_url = f'{url}/whoAmI/api/json?tree=authenticated'
@@ -606,6 +630,16 @@ def config(ctx):
     click.echo('\n'.join(lines))
 
 @cli.command()
+def version():
+    """Show the app version."""
+    try:
+        package_name = 'bundleutilspkg'
+        pkg_metadata = metadata(package_name)
+        click.echo(f"{pkg_metadata['Summary']}")
+    except PackageNotFoundError:
+        click.echo("Package is not installed. Please ensure it's built and installed correctly.")
+
+@cli.command()
 @click.option('-U', '--url', help=f'The controller URL to test for (or use JENKINS_URL).')
 @click.option('-v', '--ci-version', type=click.STRING, help=f'Optional version (taken from the remote instance otherwise).')
 @click.option('-b', '--bundles-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The directory containing the bundles.')
@@ -674,6 +708,8 @@ def null_check(ctx, obj, obj_name, obj_env_var=None, mandatory=True, default='')
                         obj = click.prompt(msg)
                 if mandatory and not obj:
                     die(f'No {obj_name} option provided and no {obj_env_var} set')
+    logging.debug(f'Setting ctx - > {obj_name}: {obj}')
+    ctx.obj[obj_name] = obj
     return obj
 
 @cli.command()
@@ -735,51 +771,23 @@ def _validate(url, username, password, source_dir, ignore_warnings):
             else:
                 die('Validation failed with errors or critical messages')
 
-@cli.command()
-@click.option('-c', '--cap', default=False, is_flag=True, help=f'Use the envelope.json from the war file to remove CAP plugin dependencies (or use {BUNDLEUTILS_FETCH_USE_CAP}).')
-@click.option('-O', '--offline', default=False, is_flag=True, help=f'Save the export and plugin data to <target-dir>-offline (or use {BUNDLEUTILS_FETCH_OFFLINE}).')
-@click.option('-j', '--plugin-json-list-strategy', help=f'Strategy for creating list from the plugins json (or use {BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY}).')
-@click.option('-J', '--plugin-json-merge-strategy', help=f'Strategy for merging plugins from list into the bundle (or use {BUNDLEUTILS_PLUGINS_JSON_MERGE_STRATEGY}).')
-@click.option('-m', '--plugin-json-url', help=f'The URL to fetch plugins info (or use {BUNDLEUTILS_JENKINS_URL}).')
-@click.option('-M', '--plugin-json-path', help=f'The path to fetch JSON file from (found at {plugin_json_url_path}).')
-@click.option('-P', '--path', 'path', type=click.Path(file_okay=True, dir_okay=False), help=f'The path to fetch YAML from (or use {BUNDLEUTILS_PATH}).')
-@click.option('-U', '--url', 'url', help=f'The URL to fetch YAML from (or use {BUNDLEUTILS_JENKINS_URL}).')
-@click.option('-u', '--username', help=f'Username for basic authentication (or use {BUNDLEUTILS_USERNAME}).')
-@click.option('-p', '--password', help=f'Password for basic authentication (or use {BUNDLEUTILS_PASSWORD}).')
-@click.option('-t', '--target-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The target directory for the YAML documents (or use {BUNDLEUTILS_FETCH_TARGET_DIR}).')
 @click.pass_context
-def fetch(ctx, url, path, username, password, target_dir, plugin_json_url, plugin_json_path, plugin_json_list_strategy, plugin_json_merge_strategy, offline, cap):
-    """Fetch YAML documents from a URL or path."""
-    set_logging(ctx)
-    cap = null_check(cap, 'cap', BUNDLEUTILS_FETCH_USE_CAP, False, '')
+def fetch_options_null_check(ctx, url, path, username, password, target_dir, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, offline, cap):
+    # creds boolean True if URL set and not empty
+    creds_needed = url is not None and url != ''
+    cap = null_check(cap, 'cap', BUNDLEUTILS_FETCH_USE_CAP_ENVELOPE, False, '')
     offline = null_check(offline, 'offline', BUNDLEUTILS_FETCH_OFFLINE, False, '')
     url = null_check(url, 'url', BUNDLEUTILS_JENKINS_URL, False)
-
     # fail fast if any strategy is passed explicitly
-    plugin_json_list_strategy = null_check(plugin_json_list_strategy, 'plugin_json_list_strategy', BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY, False, '')
-    plugin_json_merge_strategy = null_check(plugin_json_merge_strategy, 'plugin_json_merge_strategy', BUNDLEUTILS_PLUGINS_JSON_MERGE_STRATEGY, False, '')
-    if plugin_json_list_strategy:
-        plugin_json_list_strategy = get_value_from_enum(plugin_json_list_strategy,PluginJsonListStrategy)
-    if plugin_json_list_strategy:
-        plugin_json_merge_strategy = get_value_from_enum(plugin_json_merge_strategy,PluginJsonMergeStrategy)
-
-    if url or plugin_json_url:
-        # we'll need username and password for this
-        username = null_check(username, USERNAME_ARG, BUNDLEUTILS_USERNAME)
-        password = null_check(password, PASSWORD_ARG, BUNDLEUTILS_PASSWORD)
-    if url:
-        plugin_json_url = url
-    else:
-        plugin_json_url = null_check(plugin_json_url, PLUGIN_JSON_URL_ARG, BUNDLEUTILS_JENKINS_URL, False)
+    default_plugins_json_list_strategy = PluginJsonListStrategy.AUTO
+    default_plugins_json_merge_strategy = PluginJsonMergeStrategy.ADD_DELETE_SKIP_PINNED
+    plugins_json_list_strategy = null_check(plugins_json_list_strategy, 'plugins_json_list_strategy', BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY, True, default_plugins_json_list_strategy)
+    plugins_json_merge_strategy = null_check(plugins_json_merge_strategy, 'plugins_json_merge_strategy', BUNDLEUTILS_PLUGINS_JSON_MERGE_STRATEGY, True, default_plugins_json_merge_strategy)
+    username = null_check(username, USERNAME_ARG, BUNDLEUTILS_USERNAME, creds_needed)
+    password = null_check(password, PASSWORD_ARG, BUNDLEUTILS_PASSWORD, creds_needed)
     path = null_check(path, PATH_ARG, BUNDLEUTILS_PATH, False)
     plugin_json_path = null_check(plugin_json_path, PLUGIN_JSON_PATH_ARG, BUNDLEUTILS_PLUGINS_JSON_PATH, False)
-
     target_dir = null_check(target_dir, TARGET_DIR_ARG, BUNDLEUTILS_FETCH_TARGET_DIR, False, default_target)
-    if url and fetch_url_path not in url:
-        url = url + fetch_url_path
-    if plugin_json_url and plugin_json_url_path not in url:
-        plugin_json_url = plugin_json_url + plugin_json_url_path
-
     # if path or url is not provided, look for a zip file in the current directory matching the pattern core-casc-export-*.zip
     if not path and not url:
         zip_files = glob.glob('core-casc-export-*.zip')
@@ -788,26 +796,36 @@ def fetch(ctx, url, path, username, password, target_dir, plugin_json_url, plugi
             path = zip_files[0]
         elif len(zip_files) > 1:
             die('Multiple core-casc-export-*.zip files found in the current directory')
-    if not plugin_json_path and not plugin_json_url:
+    if not plugin_json_path and not url:
         plugin_json_files = glob.glob('plugins*.json')
         if len(plugin_json_files) == 1:
             logging.info(f'Found plugins*.json file: {plugin_json_files[0]}')
             plugin_json_path = plugin_json_files[0]
         elif len(plugin_json_files) > 1:
             die('Multiple plugins*.json files found in the current directory')
+
+@cli.command()
+@fetch_options
+@click.pass_context
+def fetch(ctx, url, path, username, password, target_dir, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, offline, cap):
+    """Fetch YAML documents from a URL or path."""
+    set_logging(ctx)
+    fetch_options_null_check(url, path, username, password, target_dir, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, offline, cap)
     try:
-        fetch_yaml_docs(url, path, username, password, target_dir, offline)
+        fetch_yaml_docs()
     except Exception as e:
         die(f'Failed to fetch and write YAML documents: {e}')
     try:
-        update_plugins(plugin_json_url, plugin_json_path, username, password, target_dir, plugin_json_list_strategy, plugin_json_merge_strategy, offline, cap)
+        _update_plugins()
     except Exception as e:
         logging.error(f'Failed to fetch and update plugin data: {e}')
         raise e
     # TODO remove as soon as the export does not add '^' to variables
-    handle_unwanted_escape_characters(target_dir)
+    handle_unwanted_escape_characters()
 
-def handle_unwanted_escape_characters(target_dir):
+@click.pass_context
+def handle_unwanted_escape_characters(ctx):
+    target_dir = ctx.obj.get('target_dir')
     prefix = 'ESCAPE CHAR CHECK - SECO-3944: '
     logging.info(f"{prefix}Start...")
     # check in the jenkins.yaml file for the key 'cascItemsConfiguration.variableInterpolationEnabledForAdmin'
@@ -884,12 +902,30 @@ def replace_string_in_list(data, pattern, replacement):
                 data[i] = re.sub(pattern, replacement, value)
     return data
 
+def show_diff(title, plugins, col1, col2):
+    hline(f"DIFF: {title}")
+    for plugin in plugins:
+        if plugin not in col1 and plugin not in col2:
+            continue
+        # print fixed width columns for the plugin name in each graph
+        # in the format plugin_name | < or > or = | plugin_name
+        str = ""
+        if plugin not in col2:
+            logging.info(f"{plugin:40} < {str:40}")
+        elif plugin not in col1:
+            logging.info(f"{str:40} > {plugin:40}")
+        else:
+            logging.info(f"{plugin:40} | {plugin:40}")
+
 def hline(text):
     logging.info("-" * 80)
     logging.info(text)
     logging.info("-" * 80)
 
-def _analyze_server_plugins(plugins_from_json, plugins_json_list_strategy, cap):
+@click.pass_context
+def _analyze_server_plugins(ctx, plugins_from_json):
+    plugins_json_list_strategy = ctx.obj.get('plugins_json_list_strategy')
+    cap = ctx.obj.get('cap')
     logging.debug("Plugin Analysis - Analyzing server plugins...")
     # Setup the dependency graphs
     graphs = {}
@@ -1004,22 +1040,7 @@ def _analyze_server_plugins(plugins_from_json, plugins_json_list_strategy, cap):
     dgmbr = graphs[graph_type_minus_bootstrap]["roots"]
     dgmdr = graphs[graph_type_minus_deleted_disabled]["roots"]
 
-    def show_diff(title, plugins, col1, col2):
-        hline(f"DIFF: {title}")
-        for plugin in plugins:
-            if plugin not in col1 and plugin not in col2:
-                continue
-            # print fixed width columns for the plugin name in each graph
-            # in the format plugin_name | < or > or = | plugin_name
-            str = ""
-            if plugin not in col2:
-                logging.info(f"{plugin:40} < {str:40}")
-            elif plugin not in col1:
-                logging.info(f"{str:40} > {plugin:40}")
-            else:
-                logging.info(f"{plugin:40} | {plugin:40}")
-
-    show_diff("Expected root plugins vs expected root plugins after deleted/disabled removed (any new roots on the right side are candidates for removal)", dgall.keys(), dgmbr, dgmdr)
+    show_diff("Expected root plugins < vs > expected root plugins after deleted/disabled removed (any new roots on the right side are candidates for removal)", dgall.keys(), dgmbr, dgmdr)
 
     # handle the list strategy
     if plugins_json_list_strategy == PluginJsonListStrategy.ROOTS:
@@ -1029,11 +1050,11 @@ def _analyze_server_plugins(plugins_from_json, plugins_json_list_strategy, cap):
     elif plugins_json_list_strategy == PluginJsonListStrategy.ALL:
         expected_plugins = dgall.keys()
     else:
-        die(f"Invalid plugins json list strategy: {plugins_json_list_strategy}. Expected one of: {PluginJsonListStrategy}")
+        die(f"Invalid plugins json list strategy: {plugins_json_list_strategy.name}. Expected one of: {PluginJsonListStrategy}")
 
     # handle the removal of CAP plugin dependencies removal
     if cap:
-        logging.info(f"{BUNDLEUTILS_FETCH_USE_CAP} option detected. Removing CAP plugin dependencies...")
+        logging.info(f"{BUNDLEUTILS_FETCH_USE_CAP_ENVELOPE} option detected. Removing CAP plugin dependencies...")
         expected_plugins_copy = expected_plugins.copy()
         url, ci_version = lookup_url_and_version('', '')
         if not url:
@@ -1048,7 +1069,7 @@ def _analyze_server_plugins(plugins_from_json, plugins_json_list_strategy, cap):
                     if dep in expected_plugins:
                         logging.debug(f"Removing dependency of {plugin_id}: {dep}")
                         expected_plugins.remove(dep)
-        show_diff("Expected root plugins vs expected root plugins after CAP dependencies removed", dgall.keys(), expected_plugins_copy, expected_plugins)
+        show_diff("Expected root plugins < vs > expected root plugins after CAP dependencies removed", dgall.keys(), expected_plugins_copy, expected_plugins)
 
     logging.info("Plugin Analysis - finished analysis.")
 
@@ -1083,7 +1104,27 @@ def find_plugin_by_id(plugins, plugin_id):
             return plugin
     return None
 
-def update_plugins(plugin_json_url, plugin_json_path, username, password, target_dir, plugin_json_list_strategy, plugin_json_merge_strategy, offline, cap):
+@cli.command()
+@fetch_options
+@click.pass_context
+def update_plugins(ctx, url, path, username, password, target_dir, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, offline, cap):
+    """Update plugins in the target directory."""
+    set_logging(ctx)
+    fetch_options_null_check(url, path, username, password, target_dir, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, offline, cap)
+    _update_plugins()
+
+@click.pass_context
+def _update_plugins(ctx):
+    username = ctx.obj.get('username')
+    password = ctx.obj.get('password')
+    target_dir = ctx.obj.get('target_dir')
+    url = ctx.obj.get('url')
+    plugin_json_path = ctx.obj.get('plugin_json_path')
+    plugins_json_list_strategy = ctx.obj.get('plugins_json_list_strategy')
+    plugins_json_merge_strategy = ctx.obj.get('plugins_json_merge_strategy')
+    offline = ctx.obj.get('offline')
+    cap = ctx.obj.get('cap')
+
     target_dir_offline = target_dir + '-offline'
     # handle offline mode
     if offline:
@@ -1092,14 +1133,14 @@ def update_plugins(plugin_json_url, plugin_json_path, username, password, target
         os.makedirs(target_dir_offline, exist_ok=True)
         export_json = os.path.join(target_dir_offline, 'export.json')
         if os.path.exists(export_json):
-            logging.info(f'Offline export plugins.json file exists. Skipping fetch and using it instead.')
+            logging.info(f'[offline] Offline export plugins.json file exists. Skipping fetch and using it instead.')
             plugin_json_path = export_json
             plugin_json_url = None
     else:
         remove_files_from_dir(target_dir_offline)
 
-    # if no plugin_json_list_strategy is provided, determine it based on the apiVersion in the bundle.yaml file
-    if not plugin_json_list_strategy:
+    # if no plugins_json_list_strategy is provided, determine it based on the apiVersion in the bundle.yaml file
+    if plugins_json_list_strategy == PluginJsonListStrategy.AUTO:
         # find the apiVersion from the bundle.yaml file
         bundle_yaml = os.path.join(target_dir, 'bundle.yaml')
         if os.path.exists(bundle_yaml):
@@ -1109,39 +1150,67 @@ def update_plugins(plugin_json_url, plugin_json_path, username, password, target
                 if not api_version:
                     die('No apiVersion found in bundle.yaml file')
                 elif api_version == '1':
-                    plugin_json_list_strategy = PluginJsonListStrategy.ROOTS_AND_DEPS
+                    plugins_json_list_strategy = PluginJsonListStrategy.ROOTS_AND_DEPS
+                    ctx.obj['plugins_json_list_strategy'] = plugins_json_list_strategy
                 elif api_version == '2':
-                    plugin_json_list_strategy = PluginJsonListStrategy.ROOTS
+                    plugins_json_list_strategy = PluginJsonListStrategy.ROOTS
+                    ctx.obj['plugins_json_list_strategy'] = plugins_json_list_strategy
                 else:
                     die(f"Invalid apiVersion found in bundle.yaml file: {api_version}")
-                logging.info(f'No plugin_json_list_strategy provided. Setting plugin_json_list_strategy to {plugin_json_list_strategy.name} from {get_name_from_enum(PluginJsonListStrategy)} based on apiVersion {api_version} in bundle.yaml')
-    if not plugin_json_merge_strategy:
-        plugin_json_merge_strategy = PluginJsonMergeStrategy.ADD_DELETE
-        logging.info(f'No plugin_json_merge_strategy provided. Setting to {plugin_json_merge_strategy.name} from {get_name_from_enum(PluginJsonMergeStrategy)}')
+
+    logging.info(f'Plugins JSON list strategy: {plugins_json_list_strategy.name} from {get_name_from_enum(PluginJsonListStrategy)}')
+    logging.info(f'Plugins JSON merge strategy: {plugins_json_merge_strategy.name} from {get_name_from_enum(PluginJsonMergeStrategy)}')
 
     # load the plugin JSON from the URL or path
     data = None
-    if plugin_json_url:
+    if plugin_json_path:
+        logging.debug(f'Loading plugin JSON from path: {plugin_json_path}')
+        with open(plugin_json_path, 'r') as f:
+            data = json.load(f)
+    elif url:
+        plugin_json_url = url + plugin_json_url_path
         logging.debug(f'Loading plugin JSON from URL: {plugin_json_url}')
         response_text = call_jenkins_api(plugin_json_url, username, password)
         if offline:
             with open(export_json, 'w') as f:
+                logging.info(f'[offline] Writing plugins.json to {export_json}')
                 f.write(response_text)
         # parse text as JSON
         data = json.loads(response_text)
-    elif plugin_json_path:
-        logging.debug(f'Loading plugin JSON from path: {plugin_json_path}')
-        with open(plugin_json_path, 'r') as f:
-            data = json.load(f)
     else:
         logging.info('No plugin JSON URL or path provided. Cannot determine if disabled/deleted plugins present in list.')
         return
     plugins_from_json = data.get("plugins", [])
-    expected_plugins, all_bootstrap_plugins, all_deleted_or_inactive_plugins = _analyze_server_plugins(plugins_from_json, plugin_json_list_strategy, cap)
+    expected_plugins, all_bootstrap_plugins, all_deleted_or_inactive_plugins = _analyze_server_plugins(plugins_from_json)
 
-    # handle the merge strategy
-    if plugin_json_merge_strategy == 'ADD_ONLY':
-        logging.info(f"Using merge strategy: ADD_ONLY")
+    # checking the plugin-catalog.yaml file
+    plugin_catalog_plugin_ids_previous = []
+    plugin_catalog_plugin_ids = []
+    plugin_catalog = os.path.join(target_dir, 'plugin-catalog.yaml')
+    if os.path.exists(plugin_catalog):
+        with open(plugin_catalog, 'r') as f:
+            catalog_data = yaml.load(f)  # Load the existing data
+        logging.info(f"Looking for disabled/deleted plugins to remove from plugin-catalog.yaml")
+        # Check and remove plugins listed in filtered_plugins from includePlugins
+        for configuration in catalog_data.get('configurations', []):
+            if 'includePlugins' in configuration:
+                for plugin_id in list(configuration['includePlugins']):
+                    plugin_catalog_plugin_ids_previous.append(plugin_id)
+                    if plugin_id in all_deleted_or_inactive_plugins:
+                        if plugins_json_merge_strategy.should_delete:
+                            logging.info(f" -> removing disabled/deleted plugin {plugin_id} according to merge strategy: {plugins_json_merge_strategy.name}")
+                            del configuration['includePlugins'][plugin_id]
+                        else:
+                            logging.warning(f" -> unexpected plugin {plugin_id} found but not removed according to merge strategy: {plugins_json_merge_strategy.name}")
+                            plugin_catalog_plugin_ids.append(plugin_id)
+                    else:
+                        plugin_catalog_plugin_ids.append(plugin_id)
+
+        if plugins_json_merge_strategy == PluginJsonMergeStrategy.DO_NOTHING:
+            logging.info(f"Skipping writing to plugin-catalog.yaml according to merge strategy: {plugins_json_merge_strategy.name}")
+        else:
+            with open(plugin_catalog, 'w') as file:
+                yaml.dump(catalog_data, file) # Write the updated data back to the file
 
     # removing from the plugins.yaml file
     plugins_file = os.path.join(target_dir, 'plugins.yaml')
@@ -1153,7 +1222,36 @@ def update_plugins(plugin_json_url, plugin_json_path, username, password, target
         updated_plugins = []
         # Check if 'plugins' key exists and it's a list
         if 'plugins' in plugins_data and isinstance(plugins_data['plugins'], list):
+            logging.debug(f"Found 'plugins' key in current plugins.yaml")
             current_plugins = plugins_data['plugins']
+
+        logging.info(f"Looking for disabled/deleted plugins to remove from current plugins.yaml")
+        for plugin in current_plugins:
+            if plugin['id'] in plugin_catalog_plugin_ids:
+                logging.info(f" -> skipping plugin {plugin['id']} due to entry in plugin-catalog.yaml")
+                updated_plugins.append(plugin)
+                continue
+            if plugin['id'] in all_bootstrap_plugins:
+                logging.info(f" -> removing unexpected bootstrap plugin {plugin['id']}")
+                continue
+            if not plugin['id'] in expected_plugins:
+                if plugins_json_merge_strategy.skip_pinned:
+                    # if plugin map has a url or version, skip it
+                    if 'url' in plugin:
+                        logging.info(f" -> skipping plugin {plugin['id']} with pinned url according to merge strategy: {plugins_json_merge_strategy.name}")
+                        updated_plugins.append(plugin)
+                    elif 'version' in plugin:
+                        logging.info(f" -> skipping plugin {plugin['id']} with pinned version according to merge strategy: {plugins_json_merge_strategy.name}")
+                        updated_plugins.append(plugin)
+                    else:
+                        logging.info(f" -> removing unexpected non-pinned plugin {plugin['id']} according to merge strategy: {plugins_json_merge_strategy.name}")
+                elif plugins_json_merge_strategy.should_delete:
+                    logging.info(f" -> removing unexpected plugin {plugin['id']} according to merge strategy: {plugins_json_merge_strategy.name}")
+                else:
+                    logging.warning(f" -> unexpected plugin {plugin['id']} found but not removed according to merge strategy: {plugins_json_merge_strategy.name}")
+                    updated_plugins.append(plugin)
+            else:
+                updated_plugins.append(plugin)
 
         # check for plugins that are installed and necessary but not in the plugins.yaml file
         # if the plugin is not in the plugins.yaml file, add it
@@ -1161,45 +1259,26 @@ def update_plugins(plugin_json_url, plugin_json_path, username, password, target
         for plugin in expected_plugins:
             found_plugin = find_plugin_by_id(current_plugins, plugin)
             if found_plugin is None:
-                if plugin_json_merge_strategy == PluginJsonMergeStrategy.DO_NOTHING:
-                    logging.warning(f" -> found plugin installed on server but not present in bundle (skipping according to merge strategy: {plugin_json_merge_strategy}) : {plugin}")
+                if plugins_json_merge_strategy == PluginJsonMergeStrategy.DO_NOTHING:
+                    logging.warning(f" -> found plugin installed on server but not present in bundle (skipping according to merge strategy: {plugins_json_merge_strategy.name}) : {plugin}")
                 else:
-                    logging.info(f" -> adding plugin expected but not present (according to strategy: {plugin_json_merge_strategy}) : {plugin}")
+                    logging.info(f" -> adding plugin expected but not present (according to strategy: {plugins_json_merge_strategy.name}) : {plugin}")
                     updated_plugins.append({'id': plugin})
 
-        logging.info(f"Looking for disabled/deleted plugins to remove from current plugins.yaml")
-        for plugin in current_plugins:
-            if plugin['id'] in all_bootstrap_plugins:
-                logging.debug(f" -> removing unexpected bootstrap plugin {plugin['id']}")
-            if not plugin['id'] in expected_plugins:
-                if plugin_json_merge_strategy == PluginJsonMergeStrategy.ADD_DELETE:
-                    logging.info(f" -> removing unexpected plugin {plugin['id']} according to merge strategy: {plugin_json_merge_strategy}")
-                else:
-                    logging.warning(f" -> unexpected plugin {plugin['id']} found but not removed according to merge strategy: {plugin_json_merge_strategy}")
-                    updated_plugins.append(plugin)
-
         updated_plugins = sorted(updated_plugins, key=lambda x: x['id'])
+
+        updated_plugins_ids = [plugin['id'] for plugin in updated_plugins]
+        all_plugin_ids = updated_plugins_ids + expected_plugins
+        show_diff("Final merged plugins < vs > expected plugins after merging", all_plugin_ids, updated_plugins_ids, expected_plugins)
+        if plugin_catalog_plugin_ids_previous:
+            show_diff("Final merged catalog < vs > previous catalog after merging", plugin_catalog_plugin_ids + plugin_catalog_plugin_ids_previous, plugin_catalog_plugin_ids, plugin_catalog_plugin_ids_previous)
+
         plugins_data['plugins'] = updated_plugins
-        with open(plugins_file, 'w') as f:
-            yaml.dump(plugins_data, f)  # Write the updated data back to the file
-
-    # removing from the plugin-catalog.yaml file
-    plugin_catalog = os.path.join(target_dir, 'plugin-catalog.yaml')
-    if os.path.exists(plugin_catalog):
-        with open(plugin_catalog, 'r') as f:
-            catalog_data = yaml.load(f)  # Load the existing data
-
-        logging.info(f"Looking for disabled/deleted plugins to remove from plugin-catalog.yaml")
-        # Check and remove plugins listed in filtered_plugins from includePlugins
-        for configuration in catalog_data.get('configurations', []):
-            if 'includePlugins' in configuration:
-                for plugin_id in list(configuration['includePlugins']):
-                    if plugin_id in all_deleted_or_inactive_plugins:
-                        del configuration['includePlugins'][plugin_id]
-                        logging.info(f" -> removing: {plugin_id}")
-
-        with open(plugin_catalog, 'w') as file:
-            yaml.dump(catalog_data, file) # Write the updated data back to the file
+        if plugins_json_merge_strategy == PluginJsonMergeStrategy.DO_NOTHING:
+            logging.info(f"Skipping writing to plugins.yaml according to merge strategy: {plugins_json_merge_strategy.name}")
+        else:
+            with open(plugins_file, 'w') as f:
+                yaml.dump(plugins_data, f)  # Write the updated data back to the file
 
 def remove_files_from_dir(dir):
     if os.path.exists(dir):
@@ -1208,7 +1287,14 @@ def remove_files_from_dir(dir):
             filename = os.path.join(dir, filename)
             os.remove(filename)
 
-def fetch_yaml_docs(url, path, username, password, target_dir, offline):
+@click.pass_context
+def fetch_yaml_docs(ctx):
+    url = ctx.obj.get('url')
+    path = ctx.obj.get('path')
+    username = ctx.obj.get('username')
+    password = ctx.obj.get('password')
+    target_dir = ctx.obj.get('target_dir')
+    offline = ctx.obj.get('offline')
     # place each document in a separate file under a target directory
     logging.debug(f'Creating target directory: {target_dir}')
     os.makedirs(target_dir, exist_ok=True)
@@ -1257,6 +1343,8 @@ def fetch_yaml_docs(url, path, username, password, target_dir, offline):
                 yaml_docs = list(yaml.load_all(response_text))
                 write_all_yaml_docs_from_comments(yaml_docs, target_dir)
     elif url:
+        if fetch_url_path not in url:
+            url = url + fetch_url_path
         logging.info(f'Read YAML from url: {url}')
         response_text = call_jenkins_api(url, username, password)
         if offline:

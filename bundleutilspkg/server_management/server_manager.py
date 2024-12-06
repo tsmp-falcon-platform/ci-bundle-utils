@@ -49,6 +49,7 @@ class JenkinsServerManager:
         self.target_jenkins_log = os.path.join(target_dir, 'jenkins.log')
         self.war_path = os.path.join(self.target_jenkins_home, 'jenkins.war')
         self.war_cache_file = os.path.join(self.war_cache_dir, 'jenkins.war')
+        self.war_cache_envelope_file = os.path.join(self.war_cache_dir, 'envelope.json')
         self.cb_docker_image, self.cb_war_download_url = self.set_cloudbees_variables()
         if not os.path.exists(self.target_jenkins_home_init_scripts):
             os.makedirs(self.target_jenkins_home_init_scripts)
@@ -331,6 +332,11 @@ class JenkinsServerManager:
         logging.info("Jenkins server - Finished checking the Jenkins log")
 
     def get_envelope_json_from_war(self):
+        if os.path.exists(self.war_cache_envelope_file):
+            logging.info(f"Reading envelope.json from {self.war_cache_envelope_file}")
+            with open(self.war_cache_envelope_file, 'r') as file:
+                envelope_json = file.read()
+            return envelope_json
         # read the envelope.json from self. /WEB-INF/plugins/envelope.json
         self.get_war()
         # extract the /WEB-INF/plugins/envelope.json from the WAR file
@@ -339,6 +345,8 @@ class JenkinsServerManager:
             envelope_json = envelope_json.decode('utf-8')
         if not envelope_json:
             self.die(f"WEB-INF/plugins/envelope.json not found in {self.war_cache_file}")
+        with open(self.war_cache_envelope_file, 'wb') as file:
+            file.write(envelope_json.encode('utf-8'))
         return envelope_json
 
     def get_envelope_json(self):

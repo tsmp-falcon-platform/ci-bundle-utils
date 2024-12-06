@@ -1,6 +1,10 @@
 # Use an official Python runtime as a parent image
 FROM eclipse-temurin:17.0.11_9-jdk-jammy
 
+# Build arguments
+ARG BUNDLEUTILS_RELEASE_VERSION
+ARG BUNDLEUTILS_RELEASE_HASH
+
 # TODO: make multi-stage build
 # COPY --from=builder /opt/venv /opt/venv
 
@@ -50,6 +54,10 @@ ENV PATH="/opt/bundleutils/.venv/bin:$PATH" BUNDLEUTILS_CACHE_DIR="/opt/bundleut
 # Install any needed packages specified in setup.py
 RUN pip install --upgrade pip \
     && pip install wheel
+
+# Set environment variables for runtime access
+ENV BUNDLEUTILS_RELEASE_VERSION=$BUNDLEUTILS_RELEASE_VERSION
+ENV BUNDLEUTILS_RELEASE_HASH=$BUNDLEUTILS_RELEASE_HASH
 
 # Add the current directory contents into the container at /app
 ADD bundleutilspkg /opt/bundleutils/.app/bundleutilspkg
