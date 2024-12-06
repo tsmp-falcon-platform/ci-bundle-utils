@@ -100,6 +100,10 @@ class PluginJsonMergeStrategy(Enum):
     ADD_ONLY = auto()
     ADD_DELETE = auto()
     ADD_DELETE_SKIP_PINNED = auto()
+    def should_delete(self):
+        return self == PluginJsonMergeStrategy.ADD_DELETE or self == PluginJsonMergeStrategy.ADD_DELETE_SKIP_PINNED
+    def skip_pinned(self):
+        return self == PluginJsonMergeStrategy.ADD_DELETE_SKIP_PINNED
 
 class PluginJsonListStrategy(Enum):
     AUTO = auto()
@@ -1188,7 +1192,7 @@ def _update_plugins(ctx):
                 for plugin_id in list(configuration['includePlugins']):
                     plugin_catalog_plugin_ids_previous.append(plugin_id)
                     if plugin_id in all_deleted_or_inactive_plugins:
-                        if plugins_json_merge_strategy == PluginJsonMergeStrategy.ADD_DELETE:
+                        if plugins_json_merge_strategy.should_delete:
                             logging.info(f" -> removing disabled/deleted plugin {plugin_id} according to merge strategy: {plugins_json_merge_strategy.name}")
                             del configuration['includePlugins'][plugin_id]
                         else:
@@ -1226,7 +1230,7 @@ def _update_plugins(ctx):
                 logging.info(f" -> removing unexpected bootstrap plugin {plugin['id']}")
                 continue
             if not plugin['id'] in expected_plugins:
-                if plugins_json_merge_strategy == PluginJsonMergeStrategy.ADD_DELETE_SKIP_PINNED:
+                if plugins_json_merge_strategy.skip_pinned:
                     # if plugin map has a url or version, skip it
                     if 'url' in plugin:
                         logging.info(f" -> skipping plugin {plugin['id']} with pinned url according to merge strategy: {plugins_json_merge_strategy.name}")
@@ -1236,7 +1240,7 @@ def _update_plugins(ctx):
                         updated_plugins.append(plugin)
                     else:
                         logging.info(f" -> removing unexpected non-pinned plugin {plugin['id']} according to merge strategy: {plugins_json_merge_strategy.name}")
-                elif plugins_json_merge_strategy == PluginJsonMergeStrategy.ADD_DELETE:
+                elif plugins_json_merge_strategy.should_delete:
                     logging.info(f" -> removing unexpected plugin {plugin['id']} according to merge strategy: {plugins_json_merge_strategy.name}")
                 else:
                     logging.warning(f" -> unexpected plugin {plugin['id']} found but not removed according to merge strategy: {plugins_json_merge_strategy.name}")
