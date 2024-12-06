@@ -3,11 +3,11 @@ from setuptools import setup, find_packages
 import subprocess
 def get_git_info():
     """Retrieve the Git tag and commit hash."""
-    try:
-        git_hash = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], text=True).strip()
-        return git_hash
-    except subprocess.CalledProcessError:
-        return "0.0.0", "unknown"  # Fallback for missing Git info
+    # try:
+    #     git_hash = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], text=True).strip()
+    #     return git_hash
+    # except subprocess.CalledProcessError:
+    return "0.0.0"  # Fallback for missing Git info
 
 # Retrieve Git metadata
 git_hash = get_git_info()
