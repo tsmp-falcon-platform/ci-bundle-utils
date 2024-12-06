@@ -339,7 +339,10 @@ def null_check(obj, obj_name, obj_env_var=None, mandatory=True, default=''):
     return obj
 
 def lookup_url_and_version(url, ci_version, default_url = '', default_ci_version = ''):
-    url = null_check(url, URL_ARG, 'JENKINS_URL', True, default_url)
+    url_env = 'JENKINS_URL'
+    if os.environ.get(BUNDLEUTILS_JENKINS_URL):
+        url_env = BUNDLEUTILS_JENKINS_URL
+    url = null_check(url, URL_ARG, url_env, True, default_url)
     ci_version = null_check(ci_version, CI_VERSION_ARG, BUNDLEUTILS_CI_VERSION, False, default_ci_version)
     if not ci_version:
         whoami_url = f'{url}/whoAmI/api/json?tree=authenticated'
@@ -1154,7 +1157,9 @@ def _update_plugins(ctx):
                     ctx.obj['plugins_json_list_strategy'] = plugins_json_list_strategy
                 else:
                     die(f"Invalid apiVersion found in bundle.yaml file: {api_version}")
-                logging.info(f'Setting plugins_json_list_strategy to {plugins_json_list_strategy.name} from {get_name_from_enum(PluginJsonListStrategy)} based on apiVersion {api_version} in bundle.yaml')
+
+    logging.info(f'Plugins JSON list strategy: {plugins_json_list_strategy.name} from {get_name_from_enum(PluginJsonListStrategy)}')
+    logging.info(f'Plugins JSON merge strategy: {plugins_json_merge_strategy.name} from {get_name_from_enum(PluginJsonMergeStrategy)}')
 
     # load the plugin JSON from the URL or path
     data = None
