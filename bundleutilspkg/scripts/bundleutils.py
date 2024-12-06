@@ -14,7 +14,7 @@ import logging
 import re
 import sys
 import importlib.resources as pkg_resources
-from importlib.metadata import version as app_version, PackageNotFoundError
+from importlib.metadata import metadata, PackageNotFoundError
 from collections import defaultdict
 from deepdiff import DeepDiff
 from deepdiff.helper import CannotCompare
@@ -634,8 +634,8 @@ def version():
     """Show the app version."""
     try:
         package_name = 'bundleutilspkg'
-        pkg_version = app_version(package_name)
-        click.echo(f"Built with commit: {pkg_version}")
+        pkg_metadata = metadata(package_name)
+        click.echo(f"{pkg_metadata['Summary']}")
     except PackageNotFoundError:
         click.echo("Package is not installed. Please ensure it's built and installed correctly.")
 

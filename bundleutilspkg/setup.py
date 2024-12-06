@@ -1,25 +1,34 @@
 #!/usr/bin/env python
 from setuptools import setup, find_packages
 import subprocess
-def get_git_info():
-    """Retrieve the Git tag and commit hash."""
-    # try:
-    #     git_hash = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], text=True).strip()
-    #     return git_hash
-    # except subprocess.CalledProcessError:
-    return "0.0.0"  # Fallback for missing Git info
+import os
+def get_version():
+    """Determine the application version."""
+    # Check if BUNDLEUTILS_RELEASE_VERSION and BUNDLEUTILS_RELEASE_HASH are provided as environment variables
+    release_version = os.getenv("BUNDLEUTILS_RELEASE_VERSION")
+    release_hash = os.getenv("BUNDLEUTILS_RELEASE_HASH")
+
+    if release_version and release_hash:
+        return release_version, release_hash
+
+    # Fallback to Git information if environment variable is not set
+    try:
+        release_version = subprocess.check_output(["git", "describe", "--tags"], text=True).strip()
+        release_hash = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+        return release_version, release_hash
+    except Exception:
+        return "0.0.0", "unknown"
 
 # Retrieve Git metadata
-git_hash = get_git_info()
+release_version, release_hash = get_version()
 
 # Package description
-description = f"MyApp - Commit: {git_hash}"
+description = f"{release_version} (built from {release_hash})"
 
 setup(
     name='bundleutilspkg',
-    version=git_hash,
+    version=release_version,
     description=description,
-    long_description=f"This package was built from commit {git_hash}.",
     packages=find_packages(),
     package_data={
         'defaults': ['configs/**/*', 'configs/*'],
