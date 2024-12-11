@@ -1,4 +1,5 @@
 from enum import Enum, auto
+import hashlib
 import json
 import jsonpatch
 import jsonpointer
@@ -35,7 +36,6 @@ fetch_url_path = '/core-casc-export'
 validate_url_path = '/casc-bundle-mgnt/casc-bundle-validate'
 
 default_target = 'target/docs'
-default_normalized = default_target + '-normalized'
 default_auto_env_file = 'bundle-profiles.yaml'
 
 # environment variables
@@ -55,6 +55,10 @@ BUNDLEUTILS_VALIDATE_SOURCE_DIR = 'BUNDLEUTILS_VALIDATE_SOURCE_DIR'
 BUNDLEUTILS_TRANSFORM_SOURCE_DIR = 'BUNDLEUTILS_TRANSFORM_SOURCE_DIR'
 BUNDLEUTILS_TRANSFORM_TARGET_DIR = 'BUNDLEUTILS_TRANSFORM_TARGET_DIR'
 BUNDLEUTILS_TRANSFORM_CONFIGS = 'BUNDLEUTILS_TRANSFORM_CONFIGS'
+BUNDLEUTILS_AUDIT_SOURCE_DIR = 'BUNDLEUTILS_AUDIT_SOURCE_DIR'
+BUNDLEUTILS_AUDIT_TARGET_DIR = 'BUNDLEUTILS_AUDIT_TARGET_DIR'
+BUNDLEUTILS_AUDIT_TARGET_BASE_DIR = 'BUNDLEUTILS_AUDIT_TARGET_BASE_DIR'
+BUNDLEUTILS_AUDIT_CONFIGS = 'BUNDLEUTILS_AUDIT_CONFIGS'
 BUNDLEUTILS_BUNDLE_DESCRIPTION = 'BUNDLEUTILS_BUNDLE_DESCRIPTION'
 BUNDLEUTILS_JENKINS_URL = 'BUNDLEUTILS_JENKINS_URL'
 BUNDLEUTILS_USERNAME = 'BUNDLEUTILS_USERNAME'
@@ -68,6 +72,10 @@ BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY = 'BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY
 BUNDLEUTILS_PLUGINS_JSON_MERGE_STRATEGY = 'BUNDLEUTILS_PLUGINS_JSON_MERGE_STRATEGY'
 BUNDLEUTILS_BUNDLES_DIR = 'BUNDLEUTILS_BUNDLES_DIR'
 BUNDLEUTILS_CREDENTIAL_DELETE_SIGN = 'PLEASE_DELETE_ME'
+# used to hash the credentials instead of creating environment variables for them
+# this will be used in the new audit feature
+BUNDLEUTILS_CREDENTIAL_HASH = 'BUNDLEUTILS_CREDENTIAL_HASH'
+BUNDLEUTILS_CREDENTIAL_HASH_SEED = 'BUNDLEUTILS_CREDENTIAL_HASH_SEED'
 
 # context object keys
 BUNDLE_PROFILES = 'BUNDLE_PROFILES'
@@ -248,9 +256,13 @@ def _check_cwd_for_bundle_auto_vars(ctx):
     bundle_name = os.path.basename(cwd)
 
     # if the cwd is a subdirectory of auto_env_file_path_dir, create a relative path
+    bundle_audit_target_dir = None
     bundle_target_dir = cwd
     if cwd.startswith(auto_env_file_path_dir):
         bundle_target_dir = os.path.relpath(cwd, auto_env_file_path_dir)
+        # if the BUNDLEUTILS_AUDIT_TARGET_BASE_DIR is set, use it
+        if os.environ.get(BUNDLEUTILS_AUDIT_TARGET_BASE_DIR, ''):
+            bundle_audit_target_dir = os.path.join(os.environ.get(BUNDLEUTILS_AUDIT_TARGET_BASE_DIR), bundle_target_dir)
     logging.debug(f'Current working directory: {cwd}')
     logging.debug(f'Switching to the base directory of env file: {auto_env_file_path_dir}')
     os.chdir(auto_env_file_path_dir)
@@ -273,7 +285,7 @@ def _check_cwd_for_bundle_auto_vars(ctx):
 
     if env_vars:
         # check if the BUNDLEUTILS_ENV_OVERRIDE is set to true, if so, override the env vars
-        should_env_vars_override_others = os.environ.get(BUNDLEUTILS_ENV_OVERRIDE, 'false').lower() in ['true', '1', 't', 'y', 'yes']
+        should_env_vars_override_others = is_truthy(os.environ.get(BUNDLEUTILS_ENV_OVERRIDE, 'false'))
         for key, value in env_vars.items():
             if key not in os.environ:
                 logging.info(f'Setting environment variable: {key}={value}')
@@ -289,6 +301,13 @@ def _check_cwd_for_bundle_auto_vars(ctx):
         _set_env_if_not_set('AUTOSET', BUNDLEUTILS_TRANSFORM_TARGET_DIR, bundle_target_dir)
         _set_env_if_not_set('AUTOSET', BUNDLEUTILS_SETUP_SOURCE_DIR, os.environ.get(BUNDLEUTILS_TRANSFORM_TARGET_DIR))
         _set_env_if_not_set('AUTOSET', BUNDLEUTILS_VALIDATE_SOURCE_DIR, os.environ.get(BUNDLEUTILS_TRANSFORM_TARGET_DIR))
+        # special case for audit, set the source dir to the fetch target dir and the target dir to the audit target dir
+        if bundle_audit_target_dir is not None:
+            _set_env_if_not_set('AUTOSET', BUNDLEUTILS_AUDIT_SOURCE_DIR, os.environ.get(BUNDLEUTILS_FETCH_TARGET_DIR))
+            _set_env_if_not_set('AUTOSET', BUNDLEUTILS_AUDIT_TARGET_DIR, bundle_audit_target_dir)
+
+def is_truthy(value):
+    return value.lower() in ['true', '1', 't', 'y', 'yes']
 
 def set_logging(ctx):
     _check_for_env_file(ctx)
@@ -626,6 +645,9 @@ def config(ctx):
     lines = []
     for key, value in sorted(os.environ.items()):
         if key.startswith('BUNDLEUTILS_'):
+            # if the key is a password, mask it
+            if 'PASSWORD' in key:
+                value = '*' * len(value)
             lines.append(f'{key}={value}')
     click.echo('\n'.join(lines))
 
@@ -1430,7 +1452,7 @@ def normalize_yaml(data):
     else:
         return data
 
-def traverse_credentials(filename, obj, custom_replacements={}, path=""):
+def traverse_credentials(hash_only, hash_seed, filename, obj, custom_replacements={}, path=""):
     if isinstance(obj, dict):
         for k, v in obj.items():
             new_path = f"{path}/{k}" if path else f"/{k}"
@@ -1438,12 +1460,17 @@ def traverse_credentials(filename, obj, custom_replacements={}, path=""):
             if isinstance(v, str) and 'id' in obj:
                 id = obj['id']
                 matching_tuple = None
-                custom_replacements_for_id = [item for item in custom_replacements if item['id'] == id]
-                for custom_replacement in custom_replacements_for_id:
-                    if k in custom_replacement:
-                        matching_tuple = custom_replacement
+                # hashing only for auditing purposes - no need to check for custom replacements
+                if not hash_only:
+                    custom_replacements_for_id = [item for item in custom_replacements if item['id'] == id]
+                    for custom_replacement in custom_replacements_for_id:
+                        if k in custom_replacement:
+                            matching_tuple = custom_replacement
                 if re.match(r'{.*}', v) or matching_tuple is not None:
-                    if matching_tuple is None or k not in matching_tuple:
+                    if hash_only:
+                        # create a hash of the hash_seed + v
+                        replacement = hashlib.sha256((hash_seed + v).encode()).hexdigest()
+                    elif matching_tuple is None or k not in matching_tuple:
                         logging.debug(f"Matching tuple NOT found. Creating replacement for {id} and {k}")
                         # create a string consisting of:
                         # - all non-alphanumeric characters changed to underscores
@@ -1466,20 +1493,24 @@ def traverse_credentials(filename, obj, custom_replacements={}, path=""):
                         patch = {"op": "replace", "path": f'{new_path}', "value": f'{replacement}'}
                         apply_patch(filename, [patch])
                         continue
-            traverse_credentials(filename, v, custom_replacements, new_path)
+            traverse_credentials(hash_only, hash_seed, filename, v, custom_replacements, new_path)
     elif isinstance(obj, list):
         # traverse the list in reverse order to avoid index issues when deleting items
         for i, v in enumerate(reversed(obj)):
             # Calculate the original index by subtracting the reversed index from the length of the list minus 1
             original_index = len(obj) - 1 - i
             new_path = f"{path}/{original_index}"
-            traverse_credentials(filename, v, custom_replacements, new_path)
+            traverse_credentials(hash_only, hash_seed, filename, v, custom_replacements, new_path)
     else:
         if isinstance(obj, str) and re.match(r'{.*}', obj):
             # if the string is a replacement string, raise an exception
             logging.warning(f"Found a non-credential string (no id found) that needs to be replaced at path: {path}")
-            # the replacement string should be in the format ${ID_KEY}
-            replacement = "${" + re.sub(r'\W', '_', path.removeprefix('/')).upper() + "}"
+            if hash_only:
+                # create a hash of the hash_seed + v
+                replacement = hashlib.sha256((hash_seed + v).encode()).hexdigest()
+            else:
+                # the replacement string should be in the format ${ID_KEY}
+                replacement = "${" + re.sub(r'\W', '_', path.removeprefix('/')).upper() + "}"
             # print the JSON Patch operation for the replacement
             patch = {"op": "replace", "path": f'{path}', "value": f'{replacement}'}
             apply_patch(filename, [patch])
@@ -1530,13 +1561,21 @@ def handle_patches(patches, target_dir):
         logging.info(f'Transform: applying JSON patches to {filename}')
         apply_patch(filename, patch)
 
-def apply_replacements(filename, custom_replacements):
+@click.pass_context
+def apply_replacements(ctx, filename, custom_replacements):
     with open(filename, 'r') as inp:
         obj = yaml.load(inp)
         if obj is None:
             logging.error(f'Failed to load YAML object from file {filename}')
             return
-        traverse_credentials(filename, obj, custom_replacements)
+        hash_only = is_truthy(os.environ.get(BUNDLEUTILS_CREDENTIAL_HASH, 'false'))
+        if hash_only:
+            hash_seed = ctx.obj.get('hash_seed')
+            if hash_seed is None or hash_seed == '':
+                logging.info(f'Hashing encrypted data without seed')
+            else:
+                logging.info(f'Hashing encrypted data with seed')
+        traverse_credentials(hash_only, hash_seed, filename, obj, custom_replacements)
 
 def handle_credentials(credentials, target_dir):
     # if credentials is empty, skip
@@ -1642,7 +1681,43 @@ def normalize(ctx, strict, configs, source_dir, target_dir):
     if not source_dir:
         source_dir = default_target
     if not target_dir:
-        target_dir = default_normalized
+        target_dir = source_dir + '-normalized'
+    if not configs:
+        # if a normalize.yaml file is found in the current directory, use it
+        if os.path.exists('normalize.yaml'):
+            logging.info('Using normalize.yaml in the current directory')
+            configs = ['normalize.yaml']
+        else:
+            path = pkg_resources.files('defaults.configs') / 'normalize.yaml'
+            configs = [path]
+    _transform(configs, source_dir, target_dir)
+
+@cli.command()
+@transform_options
+@click.option('-H', '--hash-seed', help=f"""
+    Optional prefix for the hashing process (also {BUNDLEUTILS_CREDENTIAL_HASH_SEED}).
+
+    NOTE: Ideally, this should be a secret value that is not shared with anyone. Changing this value will result in different hashes.""")
+@click.pass_context
+def audit(ctx, strict, configs, source_dir, target_dir, hash_seed):
+    """
+    Transform using the normalize.yaml but obfuscating any sensitive data.
+
+    NOTE: The credentials and sensitive data will be hashed and cannot be used in an actual bundle.
+    """
+    set_logging(ctx)
+
+    source_dir = null_check(source_dir, SOURCE_DIR_ARG, BUNDLEUTILS_AUDIT_SOURCE_DIR)
+    target_dir = null_check(target_dir, TARGET_DIR_ARG, BUNDLEUTILS_AUDIT_TARGET_DIR)
+    configs = null_check(configs, 'configs', BUNDLEUTILS_AUDIT_CONFIGS, False)
+
+    os.environ[BUNDLEUTILS_CREDENTIAL_HASH] = 'true'
+    null_check(hash_seed, 'hash_seed', BUNDLEUTILS_CREDENTIAL_HASH_SEED, False,'')
+
+    if not source_dir:
+        source_dir = default_target
+    if not target_dir:
+        target_dir = source_dir + '-audit'
     if not configs:
         # if a normalize.yaml file is found in the current directory, use it
         if os.path.exists('normalize.yaml'):
