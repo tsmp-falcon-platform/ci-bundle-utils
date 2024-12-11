@@ -104,6 +104,7 @@ def die(msg):
     sys.exit(1)
 
 class PluginJsonMergeStrategy(Enum):
+    ALL = auto()
     DO_NOTHING = auto()
     ADD_ONLY = auto()
     ADD_DELETE = auto()
@@ -257,31 +258,40 @@ def _check_cwd_for_bundle_auto_vars(ctx):
 
     # if the cwd is a subdirectory of auto_env_file_path_dir, create a relative path
     bundle_audit_target_dir = None
-    bundle_target_dir = cwd
-    if cwd.startswith(auto_env_file_path_dir):
-        bundle_target_dir = os.path.relpath(cwd, auto_env_file_path_dir)
-        # if the BUNDLEUTILS_AUDIT_TARGET_BASE_DIR is set, use it
-        if os.environ.get(BUNDLEUTILS_AUDIT_TARGET_BASE_DIR, ''):
-            bundle_audit_target_dir = os.path.join(os.environ.get(BUNDLEUTILS_AUDIT_TARGET_BASE_DIR), bundle_target_dir)
     logging.debug(f'Current working directory: {cwd}')
     logging.debug(f'Switching to the base directory of env file: {auto_env_file_path_dir}')
     os.chdir(auto_env_file_path_dir)
 
     # if the cwd contains a file bundle.yaml
     adhoc_profile = os.environ.get(BUNDLEUTILS_USE_PROFILE, '')
+    bundle_env_vars = {}
+    if bundle_name in bundle_profiles['bundles']:
+        bundle_env_vars = bundle_profiles['bundles'][bundle_name]
     if adhoc_profile:
         logging.info(f'Found env var {BUNDLEUTILS_USE_PROFILE}: {adhoc_profile}')
         if adhoc_profile in bundle_profiles['profiles']:
             logging.info(f'Using adhoc bundle config for {bundle_name}')
             env_vars = bundle_profiles['profiles'][adhoc_profile]
+            for key in ['BUNDLEUTILS_CI_VERSION', 'BUNDLEUTILS_JENKINS_URL']:
+                if key in bundle_env_vars:
+                    logging.info(f'Adding {key}={bundle_env_vars[key]} from bundle config')
+                    env_vars[key] = bundle_env_vars[key]
         else:
             die(f'No bundle profile found for {adhoc_profile}')
+    elif bundle_env_vars:
+        logging.info(f'Found bundle config for {bundle_name}')
+        env_vars = bundle_env_vars
     else:
-        if bundle_name in bundle_profiles['bundles']:
-            logging.info(f'Found bundle config for {bundle_name}')
-            env_vars = bundle_profiles['bundles'][bundle_name]
-        else:
-            logging.info(f'No bundle config found for {bundle_name} and no {BUNDLEUTILS_USE_PROFILE} set')
+        logging.info(f'No bundle config found for {bundle_name} and no {BUNDLEUTILS_USE_PROFILE} set')
+
+    # get target dir values
+    bundle_target_dir = cwd
+    if cwd.startswith(auto_env_file_path_dir):
+        bundle_target_dir = os.path.relpath(cwd, auto_env_file_path_dir)
+        bundle_audit_target_base_dir = null_check(env_vars.get(BUNDLEUTILS_AUDIT_TARGET_BASE_DIR, ''), 'bundle_audit_target_base_dir', BUNDLEUTILS_AUDIT_TARGET_BASE_DIR, '', False)
+        # if the BUNDLEUTILS_AUDIT_TARGET_BASE_DIR is set, use it
+        if bundle_audit_target_base_dir:
+            bundle_audit_target_dir = os.path.join(bundle_audit_target_base_dir, bundle_target_dir)
 
     if env_vars:
         # check if the BUNDLEUTILS_ENV_OVERRIDE is set to true, if so, override the env vars
@@ -801,10 +811,16 @@ def fetch_options_null_check(ctx, url, path, username, password, target_dir, plu
     offline = null_check(offline, 'offline', BUNDLEUTILS_FETCH_OFFLINE, False, '')
     url = null_check(url, 'url', BUNDLEUTILS_JENKINS_URL, False)
     # fail fast if any strategy is passed explicitly
-    default_plugins_json_list_strategy = PluginJsonListStrategy.AUTO
-    default_plugins_json_merge_strategy = PluginJsonMergeStrategy.ADD_DELETE_SKIP_PINNED
+    default_plugins_json_list_strategy = PluginJsonListStrategy.AUTO.name
+    default_plugins_json_merge_strategy = PluginJsonMergeStrategy.ADD_DELETE_SKIP_PINNED.name
     plugins_json_list_strategy = null_check(plugins_json_list_strategy, 'plugins_json_list_strategy', BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY, True, default_plugins_json_list_strategy)
     plugins_json_merge_strategy = null_check(plugins_json_merge_strategy, 'plugins_json_merge_strategy', BUNDLEUTILS_PLUGINS_JSON_MERGE_STRATEGY, True, default_plugins_json_merge_strategy)
+    logging.debug(f'Converting plugin strategies to enums...')
+    try:
+        ctx.obj['plugins_json_list_strategy'] = PluginJsonListStrategy[plugins_json_list_strategy]
+        ctx.obj['plugins_json_merge_strategy'] = PluginJsonMergeStrategy[plugins_json_merge_strategy]
+    except KeyError:
+        die(f'Invalid strategy either: {plugins_json_list_strategy} (out of {get_name_from_enum(PluginJsonListStrategy)}) or {plugins_json_merge_strategy} (out of {get_name_from_enum(PluginJsonMergeStrategy)})')
     username = null_check(username, USERNAME_ARG, BUNDLEUTILS_USERNAME, creds_needed)
     password = null_check(password, PASSWORD_ARG, BUNDLEUTILS_PASSWORD, creds_needed)
     path = null_check(path, PATH_ARG, BUNDLEUTILS_PATH, False)
@@ -926,7 +942,7 @@ def replace_string_in_list(data, pattern, replacement):
 
 def show_diff(title, plugins, col1, col2):
     hline(f"DIFF: {title}")
-    for plugin in plugins:
+    for plugin in sorted(plugins):
         if plugin not in col1 and plugin not in col2:
             continue
         # print fixed width columns for the plugin name in each graph
@@ -1070,28 +1086,31 @@ def _analyze_server_plugins(ctx, plugins_from_json):
     elif plugins_json_list_strategy == PluginJsonListStrategy.ROOTS_AND_DEPS:
         expected_plugins = graphs[graph_type_minus_deleted_disabled]["roots-and-deps"]
     elif plugins_json_list_strategy == PluginJsonListStrategy.ALL:
-        expected_plugins = dgall.keys()
+        expected_plugins = list(dgall.keys())
     else:
         die(f"Invalid plugins json list strategy: {plugins_json_list_strategy.name}. Expected one of: {PluginJsonListStrategy}")
 
     # handle the removal of CAP plugin dependencies removal
     if cap:
-        logging.info(f"{BUNDLEUTILS_FETCH_USE_CAP_ENVELOPE} option detected. Removing CAP plugin dependencies...")
-        expected_plugins_copy = expected_plugins.copy()
-        url, ci_version = lookup_url_and_version('', '')
-        if not url:
-            die("No URL provided for CAP plugin removal")
-        ci_version, ci_type, ci_server_home = server_options_null_check(ci_version, '', '')
-        jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
-        envelope_json = jenkins_manager.get_envelope_json_from_war()
-        envelope_json = json.loads(envelope_json)
-        for plugin_id, plugin_info in envelope_json['plugins'].items():
-            if plugin_info.get('scope') != 'bootstrap':
-                for dep in get_non_optional_dependencies(graph_type_all, plugin_id):
-                    if dep in expected_plugins:
-                        logging.debug(f"Removing dependency of {plugin_id}: {dep}")
-                        expected_plugins.remove(dep)
-        show_diff("Expected root plugins < vs > expected root plugins after CAP dependencies removed", dgall.keys(), expected_plugins_copy, expected_plugins)
+        if plugins_json_list_strategy == PluginJsonListStrategy.ALL:
+            logging.info(f"{BUNDLEUTILS_FETCH_USE_CAP_ENVELOPE} option detected with ALL strategy. Ignoring...")
+        else:
+            logging.info(f"{BUNDLEUTILS_FETCH_USE_CAP_ENVELOPE} option detected. Removing CAP plugin dependencies...")
+            expected_plugins_copy = expected_plugins.copy()
+            url, ci_version = lookup_url_and_version('', '')
+            if not url:
+                die("No URL provided for CAP plugin removal")
+            ci_version, ci_type, ci_server_home = server_options_null_check(ci_version, '', '')
+            jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
+            envelope_json = jenkins_manager.get_envelope_json_from_war()
+            envelope_json = json.loads(envelope_json)
+            for plugin_id, plugin_info in envelope_json['plugins'].items():
+                if plugin_info.get('scope') != 'bootstrap':
+                    for dep in get_non_optional_dependencies(graph_type_all, plugin_id):
+                        if dep in expected_plugins:
+                            logging.debug(f"Removing dependency of {plugin_id}: {dep}")
+                            expected_plugins.remove(dep)
+            show_diff("Expected root plugins < vs > expected root plugins after CAP dependencies removed", dgall.keys(), expected_plugins_copy, expected_plugins)
 
     logging.info("Plugin Analysis - finished analysis.")
 
@@ -1254,7 +1273,11 @@ def _update_plugins(ctx):
                 updated_plugins.append(plugin)
                 continue
             if plugin['id'] in all_bootstrap_plugins:
-                logging.info(f" -> removing unexpected bootstrap plugin {plugin['id']}")
+                if plugins_json_merge_strategy == PluginJsonMergeStrategy.ALL:
+                    logging.info(f" -> keeping bootstrap plugin {plugin['id']} according to merge strategy: {plugins_json_merge_strategy.name}")
+                    updated_plugins.append(plugin)
+                else:
+                    logging.info(f" -> removing unexpected bootstrap plugin {plugin['id']}")
                 continue
             if not plugin['id'] in expected_plugins:
                 if plugins_json_merge_strategy.skip_pinned:
@@ -1290,7 +1313,7 @@ def _update_plugins(ctx):
         updated_plugins = sorted(updated_plugins, key=lambda x: x['id'])
 
         updated_plugins_ids = [plugin['id'] for plugin in updated_plugins]
-        all_plugin_ids = updated_plugins_ids + expected_plugins
+        all_plugin_ids = set(updated_plugins_ids + expected_plugins)
         show_diff("Final merged plugins < vs > expected plugins after merging", all_plugin_ids, updated_plugins_ids, expected_plugins)
         if plugin_catalog_plugin_ids_previous:
             show_diff("Final merged catalog < vs > previous catalog after merging", plugin_catalog_plugin_ids + plugin_catalog_plugin_ids_previous, plugin_catalog_plugin_ids, plugin_catalog_plugin_ids_previous)
