@@ -1639,8 +1639,8 @@ def apply_replacements(ctx, filename, custom_replacements):
             logging.error(f'Failed to load YAML object from file {filename}')
             return
         hash_only = is_truthy(os.environ.get(BUNDLEUTILS_CREDENTIAL_HASH, 'false'))
+        hash_seed = ctx.obj.get('hash_seed', '')
         if hash_only:
-            hash_seed = ctx.obj.get('hash_seed')
             if hash_seed is None or hash_seed == '':
                 logging.info(f'Hashing encrypted data without seed')
             else:
