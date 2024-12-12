@@ -23,6 +23,7 @@ from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap
 from ruamel.yaml.comments import CommentedSeq
 from server_management.server_manager import JenkinsServerManager
+from urllib.parse import urlparse
 
 locale.setlocale(locale.LC_ALL, "C")
 
@@ -48,6 +49,7 @@ BUNDLEUTILS_ENV = 'BUNDLEUTILS_ENV'
 BUNDLEUTILS_ENV_OVERRIDE = 'BUNDLEUTILS_ENV_OVERRIDE'
 BUNDLEUTILS_USE_PROFILE = 'BUNDLEUTILS_USE_PROFILE'
 BUNDLEUTILS_BOOTSTRAP_SOURCE_DIR = 'BUNDLEUTILS_BOOTSTRAP_SOURCE_DIR'
+BUNDLEUTILS_BOOTSTRAP_SOURCE_BASE = 'BUNDLEUTILS_BOOTSTRAP_SOURCE_BASE'
 BUNDLEUTILS_BOOTSTRAP_PROFILE = 'BUNDLEUTILS_BOOTSTRAP_PROFILE'
 BUNDLEUTILS_BOOTSTRAP_UPDATE = 'BUNDLEUTILS_BOOTSTRAP_UPDATE'
 BUNDLEUTILS_SETUP_SOURCE_DIR = 'BUNDLEUTILS_SETUP_SOURCE_DIR'
@@ -89,6 +91,7 @@ CI_VERSION_ARG = 'ci_version'
 CI_TYPE_ARG = 'ci_type'
 CI_SERVER_HOME_ARG = 'ci_server_home'
 SOURCE_DIR_ARG = 'source_dir'
+SOURCE_BASE_ARG = 'source_base'
 TARGET_DIR_ARG = 'target_dir'
 PLUGIN_JSON_ADDITIONS_ARG = 'plugin_json_additions'
 PLUGIN_JSON_URL_ARG = 'plugin_json_url'
@@ -356,22 +359,8 @@ def compare_func(x, y, level=None):
     except Exception:
         raise CannotCompare() from None
 
-def null_check(obj, obj_name, obj_env_var=None, mandatory=True, default=''):
-    if not obj:
-        if obj_env_var:
-            obj = os.environ.get(obj_env_var, '')
-            if not obj:
-                if default:
-                    obj = default
-                elif mandatory:
-                    die(f'No {obj_name} option provided and no {obj_env_var} set')
-    return obj
-
 def lookup_url_and_version(url, ci_version, default_url = '', default_ci_version = ''):
-    url_env = 'JENKINS_URL'
-    if os.environ.get(BUNDLEUTILS_JENKINS_URL):
-        url_env = BUNDLEUTILS_JENKINS_URL
-    url = null_check(url, URL_ARG, url_env, True, default_url)
+    url = lookup_url(url, default_url)
     ci_version = null_check(ci_version, CI_VERSION_ARG, BUNDLEUTILS_CI_VERSION, False, default_ci_version)
     if not ci_version:
         whoami_url = f'{url}/whoAmI/api/json?tree=authenticated'
@@ -392,22 +381,42 @@ def lookup_url_and_version(url, ci_version, default_url = '', default_ci_version
         logging.debug(f"Version: {ci_version} (taken from command line)")
     return url, ci_version
 
+def lookup_url(url, default_url = ''):
+    url_env = 'JENKINS_URL'
+    if os.environ.get(BUNDLEUTILS_JENKINS_URL):
+        url_env = BUNDLEUTILS_JENKINS_URL
+    return null_check(url, URL_ARG, url_env, True, default_url)
+
 @cli.command()
 @click.pass_context
 @click.option('-s', '--source-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The bundle to be bootstrapped.')
+@click.option('-S', '--source-base', type=click.Path(file_okay=False, dir_okay=True), help=f'Specify parent dir of source-dir, bundle name taken from URL.')
 @click.option('-p', '--profile', help=f'The bundle profile to use.')
 @click.option('-u', '--update', help=f'Should the bundle be updated if present.')
 @click.option('-U', '--url', help=f'The controller URL to bootstrap (or use JENKINS_URL).')
 @click.option('-v', '--ci-version', type=click.STRING, help=f'Optional version (taken from the remote instance otherwise).')
-def bootstrap(ctx, source_dir, profile, update, url, ci_version):
+def bootstrap(ctx, source_dir, source_base, profile, update, url, ci_version):
     """Bootstrap a bundle"""
     _check_for_env_file(ctx)
     # no bundle_profiles found, no need to check
     if not ctx.obj.get(BUNDLE_PROFILES, ''):
         logging.debug('No bundle profiles found. Nothing to add the bundle to.')
         return
+    # source_dir and source_base are mutually exclusive but we need one of them
+    source_dir = null_check(source_dir, SOURCE_DIR_ARG, BUNDLEUTILS_BOOTSTRAP_SOURCE_DIR, False, '')
+    source_base = null_check(source_base, SOURCE_BASE_ARG, BUNDLEUTILS_BOOTSTRAP_SOURCE_BASE, False, '')
+    if source_dir and source_base:
+        die('source-dir and source-base are mutually exclusive')
+    elif source_base:
+        url = lookup_url(url)
+        bundle_name = _extract_name_from_url(url)
+        source_dir = os.path.join(source_base, bundle_name)
+        logging.info(f"Using source-dir: {source_dir} (derived from source-base and URL)")
+    elif source_dir:
+        logging.info(f"Using source-dir: {source_dir}")
+    else:
+        die('Either source-dir or source-base must be provided')
 
-    source_dir = null_check(source_dir, SOURCE_DIR_ARG, BUNDLEUTILS_BOOTSTRAP_SOURCE_DIR)
     bootstrap_profile = null_check(profile, 'profile', BUNDLEUTILS_BOOTSTRAP_PROFILE)
     bootstrap_update = null_check(update, 'update', BUNDLEUTILS_BOOTSTRAP_UPDATE, False, 'false')
     if bootstrap_profile:
@@ -672,6 +681,35 @@ def version():
         click.echo("Package is not installed. Please ensure it's built and installed correctly.")
 
 @cli.command()
+@click.option('-u', '--url', help=f'The URL to extract the controller name from.')
+def extract_name_from_url(url):
+    """
+    Smart extraction of the controller name from the URL.
+    Extracts NAME from the following URL formats:
+    - http://a.b.c/NAME/
+    - http://a.b.c/NAME
+    - https://a.b.c/NAME/
+    - https://a.b.c/NAME
+    - http://NAME.b.c/
+    - http://NAME.b.c
+    - https://NAME.b.c/
+    - https://NAME.b.c
+    """
+    name = _extract_name_from_url(url)
+    click.echo(name)
+
+def _extract_name_from_url(url):
+    url = lookup_url(url)
+    parsed = urlparse(url)
+    # Check if the URL has a path
+    if parsed.path and parsed.path != '/':
+        return parsed.path.rstrip('/').split('/')[-1]
+    # Otherwise, extract the first subdomain
+    else:
+        subdomain = parsed.netloc.split('.')[0]
+        return subdomain
+
+@cli.command()
 @click.option('-U', '--url', help=f'The controller URL to test for (or use JENKINS_URL).')
 @click.option('-v', '--ci-version', type=click.STRING, help=f'Optional version (taken from the remote instance otherwise).')
 @click.option('-b', '--bundles-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The directory containing the bundles.')
@@ -723,13 +761,14 @@ def completion(ctx, shell):
 
 @click.pass_context
 def null_check(ctx, obj, obj_name, obj_env_var=None, mandatory=True, default=''):
+    """Check if the object is None and set it to the env var or default if mandatory"""
     if not obj:
         if obj_env_var:
             obj = os.environ.get(obj_env_var, '')
             if not obj:
                 if default:
                     obj = default
-                if ctx.obj.get(INTERACTIVE_ARG):
+                if mandatory and ctx.obj.get(INTERACTIVE_ARG):
                     if obj_env_var:
                         msg = f'Please provide the {obj_name} or set the {obj_env_var}'
                     else:
@@ -740,7 +779,14 @@ def null_check(ctx, obj, obj_name, obj_env_var=None, mandatory=True, default='')
                         obj = click.prompt(msg)
                 if mandatory and not obj:
                     die(f'No {obj_name} option provided and no {obj_env_var} set')
-    logging.debug(f'Setting ctx - > {obj_name}: {obj}')
+    # mask password or token
+    obj_str = obj
+    if 'password' in obj_name or 'token' in obj_name:
+        obj_str = '*******'
+    logging.debug(f'Setting ctx - > {obj_name}: {obj_str}')
+    # if the object_name already exists in the context and if different, warn the user
+    if obj_name in ctx.obj and ctx.obj[obj_name] != obj:
+        logging.warning(f'Overriding {obj_name} from {ctx.obj[obj_name]} to {obj_str}')
     ctx.obj[obj_name] = obj
     return obj
 
@@ -760,7 +806,8 @@ def _validate(url, username, password, source_dir, ignore_warnings):
     username = null_check(username, 'username', BUNDLEUTILS_USERNAME)
     password = null_check(password, 'password', BUNDLEUTILS_PASSWORD)
     source_dir = null_check(source_dir, 'source directory', BUNDLEUTILS_VALIDATE_SOURCE_DIR)
-    url = null_check(url, URL_ARG, BUNDLEUTILS_JENKINS_URL)
+    url = lookup_url(url)
+
     # if the url does end with /casc-bundle-mgnt/casc-bundle-validate, append it
     if validate_url_path not in url:
         url = url + validate_url_path
@@ -809,7 +856,7 @@ def fetch_options_null_check(ctx, url, path, username, password, target_dir, plu
     creds_needed = url is not None and url != ''
     cap = null_check(cap, 'cap', BUNDLEUTILS_FETCH_USE_CAP_ENVELOPE, False, '')
     offline = null_check(offline, 'offline', BUNDLEUTILS_FETCH_OFFLINE, False, '')
-    url = null_check(url, 'url', BUNDLEUTILS_JENKINS_URL, False)
+    url = lookup_url(url)
     # fail fast if any strategy is passed explicitly
     default_plugins_json_list_strategy = PluginJsonListStrategy.AUTO.name
     default_plugins_json_merge_strategy = PluginJsonMergeStrategy.ADD_DELETE_SKIP_PINNED.name
