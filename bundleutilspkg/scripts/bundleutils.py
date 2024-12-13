@@ -67,6 +67,16 @@ BUNDLEUTILS_USERNAME = 'BUNDLEUTILS_USERNAME'
 BUNDLEUTILS_PASSWORD = 'BUNDLEUTILS_PASSWORD'
 BUNDLEUTILS_PATH = 'BUNDLEUTILS_PATH'
 BUNDLEUTILS_FETCH_TARGET_DIR = 'BUNDLEUTILS_FETCH_TARGET_DIR'
+
+# The strategy for handling warnings when fetching the catalog.
+# These warning make the yaml purposely invalid so that people cannot simply use the output
+# without fixing the issues.
+# The options are from the PluginCatalogWarningsStrategy enum below.
+# e.g.
+# --- There are Beekeeper warnings. This makes the bundle export a "best effort".
+# --- Exported plugin catalog and plugins list might be incorrect and might need manual fixing before use.
+# --- Pipeline: Groovy Libraries (pipeline-groovy-lib). Version 740.va_2701257fe8d is currently installed but version 727.ve832a_9244dfa_ is recommended for this version of the product.
+BUNDLEUTILS_CATALOG_WARNINGS_STRATEGY = 'BUNDLEUTILS_CATALOG_WARNINGS_STRATEGY'
 BUNDLEUTILS_FETCH_OFFLINE = 'BUNDLEUTILS_FETCH_OFFLINE'
 BUNDLEUTILS_FETCH_USE_CAP_ENVELOPE = 'BUNDLEUTILS_FETCH_USE_CAP_ENVELOPE'
 BUNDLEUTILS_PLUGINS_JSON_PATH = 'BUNDLEUTILS_PLUGINS_JSON_PATH'
@@ -105,6 +115,12 @@ PASSWORD_ARG = 'password'
 def die(msg):
     logging.error(f"{msg}\n")
     sys.exit(1)
+
+# - 'FAIL' - fail the command if there are warnings
+# - 'COMMENT' - add a comment to the yaml with the warnings
+class CatalogWarningsStrategy(Enum):
+    FAIL = auto()
+    COMMENT = auto()
 
 class PluginJsonMergeStrategy(Enum):
     ALL = auto()
@@ -152,6 +168,7 @@ def fetch_options(func):
     func = click.option('-O', '--offline', default=False, is_flag=True, help=f'Save the export and plugin data to <target-dir>-offline (or use {BUNDLEUTILS_FETCH_OFFLINE}).')(func)
     func = click.option('-j', '--plugins-json-list-strategy', help=f'Strategy for creating list from the plugins json (or use {BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY}).')(func)
     func = click.option('-J', '--plugins-json-merge-strategy', help=f'Strategy for merging plugins from list into the bundle (or use {BUNDLEUTILS_PLUGINS_JSON_MERGE_STRATEGY}).')(func)
+    func = click.option('-C', '--catalog-warnings-strategy', help=f'Strategy for handling beekeeper warnings in the plugin catalog (or use {BUNDLEUTILS_CATALOG_WARNINGS_STRATEGY}).')(func)
     func = click.option('-U', '--url', 'url', help=f'The URL to fetch YAML from (or use {BUNDLEUTILS_JENKINS_URL}).')(func)
     func = click.option('-u', '--username', help=f'Username for basic authentication (or use {BUNDLEUTILS_USERNAME}).')(func)
     func = click.option('-p', '--password', help=f'Password for basic authentication (or use {BUNDLEUTILS_PASSWORD}).')(func)
@@ -381,11 +398,11 @@ def lookup_url_and_version(url, ci_version, default_url = '', default_ci_version
         logging.debug(f"Version: {ci_version} (taken from command line)")
     return url, ci_version
 
-def lookup_url(url, default_url = ''):
+def lookup_url(url, default_url = '', mandatory = True):
     url_env = 'JENKINS_URL'
     if os.environ.get(BUNDLEUTILS_JENKINS_URL):
         url_env = BUNDLEUTILS_JENKINS_URL
-    return null_check(url, URL_ARG, url_env, True, default_url)
+    return null_check(url, URL_ARG, url_env, mandatory, default_url)
 
 @cli.command()
 @click.pass_context
@@ -851,23 +868,30 @@ def _validate(url, username, password, source_dir, ignore_warnings):
                 die('Validation failed with errors or critical messages')
 
 @click.pass_context
-def fetch_options_null_check(ctx, url, path, username, password, target_dir, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, offline, cap):
+def fetch_options_null_check(ctx, url, path, username, password, target_dir, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, offline, cap):
     # creds boolean True if URL set and not empty
     creds_needed = url is not None and url != ''
     cap = null_check(cap, 'cap', BUNDLEUTILS_FETCH_USE_CAP_ENVELOPE, False, '')
     offline = null_check(offline, 'offline', BUNDLEUTILS_FETCH_OFFLINE, False, '')
-    url = lookup_url(url)
+    url = lookup_url(url, '', False)
     # fail fast if any strategy is passed explicitly
     default_plugins_json_list_strategy = PluginJsonListStrategy.AUTO.name
     default_plugins_json_merge_strategy = PluginJsonMergeStrategy.ADD_DELETE_SKIP_PINNED.name
+    default_catalog_warnings_strategy = CatalogWarningsStrategy.FAIL.name
     plugins_json_list_strategy = null_check(plugins_json_list_strategy, 'plugins_json_list_strategy', BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY, True, default_plugins_json_list_strategy)
     plugins_json_merge_strategy = null_check(plugins_json_merge_strategy, 'plugins_json_merge_strategy', BUNDLEUTILS_PLUGINS_JSON_MERGE_STRATEGY, True, default_plugins_json_merge_strategy)
-    logging.debug(f'Converting plugin strategies to enums...')
+    catalog_warnings_strategy = null_check(catalog_warnings_strategy, 'catalog_warnings_strategy', BUNDLEUTILS_CATALOG_WARNINGS_STRATEGY, True, default_catalog_warnings_strategy)
+    logging.debug(f'Converting strategies to enums...')
     try:
         ctx.obj['plugins_json_list_strategy'] = PluginJsonListStrategy[plugins_json_list_strategy]
         ctx.obj['plugins_json_merge_strategy'] = PluginJsonMergeStrategy[plugins_json_merge_strategy]
+        ctx.obj['catalog_warnings_strategy'] = CatalogWarningsStrategy[catalog_warnings_strategy]
     except KeyError:
-        die(f'Invalid strategy either: {plugins_json_list_strategy} (out of {get_name_from_enum(PluginJsonListStrategy)}) or {plugins_json_merge_strategy} (out of {get_name_from_enum(PluginJsonMergeStrategy)})')
+        die(f'''Invalid strategy either:
+            {plugins_json_list_strategy} (out of {get_name_from_enum(PluginJsonListStrategy)})
+            or {plugins_json_merge_strategy} (out of {get_name_from_enum(PluginJsonMergeStrategy)})
+            or {catalog_warnings_strategy} (out of {get_name_from_enum(CatalogWarningsStrategy)})
+            ''')
     username = null_check(username, USERNAME_ARG, BUNDLEUTILS_USERNAME, creds_needed)
     password = null_check(password, PASSWORD_ARG, BUNDLEUTILS_PASSWORD, creds_needed)
     path = null_check(path, PATH_ARG, BUNDLEUTILS_PATH, False)
@@ -892,10 +916,10 @@ def fetch_options_null_check(ctx, url, path, username, password, target_dir, plu
 @cli.command()
 @fetch_options
 @click.pass_context
-def fetch(ctx, url, path, username, password, target_dir, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, offline, cap):
+def fetch(ctx, url, path, username, password, target_dir, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, offline, cap):
     """Fetch YAML documents from a URL or path."""
     set_logging(ctx)
-    fetch_options_null_check(url, path, username, password, target_dir, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, offline, cap)
+    fetch_options_null_check(url, path, username, password, target_dir, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, offline, cap)
     try:
         fetch_yaml_docs()
     except Exception as e:
@@ -1449,20 +1473,37 @@ def fetch_yaml_docs(ctx):
     else:
         die('No path or URL provided')
 
-def replace_carriage_returns(response_text):
+@click.pass_context
+def replace_carriage_returns(ctx, response_text):
+        catalog_warnings_strategy = ctx.obj.get('catalog_warnings_strategy')
         if isinstance(response_text, bytes):
             response_text = response_text.decode('utf-8')
         # print any lines with carriage returns in them
         for line in response_text.split('\n'):
             if '\\r' in line:
                 logging.debug(f'Carriage return found in line: {line}')
+        # find any occurrences of "^--- .*$"
+        matching_lines = re.findall(r'^--- .*$', response_text, re.MULTILINE)
+        if matching_lines:
+            # log results
+            for line in matching_lines:
+                logging.warning(f'Found catalog warnings: {line}')
+            if catalog_warnings_strategy == CatalogWarningsStrategy.COMMENT:
+                logging.warning(f'Found catalog warnings in the response. Converting to comments according to strategy {catalog_warnings_strategy.name}')
+                response_text = re.sub(r'^--- .*$','# \g<0>', response_text, flags=re.MULTILINE)
+            elif catalog_warnings_strategy == CatalogWarningsStrategy.FAIL:
+                die(f'''
+                    Found catalog warnings in the response. Exiting according to strategy {catalog_warnings_strategy.name}
+                    Either fix the warnings or change the strategy to {CatalogWarningsStrategy.COMMENT.name} to convert warnings to comments.''')
+            else:
+                die(f'Invalid catalog warnings strategy: {catalog_warnings_strategy.name}. Expected one of: {get_name_from_enum(CatalogWarningsStrategy)}')
         # remove any '\r' characters from the response
         logging.info('Removing carriage returns from the response')
         response_text = response_text.replace('\\r', '')
         # print any lines with carriage returns in them
         for line in response_text.split('\n'):
             if '\\r' in line:
-                logging.warn(f'Carriage return found in line still: {line}')
+                logging.warning(f'Carriage return found in line still: {line}')
         return response_text
 
 def call_jenkins_api(url, username, password):
@@ -1482,14 +1523,12 @@ def write_all_yaml_docs_from_comments(yaml_docs, target_dir):
     for i, doc in enumerate(yaml_docs):
         # read the header from the original YAML doc
         filename = doc.ca.comment[1][0].value.strip().strip("# ")
-        # remove comments from the YAML doc
-        doc.ca.comment = None
+        # remove the first line of the comment from the YAML doc
+        doc.ca.comment[1].pop(0)
         write_yaml_doc(doc, target_dir, filename)
 
 def write_yaml_doc(doc, target_dir, filename):
     filename = os.path.join(target_dir, filename)
-    # normalize the YAML doc
-    doc = normalize_yaml(doc)
     doc = remove_empty_keys(doc)
 
     # create a new file for each YAML document
@@ -1505,22 +1544,6 @@ def write_yaml_doc(doc, target_dir, filename):
         lines = lines[:-1]
     with open(filename, 'w') as f:
         f.writelines(lines)
-
-# TODO: remove after testing with normalising
-def normalize_yaml(data):
-    """Normalize a nested dictionary."""
-    if isinstance(data, dict):
-        return {k: normalize_yaml(v) for k, v in data.items()}
-    elif isinstance(data, list):
-        return [normalize_yaml(v) for v in data]
-    elif isinstance(data, str):
-        # Normalize strings that contain newline characters
-        # if '\\n' in data:
-        #     return '|\n' + data.replace('\\n', '\n')
-        # else:
-            return data
-    else:
-        return data
 
 def traverse_credentials(hash_only, hash_seed, filename, obj, custom_replacements={}, path=""):
     if isinstance(obj, dict):
@@ -1870,24 +1893,39 @@ def _transform(configs, source_dir, target_dir):
     _update_bundle(target_dir)
 
 def remove_empty_keys(data):
-    if isinstance(data, dict):  # If the data is a dictionary
-        # Create a new dictionary, skipping entries with empty keys
-        ret = {k: remove_empty_keys(v) for k, v in data.items() if k != ""}
-        logging.log(logging.NOTSET, f'Removing empty keys from DICT {data}')
-        logging.log(logging.NOTSET, f'Result: {ret}')
-        return ret
-    elif isinstance(data, list):  # If the data is a list
-        logging.log(logging.NOTSET, f'Removing empty keys from LIST {data}')
+    if isinstance(data, CommentedMap):  # Handle dictionaries with comments
+        keys_to_remove = [k for k in data if k == ""]
+        for key in keys_to_remove:
+            del data[key]  # Remove the empty key directly from the object
+        for key, value in data.items():
+            remove_empty_keys(value)  # Recursively process nested items
+        logging.debug(logging.NOTSET, f'Removed empty keys from DICT: {data}')
+    elif isinstance(data, CommentedSeq):  # Handle lists with comments
+        items_to_keep = []
+        for item in data:
+            processed_item = remove_empty_keys(item)
+            if processed_item or processed_item == 0:  # Keep non-empty items
+                items_to_keep.append(processed_item)
+        # Modify the list in place
+        data[:] = items_to_keep
+        logging.debug(logging.NOTSET, f'Removed empty keys from LIST: {data}')
+    elif isinstance(data, list):  # Handle regular Python lists
         newdata = []
-        for v in data:
-            ret = remove_empty_keys(v)
-            if ret:
-                newdata.append(ret)
-        logging.log(logging.NOTSET, f'Result: {newdata}')
-        return newdata
-    else:
-        # Return the item itself if it's not a dictionary or list
-        return data
+        for item in data:
+            processed_item = remove_empty_keys(item)
+            if processed_item or processed_item == 0:
+                newdata.append(processed_item)
+        data[:] = newdata
+        logging.debug(logging.NOTSET, f'Result: {data}')
+    elif isinstance(data, dict):  # Handle regular Python dictionaries
+        keys_to_remove = [k for k in data if k == ""]
+        for key in keys_to_remove:
+            del data[key]
+        for key, value in list(data.items()):
+            data[key] = remove_empty_keys(value)
+        logging.debug(logging.NOTSET, f'Removed empty keys from regular DICT: {data}')
+    # For scalar values, just return as-is
+    return data
 
 @cli.command()
 @click.option('-t', '--target-dir', 'target_dir', required=True, type=click.Path(file_okay=False, dir_okay=True), help=f'The target directory to update the bundle.yaml file.')
