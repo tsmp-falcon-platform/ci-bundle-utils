@@ -1,10 +1,15 @@
 # Patches based upon https://jsonpatch.com/
 patches:
   jenkins.yaml:
+    # you may want to keep this if you have a license file
   - op: remove
-    path: /license # you may want to keep this if you have a license file
+    path: /license
+    # these labels are dynamic based on the agents available
   - op: remove
-    path: /jenkins/labelAtoms # these labels are dynamic based on the agents available
+    path: /jenkins/labelAtoms
+    # remove the operationsCenterRootAction because it is provided by the OC
+  - op: remove
+    path: /unclassified/operationsCenterRootAction
 
 # Replace credentials with references to variables
 # Autosetting:

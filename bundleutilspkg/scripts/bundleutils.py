@@ -1,4 +1,5 @@
 from enum import Enum, auto
+import hashlib
 import json
 import jsonpatch
 import jsonpointer
@@ -22,6 +23,7 @@ from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap
 from ruamel.yaml.comments import CommentedSeq
 from server_management.server_manager import JenkinsServerManager
+from urllib.parse import urlparse
 
 locale.setlocale(locale.LC_ALL, "C")
 
@@ -35,7 +37,6 @@ fetch_url_path = '/core-casc-export'
 validate_url_path = '/casc-bundle-mgnt/casc-bundle-validate'
 
 default_target = 'target/docs'
-default_normalized = default_target + '-normalized'
 default_auto_env_file = 'bundle-profiles.yaml'
 
 # environment variables
@@ -48,6 +49,7 @@ BUNDLEUTILS_ENV = 'BUNDLEUTILS_ENV'
 BUNDLEUTILS_ENV_OVERRIDE = 'BUNDLEUTILS_ENV_OVERRIDE'
 BUNDLEUTILS_USE_PROFILE = 'BUNDLEUTILS_USE_PROFILE'
 BUNDLEUTILS_BOOTSTRAP_SOURCE_DIR = 'BUNDLEUTILS_BOOTSTRAP_SOURCE_DIR'
+BUNDLEUTILS_BOOTSTRAP_SOURCE_BASE = 'BUNDLEUTILS_BOOTSTRAP_SOURCE_BASE'
 BUNDLEUTILS_BOOTSTRAP_PROFILE = 'BUNDLEUTILS_BOOTSTRAP_PROFILE'
 BUNDLEUTILS_BOOTSTRAP_UPDATE = 'BUNDLEUTILS_BOOTSTRAP_UPDATE'
 BUNDLEUTILS_SETUP_SOURCE_DIR = 'BUNDLEUTILS_SETUP_SOURCE_DIR'
@@ -55,12 +57,26 @@ BUNDLEUTILS_VALIDATE_SOURCE_DIR = 'BUNDLEUTILS_VALIDATE_SOURCE_DIR'
 BUNDLEUTILS_TRANSFORM_SOURCE_DIR = 'BUNDLEUTILS_TRANSFORM_SOURCE_DIR'
 BUNDLEUTILS_TRANSFORM_TARGET_DIR = 'BUNDLEUTILS_TRANSFORM_TARGET_DIR'
 BUNDLEUTILS_TRANSFORM_CONFIGS = 'BUNDLEUTILS_TRANSFORM_CONFIGS'
+BUNDLEUTILS_AUDIT_SOURCE_DIR = 'BUNDLEUTILS_AUDIT_SOURCE_DIR'
+BUNDLEUTILS_AUDIT_TARGET_DIR = 'BUNDLEUTILS_AUDIT_TARGET_DIR'
+BUNDLEUTILS_AUDIT_TARGET_BASE_DIR = 'BUNDLEUTILS_AUDIT_TARGET_BASE_DIR'
+BUNDLEUTILS_AUDIT_CONFIGS = 'BUNDLEUTILS_AUDIT_CONFIGS'
 BUNDLEUTILS_BUNDLE_DESCRIPTION = 'BUNDLEUTILS_BUNDLE_DESCRIPTION'
 BUNDLEUTILS_JENKINS_URL = 'BUNDLEUTILS_JENKINS_URL'
 BUNDLEUTILS_USERNAME = 'BUNDLEUTILS_USERNAME'
 BUNDLEUTILS_PASSWORD = 'BUNDLEUTILS_PASSWORD'
 BUNDLEUTILS_PATH = 'BUNDLEUTILS_PATH'
 BUNDLEUTILS_FETCH_TARGET_DIR = 'BUNDLEUTILS_FETCH_TARGET_DIR'
+
+# The strategy for handling warnings when fetching the catalog.
+# These warning make the yaml purposely invalid so that people cannot simply use the output
+# without fixing the issues.
+# The options are from the PluginCatalogWarningsStrategy enum below.
+# e.g.
+# --- There are Beekeeper warnings. This makes the bundle export a "best effort".
+# --- Exported plugin catalog and plugins list might be incorrect and might need manual fixing before use.
+# --- Pipeline: Groovy Libraries (pipeline-groovy-lib). Version 740.va_2701257fe8d is currently installed but version 727.ve832a_9244dfa_ is recommended for this version of the product.
+BUNDLEUTILS_CATALOG_WARNINGS_STRATEGY = 'BUNDLEUTILS_CATALOG_WARNINGS_STRATEGY'
 BUNDLEUTILS_FETCH_OFFLINE = 'BUNDLEUTILS_FETCH_OFFLINE'
 BUNDLEUTILS_FETCH_USE_CAP_ENVELOPE = 'BUNDLEUTILS_FETCH_USE_CAP_ENVELOPE'
 BUNDLEUTILS_PLUGINS_JSON_PATH = 'BUNDLEUTILS_PLUGINS_JSON_PATH'
@@ -68,6 +84,10 @@ BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY = 'BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY
 BUNDLEUTILS_PLUGINS_JSON_MERGE_STRATEGY = 'BUNDLEUTILS_PLUGINS_JSON_MERGE_STRATEGY'
 BUNDLEUTILS_BUNDLES_DIR = 'BUNDLEUTILS_BUNDLES_DIR'
 BUNDLEUTILS_CREDENTIAL_DELETE_SIGN = 'PLEASE_DELETE_ME'
+# used to hash the credentials instead of creating environment variables for them
+# this will be used in the new audit feature
+BUNDLEUTILS_CREDENTIAL_HASH = 'BUNDLEUTILS_CREDENTIAL_HASH'
+BUNDLEUTILS_CREDENTIAL_HASH_SEED = 'BUNDLEUTILS_CREDENTIAL_HASH_SEED'
 
 # context object keys
 BUNDLE_PROFILES = 'BUNDLE_PROFILES'
@@ -81,6 +101,7 @@ CI_VERSION_ARG = 'ci_version'
 CI_TYPE_ARG = 'ci_type'
 CI_SERVER_HOME_ARG = 'ci_server_home'
 SOURCE_DIR_ARG = 'source_dir'
+SOURCE_BASE_ARG = 'source_base'
 TARGET_DIR_ARG = 'target_dir'
 PLUGIN_JSON_ADDITIONS_ARG = 'plugin_json_additions'
 PLUGIN_JSON_URL_ARG = 'plugin_json_url'
@@ -95,7 +116,14 @@ def die(msg):
     logging.error(f"{msg}\n")
     sys.exit(1)
 
+# - 'FAIL' - fail the command if there are warnings
+# - 'COMMENT' - add a comment to the yaml with the warnings
+class CatalogWarningsStrategy(Enum):
+    FAIL = auto()
+    COMMENT = auto()
+
 class PluginJsonMergeStrategy(Enum):
+    ALL = auto()
     DO_NOTHING = auto()
     ADD_ONLY = auto()
     ADD_DELETE = auto()
@@ -140,6 +168,7 @@ def fetch_options(func):
     func = click.option('-O', '--offline', default=False, is_flag=True, help=f'Save the export and plugin data to <target-dir>-offline (or use {BUNDLEUTILS_FETCH_OFFLINE}).')(func)
     func = click.option('-j', '--plugins-json-list-strategy', help=f'Strategy for creating list from the plugins json (or use {BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY}).')(func)
     func = click.option('-J', '--plugins-json-merge-strategy', help=f'Strategy for merging plugins from list into the bundle (or use {BUNDLEUTILS_PLUGINS_JSON_MERGE_STRATEGY}).')(func)
+    func = click.option('-C', '--catalog-warnings-strategy', help=f'Strategy for handling beekeeper warnings in the plugin catalog (or use {BUNDLEUTILS_CATALOG_WARNINGS_STRATEGY}).')(func)
     func = click.option('-U', '--url', 'url', help=f'The URL to fetch YAML from (or use {BUNDLEUTILS_JENKINS_URL}).')(func)
     func = click.option('-u', '--username', help=f'Username for basic authentication (or use {BUNDLEUTILS_USERNAME}).')(func)
     func = click.option('-p', '--password', help=f'Password for basic authentication (or use {BUNDLEUTILS_PASSWORD}).')(func)
@@ -248,32 +277,45 @@ def _check_cwd_for_bundle_auto_vars(ctx):
     bundle_name = os.path.basename(cwd)
 
     # if the cwd is a subdirectory of auto_env_file_path_dir, create a relative path
-    bundle_target_dir = cwd
-    if cwd.startswith(auto_env_file_path_dir):
-        bundle_target_dir = os.path.relpath(cwd, auto_env_file_path_dir)
+    bundle_audit_target_dir = None
     logging.debug(f'Current working directory: {cwd}')
     logging.debug(f'Switching to the base directory of env file: {auto_env_file_path_dir}')
     os.chdir(auto_env_file_path_dir)
 
     # if the cwd contains a file bundle.yaml
     adhoc_profile = os.environ.get(BUNDLEUTILS_USE_PROFILE, '')
+    bundle_env_vars = {}
+    if bundle_name in bundle_profiles['bundles']:
+        bundle_env_vars = bundle_profiles['bundles'][bundle_name]
     if adhoc_profile:
         logging.info(f'Found env var {BUNDLEUTILS_USE_PROFILE}: {adhoc_profile}')
         if adhoc_profile in bundle_profiles['profiles']:
             logging.info(f'Using adhoc bundle config for {bundle_name}')
             env_vars = bundle_profiles['profiles'][adhoc_profile]
+            for key in ['BUNDLEUTILS_CI_VERSION', 'BUNDLEUTILS_JENKINS_URL']:
+                if key in bundle_env_vars:
+                    logging.info(f'Adding {key}={bundle_env_vars[key]} from bundle config')
+                    env_vars[key] = bundle_env_vars[key]
         else:
             die(f'No bundle profile found for {adhoc_profile}')
+    elif bundle_env_vars:
+        logging.info(f'Found bundle config for {bundle_name}')
+        env_vars = bundle_env_vars
     else:
-        if bundle_name in bundle_profiles['bundles']:
-            logging.info(f'Found bundle config for {bundle_name}')
-            env_vars = bundle_profiles['bundles'][bundle_name]
-        else:
-            logging.info(f'No bundle config found for {bundle_name} and no {BUNDLEUTILS_USE_PROFILE} set')
+        logging.info(f'No bundle config found for {bundle_name} and no {BUNDLEUTILS_USE_PROFILE} set')
+
+    # get target dir values
+    bundle_target_dir = cwd
+    if cwd.startswith(auto_env_file_path_dir):
+        bundle_target_dir = os.path.relpath(cwd, auto_env_file_path_dir)
+        bundle_audit_target_base_dir = null_check(env_vars.get(BUNDLEUTILS_AUDIT_TARGET_BASE_DIR, ''), 'bundle_audit_target_base_dir', BUNDLEUTILS_AUDIT_TARGET_BASE_DIR, '', False)
+        # if the BUNDLEUTILS_AUDIT_TARGET_BASE_DIR is set, use it
+        if bundle_audit_target_base_dir:
+            bundle_audit_target_dir = os.path.join(bundle_audit_target_base_dir, bundle_target_dir)
 
     if env_vars:
         # check if the BUNDLEUTILS_ENV_OVERRIDE is set to true, if so, override the env vars
-        should_env_vars_override_others = os.environ.get(BUNDLEUTILS_ENV_OVERRIDE, 'false').lower() in ['true', '1', 't', 'y', 'yes']
+        should_env_vars_override_others = is_truthy(os.environ.get(BUNDLEUTILS_ENV_OVERRIDE, 'false'))
         for key, value in env_vars.items():
             if key not in os.environ:
                 logging.info(f'Setting environment variable: {key}={value}')
@@ -289,6 +331,13 @@ def _check_cwd_for_bundle_auto_vars(ctx):
         _set_env_if_not_set('AUTOSET', BUNDLEUTILS_TRANSFORM_TARGET_DIR, bundle_target_dir)
         _set_env_if_not_set('AUTOSET', BUNDLEUTILS_SETUP_SOURCE_DIR, os.environ.get(BUNDLEUTILS_TRANSFORM_TARGET_DIR))
         _set_env_if_not_set('AUTOSET', BUNDLEUTILS_VALIDATE_SOURCE_DIR, os.environ.get(BUNDLEUTILS_TRANSFORM_TARGET_DIR))
+        # special case for audit, set the source dir to the fetch target dir and the target dir to the audit target dir
+        if bundle_audit_target_dir is not None:
+            _set_env_if_not_set('AUTOSET', BUNDLEUTILS_AUDIT_SOURCE_DIR, os.environ.get(BUNDLEUTILS_FETCH_TARGET_DIR))
+            _set_env_if_not_set('AUTOSET', BUNDLEUTILS_AUDIT_TARGET_DIR, bundle_audit_target_dir)
+
+def is_truthy(value):
+    return value.lower() in ['true', '1', 't', 'y', 'yes']
 
 def set_logging(ctx):
     _check_for_env_file(ctx)
@@ -327,22 +376,8 @@ def compare_func(x, y, level=None):
     except Exception:
         raise CannotCompare() from None
 
-def null_check(obj, obj_name, obj_env_var=None, mandatory=True, default=''):
-    if not obj:
-        if obj_env_var:
-            obj = os.environ.get(obj_env_var, '')
-            if not obj:
-                if default:
-                    obj = default
-                elif mandatory:
-                    die(f'No {obj_name} option provided and no {obj_env_var} set')
-    return obj
-
 def lookup_url_and_version(url, ci_version, default_url = '', default_ci_version = ''):
-    url_env = 'JENKINS_URL'
-    if os.environ.get(BUNDLEUTILS_JENKINS_URL):
-        url_env = BUNDLEUTILS_JENKINS_URL
-    url = null_check(url, URL_ARG, url_env, True, default_url)
+    url = lookup_url(url, default_url)
     ci_version = null_check(ci_version, CI_VERSION_ARG, BUNDLEUTILS_CI_VERSION, False, default_ci_version)
     if not ci_version:
         whoami_url = f'{url}/whoAmI/api/json?tree=authenticated'
@@ -363,22 +398,42 @@ def lookup_url_and_version(url, ci_version, default_url = '', default_ci_version
         logging.debug(f"Version: {ci_version} (taken from command line)")
     return url, ci_version
 
+def lookup_url(url, default_url = '', mandatory = True):
+    url_env = 'JENKINS_URL'
+    if os.environ.get(BUNDLEUTILS_JENKINS_URL):
+        url_env = BUNDLEUTILS_JENKINS_URL
+    return null_check(url, URL_ARG, url_env, mandatory, default_url)
+
 @cli.command()
 @click.pass_context
 @click.option('-s', '--source-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The bundle to be bootstrapped.')
+@click.option('-S', '--source-base', type=click.Path(file_okay=False, dir_okay=True), help=f'Specify parent dir of source-dir, bundle name taken from URL.')
 @click.option('-p', '--profile', help=f'The bundle profile to use.')
 @click.option('-u', '--update', help=f'Should the bundle be updated if present.')
 @click.option('-U', '--url', help=f'The controller URL to bootstrap (or use JENKINS_URL).')
 @click.option('-v', '--ci-version', type=click.STRING, help=f'Optional version (taken from the remote instance otherwise).')
-def bootstrap(ctx, source_dir, profile, update, url, ci_version):
+def bootstrap(ctx, source_dir, source_base, profile, update, url, ci_version):
     """Bootstrap a bundle"""
     _check_for_env_file(ctx)
     # no bundle_profiles found, no need to check
     if not ctx.obj.get(BUNDLE_PROFILES, ''):
         logging.debug('No bundle profiles found. Nothing to add the bundle to.')
         return
+    # source_dir and source_base are mutually exclusive but we need one of them
+    source_dir = null_check(source_dir, SOURCE_DIR_ARG, BUNDLEUTILS_BOOTSTRAP_SOURCE_DIR, False, '')
+    source_base = null_check(source_base, SOURCE_BASE_ARG, BUNDLEUTILS_BOOTSTRAP_SOURCE_BASE, False, '')
+    if source_dir and source_base:
+        die('source-dir and source-base are mutually exclusive')
+    elif source_base:
+        url = lookup_url(url)
+        bundle_name = _extract_name_from_url(url)
+        source_dir = os.path.join(source_base, bundle_name)
+        logging.info(f"Using source-dir: {source_dir} (derived from source-base and URL)")
+    elif source_dir:
+        logging.info(f"Using source-dir: {source_dir}")
+    else:
+        die('Either source-dir or source-base must be provided')
 
-    source_dir = null_check(source_dir, SOURCE_DIR_ARG, BUNDLEUTILS_BOOTSTRAP_SOURCE_DIR)
     bootstrap_profile = null_check(profile, 'profile', BUNDLEUTILS_BOOTSTRAP_PROFILE)
     bootstrap_update = null_check(update, 'update', BUNDLEUTILS_BOOTSTRAP_UPDATE, False, 'false')
     if bootstrap_profile:
@@ -626,6 +681,9 @@ def config(ctx):
     lines = []
     for key, value in sorted(os.environ.items()):
         if key.startswith('BUNDLEUTILS_'):
+            # if the key is a password, mask it
+            if 'PASSWORD' in key:
+                value = '*' * len(value)
             lines.append(f'{key}={value}')
     click.echo('\n'.join(lines))
 
@@ -638,6 +696,35 @@ def version():
         click.echo(f"{pkg_metadata['Summary']}")
     except PackageNotFoundError:
         click.echo("Package is not installed. Please ensure it's built and installed correctly.")
+
+@cli.command()
+@click.option('-u', '--url', help=f'The URL to extract the controller name from.')
+def extract_name_from_url(url):
+    """
+    Smart extraction of the controller name from the URL.
+    Extracts NAME from the following URL formats:
+    - http://a.b.c/NAME/
+    - http://a.b.c/NAME
+    - https://a.b.c/NAME/
+    - https://a.b.c/NAME
+    - http://NAME.b.c/
+    - http://NAME.b.c
+    - https://NAME.b.c/
+    - https://NAME.b.c
+    """
+    name = _extract_name_from_url(url)
+    click.echo(name)
+
+def _extract_name_from_url(url):
+    url = lookup_url(url)
+    parsed = urlparse(url)
+    # Check if the URL has a path
+    if parsed.path and parsed.path != '/':
+        return parsed.path.rstrip('/').split('/')[-1]
+    # Otherwise, extract the first subdomain
+    else:
+        subdomain = parsed.netloc.split('.')[0]
+        return subdomain
 
 @cli.command()
 @click.option('-U', '--url', help=f'The controller URL to test for (or use JENKINS_URL).')
@@ -691,13 +778,14 @@ def completion(ctx, shell):
 
 @click.pass_context
 def null_check(ctx, obj, obj_name, obj_env_var=None, mandatory=True, default=''):
+    """Check if the object is None and set it to the env var or default if mandatory"""
     if not obj:
         if obj_env_var:
             obj = os.environ.get(obj_env_var, '')
             if not obj:
                 if default:
                     obj = default
-                if ctx.obj.get(INTERACTIVE_ARG):
+                if mandatory and ctx.obj.get(INTERACTIVE_ARG):
                     if obj_env_var:
                         msg = f'Please provide the {obj_name} or set the {obj_env_var}'
                     else:
@@ -708,7 +796,14 @@ def null_check(ctx, obj, obj_name, obj_env_var=None, mandatory=True, default='')
                         obj = click.prompt(msg)
                 if mandatory and not obj:
                     die(f'No {obj_name} option provided and no {obj_env_var} set')
-    logging.debug(f'Setting ctx - > {obj_name}: {obj}')
+    # mask password or token
+    obj_str = obj
+    if 'password' in obj_name or 'token' in obj_name:
+        obj_str = '*******'
+    logging.debug(f'Setting ctx - > {obj_name}: {obj_str}')
+    # if the object_name already exists in the context and if different, warn the user
+    if obj_name in ctx.obj and ctx.obj[obj_name] != obj:
+        logging.warning(f'Overriding {obj_name} from {ctx.obj[obj_name]} to {obj_str}')
     ctx.obj[obj_name] = obj
     return obj
 
@@ -728,7 +823,8 @@ def _validate(url, username, password, source_dir, ignore_warnings):
     username = null_check(username, 'username', BUNDLEUTILS_USERNAME)
     password = null_check(password, 'password', BUNDLEUTILS_PASSWORD)
     source_dir = null_check(source_dir, 'source directory', BUNDLEUTILS_VALIDATE_SOURCE_DIR)
-    url = null_check(url, URL_ARG, BUNDLEUTILS_JENKINS_URL)
+    url = lookup_url(url)
+
     # if the url does end with /casc-bundle-mgnt/casc-bundle-validate, append it
     if validate_url_path not in url:
         url = url + validate_url_path
@@ -772,17 +868,30 @@ def _validate(url, username, password, source_dir, ignore_warnings):
                 die('Validation failed with errors or critical messages')
 
 @click.pass_context
-def fetch_options_null_check(ctx, url, path, username, password, target_dir, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, offline, cap):
+def fetch_options_null_check(ctx, url, path, username, password, target_dir, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, offline, cap):
     # creds boolean True if URL set and not empty
     creds_needed = url is not None and url != ''
     cap = null_check(cap, 'cap', BUNDLEUTILS_FETCH_USE_CAP_ENVELOPE, False, '')
     offline = null_check(offline, 'offline', BUNDLEUTILS_FETCH_OFFLINE, False, '')
-    url = null_check(url, 'url', BUNDLEUTILS_JENKINS_URL, False)
+    url = lookup_url(url, '', False)
     # fail fast if any strategy is passed explicitly
-    default_plugins_json_list_strategy = PluginJsonListStrategy.AUTO
-    default_plugins_json_merge_strategy = PluginJsonMergeStrategy.ADD_DELETE_SKIP_PINNED
+    default_plugins_json_list_strategy = PluginJsonListStrategy.AUTO.name
+    default_plugins_json_merge_strategy = PluginJsonMergeStrategy.ADD_DELETE_SKIP_PINNED.name
+    default_catalog_warnings_strategy = CatalogWarningsStrategy.FAIL.name
     plugins_json_list_strategy = null_check(plugins_json_list_strategy, 'plugins_json_list_strategy', BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY, True, default_plugins_json_list_strategy)
     plugins_json_merge_strategy = null_check(plugins_json_merge_strategy, 'plugins_json_merge_strategy', BUNDLEUTILS_PLUGINS_JSON_MERGE_STRATEGY, True, default_plugins_json_merge_strategy)
+    catalog_warnings_strategy = null_check(catalog_warnings_strategy, 'catalog_warnings_strategy', BUNDLEUTILS_CATALOG_WARNINGS_STRATEGY, True, default_catalog_warnings_strategy)
+    logging.debug(f'Converting strategies to enums...')
+    try:
+        ctx.obj['plugins_json_list_strategy'] = PluginJsonListStrategy[plugins_json_list_strategy]
+        ctx.obj['plugins_json_merge_strategy'] = PluginJsonMergeStrategy[plugins_json_merge_strategy]
+        ctx.obj['catalog_warnings_strategy'] = CatalogWarningsStrategy[catalog_warnings_strategy]
+    except KeyError:
+        die(f'''Invalid strategy either:
+            {plugins_json_list_strategy} (out of {get_name_from_enum(PluginJsonListStrategy)})
+            or {plugins_json_merge_strategy} (out of {get_name_from_enum(PluginJsonMergeStrategy)})
+            or {catalog_warnings_strategy} (out of {get_name_from_enum(CatalogWarningsStrategy)})
+            ''')
     username = null_check(username, USERNAME_ARG, BUNDLEUTILS_USERNAME, creds_needed)
     password = null_check(password, PASSWORD_ARG, BUNDLEUTILS_PASSWORD, creds_needed)
     path = null_check(path, PATH_ARG, BUNDLEUTILS_PATH, False)
@@ -807,10 +916,10 @@ def fetch_options_null_check(ctx, url, path, username, password, target_dir, plu
 @cli.command()
 @fetch_options
 @click.pass_context
-def fetch(ctx, url, path, username, password, target_dir, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, offline, cap):
+def fetch(ctx, url, path, username, password, target_dir, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, offline, cap):
     """Fetch YAML documents from a URL or path."""
     set_logging(ctx)
-    fetch_options_null_check(url, path, username, password, target_dir, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, offline, cap)
+    fetch_options_null_check(url, path, username, password, target_dir, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, offline, cap)
     try:
         fetch_yaml_docs()
     except Exception as e:
@@ -904,7 +1013,7 @@ def replace_string_in_list(data, pattern, replacement):
 
 def show_diff(title, plugins, col1, col2):
     hline(f"DIFF: {title}")
-    for plugin in plugins:
+    for plugin in sorted(plugins):
         if plugin not in col1 and plugin not in col2:
             continue
         # print fixed width columns for the plugin name in each graph
@@ -1048,28 +1157,31 @@ def _analyze_server_plugins(ctx, plugins_from_json):
     elif plugins_json_list_strategy == PluginJsonListStrategy.ROOTS_AND_DEPS:
         expected_plugins = graphs[graph_type_minus_deleted_disabled]["roots-and-deps"]
     elif plugins_json_list_strategy == PluginJsonListStrategy.ALL:
-        expected_plugins = dgall.keys()
+        expected_plugins = list(dgall.keys())
     else:
         die(f"Invalid plugins json list strategy: {plugins_json_list_strategy.name}. Expected one of: {PluginJsonListStrategy}")
 
     # handle the removal of CAP plugin dependencies removal
     if cap:
-        logging.info(f"{BUNDLEUTILS_FETCH_USE_CAP_ENVELOPE} option detected. Removing CAP plugin dependencies...")
-        expected_plugins_copy = expected_plugins.copy()
-        url, ci_version = lookup_url_and_version('', '')
-        if not url:
-            die("No URL provided for CAP plugin removal")
-        ci_version, ci_type, ci_server_home = server_options_null_check(ci_version, '', '')
-        jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
-        envelope_json = jenkins_manager.get_envelope_json_from_war()
-        envelope_json = json.loads(envelope_json)
-        for plugin_id, plugin_info in envelope_json['plugins'].items():
-            if plugin_info.get('scope') != 'bootstrap':
-                for dep in get_non_optional_dependencies(graph_type_all, plugin_id):
-                    if dep in expected_plugins:
-                        logging.debug(f"Removing dependency of {plugin_id}: {dep}")
-                        expected_plugins.remove(dep)
-        show_diff("Expected root plugins < vs > expected root plugins after CAP dependencies removed", dgall.keys(), expected_plugins_copy, expected_plugins)
+        if plugins_json_list_strategy == PluginJsonListStrategy.ALL:
+            logging.info(f"{BUNDLEUTILS_FETCH_USE_CAP_ENVELOPE} option detected with ALL strategy. Ignoring...")
+        else:
+            logging.info(f"{BUNDLEUTILS_FETCH_USE_CAP_ENVELOPE} option detected. Removing CAP plugin dependencies...")
+            expected_plugins_copy = expected_plugins.copy()
+            url, ci_version = lookup_url_and_version('', '')
+            if not url:
+                die("No URL provided for CAP plugin removal")
+            ci_version, ci_type, ci_server_home = server_options_null_check(ci_version, '', '')
+            jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
+            envelope_json = jenkins_manager.get_envelope_json_from_war()
+            envelope_json = json.loads(envelope_json)
+            for plugin_id, plugin_info in envelope_json['plugins'].items():
+                if plugin_info.get('scope') != 'bootstrap':
+                    for dep in get_non_optional_dependencies(graph_type_all, plugin_id):
+                        if dep in expected_plugins:
+                            logging.debug(f"Removing dependency of {plugin_id}: {dep}")
+                            expected_plugins.remove(dep)
+            show_diff("Expected root plugins < vs > expected root plugins after CAP dependencies removed", dgall.keys(), expected_plugins_copy, expected_plugins)
 
     logging.info("Plugin Analysis - finished analysis.")
 
@@ -1232,7 +1344,11 @@ def _update_plugins(ctx):
                 updated_plugins.append(plugin)
                 continue
             if plugin['id'] in all_bootstrap_plugins:
-                logging.info(f" -> removing unexpected bootstrap plugin {plugin['id']}")
+                if plugins_json_merge_strategy == PluginJsonMergeStrategy.ALL:
+                    logging.info(f" -> keeping bootstrap plugin {plugin['id']} according to merge strategy: {plugins_json_merge_strategy.name}")
+                    updated_plugins.append(plugin)
+                else:
+                    logging.info(f" -> removing unexpected bootstrap plugin {plugin['id']}")
                 continue
             if not plugin['id'] in expected_plugins:
                 if plugins_json_merge_strategy.skip_pinned:
@@ -1268,7 +1384,7 @@ def _update_plugins(ctx):
         updated_plugins = sorted(updated_plugins, key=lambda x: x['id'])
 
         updated_plugins_ids = [plugin['id'] for plugin in updated_plugins]
-        all_plugin_ids = updated_plugins_ids + expected_plugins
+        all_plugin_ids = set(updated_plugins_ids + expected_plugins)
         show_diff("Final merged plugins < vs > expected plugins after merging", all_plugin_ids, updated_plugins_ids, expected_plugins)
         if plugin_catalog_plugin_ids_previous:
             show_diff("Final merged catalog < vs > previous catalog after merging", plugin_catalog_plugin_ids + plugin_catalog_plugin_ids_previous, plugin_catalog_plugin_ids, plugin_catalog_plugin_ids_previous)
@@ -1357,20 +1473,37 @@ def fetch_yaml_docs(ctx):
     else:
         die('No path or URL provided')
 
-def replace_carriage_returns(response_text):
+@click.pass_context
+def replace_carriage_returns(ctx, response_text):
+        catalog_warnings_strategy = ctx.obj.get('catalog_warnings_strategy')
         if isinstance(response_text, bytes):
             response_text = response_text.decode('utf-8')
         # print any lines with carriage returns in them
         for line in response_text.split('\n'):
             if '\\r' in line:
                 logging.debug(f'Carriage return found in line: {line}')
+        # find any occurrences of "^--- .*$"
+        matching_lines = re.findall(r'^--- .*$', response_text, re.MULTILINE)
+        if matching_lines:
+            # log results
+            for line in matching_lines:
+                logging.warning(f'Found catalog warnings: {line}')
+            if catalog_warnings_strategy == CatalogWarningsStrategy.COMMENT:
+                logging.warning(f'Found catalog warnings in the response. Converting to comments according to strategy {catalog_warnings_strategy.name}')
+                response_text = re.sub(r'^--- .*$','# \g<0>', response_text, flags=re.MULTILINE)
+            elif catalog_warnings_strategy == CatalogWarningsStrategy.FAIL:
+                die(f'''
+                    Found catalog warnings in the response. Exiting according to strategy {catalog_warnings_strategy.name}
+                    Either fix the warnings or change the strategy to {CatalogWarningsStrategy.COMMENT.name} to convert warnings to comments.''')
+            else:
+                die(f'Invalid catalog warnings strategy: {catalog_warnings_strategy.name}. Expected one of: {get_name_from_enum(CatalogWarningsStrategy)}')
         # remove any '\r' characters from the response
         logging.info('Removing carriage returns from the response')
         response_text = response_text.replace('\\r', '')
         # print any lines with carriage returns in them
         for line in response_text.split('\n'):
             if '\\r' in line:
-                logging.warn(f'Carriage return found in line still: {line}')
+                logging.warning(f'Carriage return found in line still: {line}')
         return response_text
 
 def call_jenkins_api(url, username, password):
@@ -1390,14 +1523,12 @@ def write_all_yaml_docs_from_comments(yaml_docs, target_dir):
     for i, doc in enumerate(yaml_docs):
         # read the header from the original YAML doc
         filename = doc.ca.comment[1][0].value.strip().strip("# ")
-        # remove comments from the YAML doc
-        doc.ca.comment = None
+        # remove the first line of the comment from the YAML doc
+        doc.ca.comment[1].pop(0)
         write_yaml_doc(doc, target_dir, filename)
 
 def write_yaml_doc(doc, target_dir, filename):
     filename = os.path.join(target_dir, filename)
-    # normalize the YAML doc
-    doc = normalize_yaml(doc)
     doc = remove_empty_keys(doc)
 
     # create a new file for each YAML document
@@ -1414,23 +1545,7 @@ def write_yaml_doc(doc, target_dir, filename):
     with open(filename, 'w') as f:
         f.writelines(lines)
 
-# TODO: remove after testing with normalising
-def normalize_yaml(data):
-    """Normalize a nested dictionary."""
-    if isinstance(data, dict):
-        return {k: normalize_yaml(v) for k, v in data.items()}
-    elif isinstance(data, list):
-        return [normalize_yaml(v) for v in data]
-    elif isinstance(data, str):
-        # Normalize strings that contain newline characters
-        # if '\\n' in data:
-        #     return '|\n' + data.replace('\\n', '\n')
-        # else:
-            return data
-    else:
-        return data
-
-def traverse_credentials(filename, obj, custom_replacements={}, path=""):
+def traverse_credentials(hash_only, hash_seed, filename, obj, custom_replacements={}, path=""):
     if isinstance(obj, dict):
         for k, v in obj.items():
             new_path = f"{path}/{k}" if path else f"/{k}"
@@ -1438,12 +1553,17 @@ def traverse_credentials(filename, obj, custom_replacements={}, path=""):
             if isinstance(v, str) and 'id' in obj:
                 id = obj['id']
                 matching_tuple = None
-                custom_replacements_for_id = [item for item in custom_replacements if item['id'] == id]
-                for custom_replacement in custom_replacements_for_id:
-                    if k in custom_replacement:
-                        matching_tuple = custom_replacement
+                # hashing only for auditing purposes - no need to check for custom replacements
+                if not hash_only:
+                    custom_replacements_for_id = [item for item in custom_replacements if item['id'] == id]
+                    for custom_replacement in custom_replacements_for_id:
+                        if k in custom_replacement:
+                            matching_tuple = custom_replacement
                 if re.match(r'{.*}', v) or matching_tuple is not None:
-                    if matching_tuple is None or k not in matching_tuple:
+                    if hash_only:
+                        # create a hash of the hash_seed + v
+                        replacement = hashlib.sha256((hash_seed + v).encode()).hexdigest()
+                    elif matching_tuple is None or k not in matching_tuple:
                         logging.debug(f"Matching tuple NOT found. Creating replacement for {id} and {k}")
                         # create a string consisting of:
                         # - all non-alphanumeric characters changed to underscores
@@ -1466,20 +1586,24 @@ def traverse_credentials(filename, obj, custom_replacements={}, path=""):
                         patch = {"op": "replace", "path": f'{new_path}', "value": f'{replacement}'}
                         apply_patch(filename, [patch])
                         continue
-            traverse_credentials(filename, v, custom_replacements, new_path)
+            traverse_credentials(hash_only, hash_seed, filename, v, custom_replacements, new_path)
     elif isinstance(obj, list):
         # traverse the list in reverse order to avoid index issues when deleting items
         for i, v in enumerate(reversed(obj)):
             # Calculate the original index by subtracting the reversed index from the length of the list minus 1
             original_index = len(obj) - 1 - i
             new_path = f"{path}/{original_index}"
-            traverse_credentials(filename, v, custom_replacements, new_path)
+            traverse_credentials(hash_only, hash_seed, filename, v, custom_replacements, new_path)
     else:
         if isinstance(obj, str) and re.match(r'{.*}', obj):
             # if the string is a replacement string, raise an exception
             logging.warning(f"Found a non-credential string (no id found) that needs to be replaced at path: {path}")
-            # the replacement string should be in the format ${ID_KEY}
-            replacement = "${" + re.sub(r'\W', '_', path.removeprefix('/')).upper() + "}"
+            if hash_only:
+                # create a hash of the hash_seed + v
+                replacement = hashlib.sha256((hash_seed + v).encode()).hexdigest()
+            else:
+                # the replacement string should be in the format ${ID_KEY}
+                replacement = "${" + re.sub(r'\W', '_', path.removeprefix('/')).upper() + "}"
             # print the JSON Patch operation for the replacement
             patch = {"op": "replace", "path": f'{path}', "value": f'{replacement}'}
             apply_patch(filename, [patch])
@@ -1530,13 +1654,21 @@ def handle_patches(patches, target_dir):
         logging.info(f'Transform: applying JSON patches to {filename}')
         apply_patch(filename, patch)
 
-def apply_replacements(filename, custom_replacements):
+@click.pass_context
+def apply_replacements(ctx, filename, custom_replacements):
     with open(filename, 'r') as inp:
         obj = yaml.load(inp)
         if obj is None:
             logging.error(f'Failed to load YAML object from file {filename}')
             return
-        traverse_credentials(filename, obj, custom_replacements)
+        hash_only = is_truthy(os.environ.get(BUNDLEUTILS_CREDENTIAL_HASH, 'false'))
+        hash_seed = ctx.obj.get('hash_seed', '')
+        if hash_only:
+            if hash_seed is None or hash_seed == '':
+                logging.info(f'Hashing encrypted data without seed')
+            else:
+                logging.info(f'Hashing encrypted data with seed')
+        traverse_credentials(hash_only, hash_seed, filename, obj, custom_replacements)
 
 def handle_credentials(credentials, target_dir):
     # if credentials is empty, skip
@@ -1642,7 +1774,43 @@ def normalize(ctx, strict, configs, source_dir, target_dir):
     if not source_dir:
         source_dir = default_target
     if not target_dir:
-        target_dir = default_normalized
+        target_dir = source_dir + '-normalized'
+    if not configs:
+        # if a normalize.yaml file is found in the current directory, use it
+        if os.path.exists('normalize.yaml'):
+            logging.info('Using normalize.yaml in the current directory')
+            configs = ['normalize.yaml']
+        else:
+            path = pkg_resources.files('defaults.configs') / 'normalize.yaml'
+            configs = [path]
+    _transform(configs, source_dir, target_dir)
+
+@cli.command()
+@transform_options
+@click.option('-H', '--hash-seed', help=f"""
+    Optional prefix for the hashing process (also {BUNDLEUTILS_CREDENTIAL_HASH_SEED}).
+
+    NOTE: Ideally, this should be a secret value that is not shared with anyone. Changing this value will result in different hashes.""")
+@click.pass_context
+def audit(ctx, strict, configs, source_dir, target_dir, hash_seed):
+    """
+    Transform using the normalize.yaml but obfuscating any sensitive data.
+
+    NOTE: The credentials and sensitive data will be hashed and cannot be used in an actual bundle.
+    """
+    set_logging(ctx)
+
+    source_dir = null_check(source_dir, SOURCE_DIR_ARG, BUNDLEUTILS_AUDIT_SOURCE_DIR)
+    target_dir = null_check(target_dir, TARGET_DIR_ARG, BUNDLEUTILS_AUDIT_TARGET_DIR)
+    configs = null_check(configs, 'configs', BUNDLEUTILS_AUDIT_CONFIGS, False)
+
+    os.environ[BUNDLEUTILS_CREDENTIAL_HASH] = 'true'
+    null_check(hash_seed, 'hash_seed', BUNDLEUTILS_CREDENTIAL_HASH_SEED, False,'')
+
+    if not source_dir:
+        source_dir = default_target
+    if not target_dir:
+        target_dir = source_dir + '-audit'
     if not configs:
         # if a normalize.yaml file is found in the current directory, use it
         if os.path.exists('normalize.yaml'):
@@ -1725,24 +1893,39 @@ def _transform(configs, source_dir, target_dir):
     _update_bundle(target_dir)
 
 def remove_empty_keys(data):
-    if isinstance(data, dict):  # If the data is a dictionary
-        # Create a new dictionary, skipping entries with empty keys
-        ret = {k: remove_empty_keys(v) for k, v in data.items() if k != ""}
-        logging.log(logging.NOTSET, f'Removing empty keys from DICT {data}')
-        logging.log(logging.NOTSET, f'Result: {ret}')
-        return ret
-    elif isinstance(data, list):  # If the data is a list
-        logging.log(logging.NOTSET, f'Removing empty keys from LIST {data}')
+    if isinstance(data, CommentedMap):  # Handle dictionaries with comments
+        keys_to_remove = [k for k in data if k == ""]
+        for key in keys_to_remove:
+            del data[key]  # Remove the empty key directly from the object
+        for key, value in data.items():
+            remove_empty_keys(value)  # Recursively process nested items
+        logging.debug(logging.NOTSET, f'Removed empty keys from DICT: {data}')
+    elif isinstance(data, CommentedSeq):  # Handle lists with comments
+        items_to_keep = []
+        for item in data:
+            processed_item = remove_empty_keys(item)
+            if processed_item or processed_item == 0:  # Keep non-empty items
+                items_to_keep.append(processed_item)
+        # Modify the list in place
+        data[:] = items_to_keep
+        logging.debug(logging.NOTSET, f'Removed empty keys from LIST: {data}')
+    elif isinstance(data, list):  # Handle regular Python lists
         newdata = []
-        for v in data:
-            ret = remove_empty_keys(v)
-            if ret:
-                newdata.append(ret)
-        logging.log(logging.NOTSET, f'Result: {newdata}')
-        return newdata
-    else:
-        # Return the item itself if it's not a dictionary or list
-        return data
+        for item in data:
+            processed_item = remove_empty_keys(item)
+            if processed_item or processed_item == 0:
+                newdata.append(processed_item)
+        data[:] = newdata
+        logging.debug(logging.NOTSET, f'Result: {data}')
+    elif isinstance(data, dict):  # Handle regular Python dictionaries
+        keys_to_remove = [k for k in data if k == ""]
+        for key in keys_to_remove:
+            del data[key]
+        for key, value in list(data.items()):
+            data[key] = remove_empty_keys(value)
+        logging.debug(logging.NOTSET, f'Removed empty keys from regular DICT: {data}')
+    # For scalar values, just return as-is
+    return data
 
 @cli.command()
 @click.option('-t', '--target-dir', 'target_dir', required=True, type=click.Path(file_okay=False, dir_okay=True), help=f'The target directory to update the bundle.yaml file.')
