@@ -325,7 +325,7 @@ class JenkinsServerManager:
         self.check_auth_token()
         # look for any WARN or ERROR messages in the log, and print the log line if found
         logging.info("Jenkins server - Checking for WARN or ERROR messages in the Jenkins log...")
-        with open(self.target_jenkins_log, 'r') as log_file:
+        with open(self.target_jenkins_log, 'r', encoding='utf-8') as log_file:
             for line in log_file:
                 if 'WARN' in line or 'ERROR' in line:
                     logging.warn(line)
