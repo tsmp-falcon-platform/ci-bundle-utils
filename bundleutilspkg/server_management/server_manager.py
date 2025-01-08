@@ -414,7 +414,7 @@ class JenkinsServerManager:
                 logging.info("Waiting for server to start...")
         if not server_started:
             logging.warn("ERROR: Server not started in time. Printing the Jenkins log....")
-            with open(self.target_jenkins_log, "r") as log_file:
+            with open(self.target_jenkins_log, "r", encoding='utf-8') as log_file:
                 logging.info(log_file.read())
             self.stop_server()
             self.die("ERROR: Server not started in time. Please check the Jenkins log for more information.")
