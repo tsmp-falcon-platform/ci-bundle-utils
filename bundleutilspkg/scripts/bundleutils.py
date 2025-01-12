@@ -743,7 +743,7 @@ def find_bundle_by_url(ctx, url, ci_version, bundles_dir):
     my_bundle = None
     bundle_profiles = ctx.obj.get(BUNDLE_PROFILES)
     for bundle_name, bundle_env_vars in bundle_profiles['bundles'].items():
-        if bundle_env_vars.get(BUNDLEUTILS_JENKINS_URL, '').strip().rstrip('/') == url.strip().rstrip('/') and bundle_env_vars.get(BUNDLEUTILS_CI_VERSION, '') == ci_version:
+        if bundle_env_vars.get(BUNDLEUTILS_JENKINS_URL, '').strip().rstrip('/') == url.strip().rstrip('/') and re.match(ci_version, bundle_env_vars.get(BUNDLEUTILS_CI_VERSION, '')):
             logging.debug(f"Found bundle: {bundle_name}. Checking for bundle.yaml in {bundles_dir}")
             bundles_found = []
             for bundle_found in glob.iglob(f'{bundles_dir}/**/{bundle_name}/bundle.yaml', recursive=True):
@@ -751,7 +751,7 @@ def find_bundle_by_url(ctx, url, ci_version, bundles_dir):
                 bundles_found.append(bundle_found)
                 if my_bundle:
                     # exit with exit code 1 and text message if a second bundle is found
-                    die(f"Multiple bundles found matching the criteria: {my_bundle} and {bundle_found}")
+                    die(f"Multiple bundles found with the name '{bundle_found}'")
 
             if len(bundles_found) > 1:
                 die(f"Multiple bundles found: {bundles_found}")
