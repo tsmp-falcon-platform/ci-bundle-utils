@@ -8,6 +8,7 @@
 - [Why create it?](#why-create-it)
 - [Where can I run it?](#where-can-i-run-it)
 - [Commands](#commands)
+- [Help Pages](#help-pages)
 - [Local Development](#local-development)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
@@ -46,7 +47,7 @@ Runtime variants explained here include:
 
 For a summary of commands, see [explaining the main commands](./docs/explaining-commands.md)
 
-Help Pages
+## Help Pages
 
 <!-- START help-pages-doc -->
 ```mono
