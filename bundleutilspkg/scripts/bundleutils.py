@@ -483,12 +483,33 @@ def bootstrap(ctx, source_dir, source_base, profile, update, url, ci_version):
             die(f'No bundle profile found for {bootstrap_profile}')
 
 @cli.command()
+@click.pass_context
+def help_pages(ctx):
+    """
+    Show all help pages by running 'bundleutils --help' at the global level and then per sub command.
+    """
+    click.echo(ctx.parent.get_help())
+    # get all sub commands in alphabetical order
+    commands = sorted(cli.commands.keys())
+
+    for key in commands:
+        command = cli.commands[key]
+        click.echo('-' * 80)
+        click.echo(command.get_help(ctx.parent).replace('Usage: bundleutils', f'Usage: bundleutils {command.name}'))
+
+@cli.command()
 @server_options
 @click.option('-s', '--source-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The bundle to be validated (startup will use the plugins from here).')
 @click.option('-T', '--ci-bundle-template', type=click.Path(file_okay=False, dir_okay=True), required=False, help=f'Path to a template bundle used to start the test server (defaults to in-built tempalte).')
 @click.pass_context
 def ci_setup(ctx, ci_version, ci_type, ci_server_home, source_dir, ci_bundle_template):
-    """Download CloudBees WAR file, and setup the starter bundle"""
+    """
+    Download CloudBees WAR file, and setup the starter bundle.
+    Env vars:
+        BUNDLEUTILS_CB_DOCKER_IMAGE_{CI_TYPE}: Docker image to use for the specified CI type
+        BUNDLEUTILS_CB_WAR_DOWNLOAD_URL_{CI_TYPE}: WAR download URL to use for the specified CI type
+        BUNDLEUTILS_SKOPEO_COPY_OPTS: options to pass to skopeo copy command
+    """
     set_logging(ctx)
     ci_version, ci_type, ci_server_home = server_options_null_check(ci_version, ci_type, ci_server_home)
     source_dir = null_check(source_dir, SOURCE_DIR_ARG, BUNDLEUTILS_SETUP_SOURCE_DIR)

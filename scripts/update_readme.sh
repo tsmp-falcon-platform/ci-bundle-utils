@@ -16,7 +16,7 @@ tmpfile=$(mktemp)
 # Extract policies data from each YAML file and add to the temporary file
 # shellcheck disable=SC1090
 source "${venv_activate}"
-echo '```sh' > "$tmpfile"
+echo '```mono' > "$tmpfile"
 bundleutils help-pages >> "$tmpfile"
 echo '```' >> "$tmpfile"
 
