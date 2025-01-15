@@ -185,6 +185,7 @@ class JenkinsServerManager:
         """Create a startup bundle from the specified source directory and bundle template."""
         if not plugin_files:
             self.die(f"Plugin files not found in {plugin_files}")
+        logging.info(f"Using plugin files: {plugin_files}")
         # the validation template is a directory containing the configuration files to be used
         if not validation_template or os.path.exists(validation_template):
             # check if the validation-template directory exists in the current directory
@@ -206,8 +207,10 @@ class JenkinsServerManager:
                 src_file = os.path.join(root, file)
                 dest_file = os.path.join(self.target_jenkins_home_casc_startup_bundle, os.path.relpath(src_file, validation_template))
                 os.makedirs(os.path.dirname(dest_file), exist_ok=True)
+                logging.debug(f"Copying file {src_file} to {dest_file}")
                 subprocess.run(['cp', src_file, dest_file], check=True)
         for plugin_file in plugin_files:
+            logging.debug(f"Copying plugin file {plugin_file} to {self.target_jenkins_home_casc_startup_bundle}")
             subprocess.run(['cp', plugin_file, self.target_jenkins_home_casc_startup_bundle], check=True)
         logging.info(f"Created startup bundle in {self.target_jenkins_home_casc_startup_bundle}")
 

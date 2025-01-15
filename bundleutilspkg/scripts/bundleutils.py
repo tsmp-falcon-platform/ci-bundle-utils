@@ -1965,11 +1965,15 @@ def _update_bundle(target_dir, description=None):
                 files = [exact_match]
                 break
 
-        # Add list of YAML files starting with the prefix
-        for prefix in prefixes:
-            files += sorted(glob.glob(os.path.join(target_dir, f'{prefix}.*.yaml')))
+        # Add list of YAML files matching .*prefix.* and ending with .yaml
+        for file in os.listdir(target_dir):
+            if re.match(rf'.*{prefix}.*\.yaml', file) and not file == f'{prefix}.yaml':
+                files.append(os.path.join(target_dir, file))
+
         # remove any empty files
-        files = [file for file in files if _file_check(file)]
+        files = sorted([file for file in files if _file_check(file)])
+        for file in files:
+            logging.debug(f'File for {key}: {file}')
 
         # special case for 'plugins'. If any of the files does not contain the yaml key 'plugins', remove the key from the data
         if key == 'plugins':
