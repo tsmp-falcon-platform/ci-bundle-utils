@@ -150,8 +150,8 @@ def get_name_from_enum(my_enum):
 
 
 def common_options(func):
-    func = click.option('-l', '--log-level', default=os.environ.get(BUNDLEUTILS_LOG_LEVEL, 'INFO'), help=f'The log level (or use {BUNDLEUTILS_LOG_LEVEL}).')(func)
-    func = click.option('-e', '--env-file', default=os.environ.get(BUNDLEUTILS_ENV, ''), type=click.Path(file_okay=True, dir_okay=False), help=f'Optional bundle profiles file (or use {BUNDLEUTILS_ENV}).')(func)
+    func = click.option('-l', '--log-level', default=os.environ.get(BUNDLEUTILS_LOG_LEVEL, 'INFO'), help=f'The log level ({BUNDLEUTILS_LOG_LEVEL}).')(func)
+    func = click.option('-e', '--env-file', default=os.environ.get(BUNDLEUTILS_ENV, ''), type=click.Path(file_okay=True, dir_okay=False), help=f'Optional bundle profiles file ({BUNDLEUTILS_ENV}).')(func)
     func = click.option('-i', '--interactive', default=False, is_flag=True, help=f'Run in interactive mode.')(func)
     return func
 
@@ -163,16 +163,16 @@ def server_options(func):
 
 def fetch_options(func):
     func = click.option('-M', '--plugin-json-path', help=f'The path to fetch JSON file from (found at {plugin_json_url_path}).')(func)
-    func = click.option('-P', '--path', 'path', type=click.Path(file_okay=True, dir_okay=False), help=f'The path to fetch YAML from (or use {BUNDLEUTILS_PATH}).')(func)
-    func = click.option('-c', '--cap', default=False, is_flag=True, help=f'Use the envelope.json from the war file to remove CAP plugin dependencies (or use {BUNDLEUTILS_FETCH_USE_CAP_ENVELOPE}).')(func)
-    func = click.option('-O', '--offline', default=False, is_flag=True, help=f'Save the export and plugin data to <target-dir>-offline (or use {BUNDLEUTILS_FETCH_OFFLINE}).')(func)
-    func = click.option('-j', '--plugins-json-list-strategy', help=f'Strategy for creating list from the plugins json (or use {BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY}).')(func)
-    func = click.option('-J', '--plugins-json-merge-strategy', help=f'Strategy for merging plugins from list into the bundle (or use {BUNDLEUTILS_PLUGINS_JSON_MERGE_STRATEGY}).')(func)
-    func = click.option('-C', '--catalog-warnings-strategy', help=f'Strategy for handling beekeeper warnings in the plugin catalog (or use {BUNDLEUTILS_CATALOG_WARNINGS_STRATEGY}).')(func)
-    func = click.option('-U', '--url', 'url', help=f'The URL to fetch YAML from (or use {BUNDLEUTILS_JENKINS_URL}).')(func)
-    func = click.option('-u', '--username', help=f'Username for basic authentication (or use {BUNDLEUTILS_USERNAME}).')(func)
-    func = click.option('-p', '--password', help=f'Password for basic authentication (or use {BUNDLEUTILS_PASSWORD}).')(func)
-    func = click.option('-t', '--target-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The target directory for the YAML documents (or use {BUNDLEUTILS_FETCH_TARGET_DIR}).')(func)
+    func = click.option('-P', '--path', 'path', type=click.Path(file_okay=True, dir_okay=False), help=f'The path to fetch YAML from ({BUNDLEUTILS_PATH}).')(func)
+    func = click.option('-c', '--cap', default=False, is_flag=True, help=f'Use the envelope.json from the war file to remove CAP plugin dependencies ({BUNDLEUTILS_FETCH_USE_CAP_ENVELOPE}).')(func)
+    func = click.option('-O', '--offline', default=False, is_flag=True, help=f'Save the export and plugin data to <target-dir>-offline ({BUNDLEUTILS_FETCH_OFFLINE}).')(func)
+    func = click.option('-j', '--plugins-json-list-strategy', help=f'Strategy for creating list from the plugins json ({BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY}).')(func)
+    func = click.option('-J', '--plugins-json-merge-strategy', help=f'Strategy for merging plugins from list into the bundle ({BUNDLEUTILS_PLUGINS_JSON_MERGE_STRATEGY}).')(func)
+    func = click.option('-C', '--catalog-warnings-strategy', help=f'Strategy for handling beekeeper warnings in the plugin catalog ({BUNDLEUTILS_CATALOG_WARNINGS_STRATEGY}).')(func)
+    func = click.option('-U', '--url', 'url', help=f'The URL to fetch YAML from ({BUNDLEUTILS_JENKINS_URL}).')(func)
+    func = click.option('-u', '--username', help=f'Username for basic authentication ({BUNDLEUTILS_USERNAME}).')(func)
+    func = click.option('-p', '--password', help=f'Password for basic authentication ({BUNDLEUTILS_PASSWORD}).')(func)
+    func = click.option('-t', '--target-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The target directory for the YAML documents ({BUNDLEUTILS_FETCH_TARGET_DIR}).')(func)
     return func
 
 
@@ -349,6 +349,7 @@ def set_logging(ctx):
 def cli(ctx, log_level, env_file, interactive):
     """A tool to fetch and transform YAML documents."""
     ctx.ensure_object(dict)
+    ctx.max_content_width=120
     ctx.obj[ENV_FILE_ARG] = env_file
     ctx.obj[INTERACTIVE_ARG] = interactive
     if not ctx.obj.get(BUNDLEUTILS_LOG_LEVEL, ''):
@@ -359,7 +360,6 @@ def cli(ctx, log_level, env_file, interactive):
         ctx.obj[ORIGINAL_CWD] = os.getcwd()
     if ctx.invoked_subcommand is None:
         click.echo(ctx.get_help())
-
 
 def yaml2dict(yamlFile):
     dict_res = {}
@@ -410,10 +410,12 @@ def lookup_url(url, default_url = '', mandatory = True):
 @click.option('-S', '--source-base', type=click.Path(file_okay=False, dir_okay=True), help=f'Specify parent dir of source-dir, bundle name taken from URL.')
 @click.option('-p', '--profile', help=f'The bundle profile to use.')
 @click.option('-u', '--update', help=f'Should the bundle be updated if present.')
-@click.option('-U', '--url', help=f'The controller URL to bootstrap (or use JENKINS_URL).')
+@click.option('-U', '--url', help=f'The controller URL to bootstrap (JENKINS_URL).')
 @click.option('-v', '--ci-version', type=click.STRING, help=f'Optional version (taken from the remote instance otherwise).')
 def bootstrap(ctx, source_dir, source_base, profile, update, url, ci_version):
-    """Bootstrap a bundle"""
+    """
+    Bootstrap a bundle.
+    """
     _check_for_env_file(ctx)
     # no bundle_profiles found, no need to check
     if not ctx.obj.get(BUNDLE_PROFILES, ''):
@@ -486,7 +488,7 @@ def bootstrap(ctx, source_dir, source_base, profile, update, url, ci_version):
 @click.pass_context
 def help_pages(ctx):
     """
-    Show all help pages by running 'bundleutils --help' at the global level and then per sub command.
+    Show all help pages by running 'bundleutils --help' at the global level and each sub command.
     """
     click.echo(ctx.parent.get_help())
     # get all sub commands in alphabetical order
@@ -494,7 +496,7 @@ def help_pages(ctx):
 
     for key in commands:
         command = cli.commands[key]
-        click.echo('-' * 80)
+        click.echo('-' * 120)
         click.echo(command.get_help(ctx.parent).replace('Usage: bundleutils', f'Usage: bundleutils {command.name}'))
 
 @cli.command()
@@ -505,6 +507,8 @@ def help_pages(ctx):
 def ci_setup(ctx, ci_version, ci_type, ci_server_home, source_dir, ci_bundle_template):
     """
     Download CloudBees WAR file, and setup the starter bundle.
+
+    \b
     Env vars:
         BUNDLEUTILS_CB_DOCKER_IMAGE_{CI_TYPE}: Docker image to use for the specified CI type
         BUNDLEUTILS_CB_WAR_DOWNLOAD_URL_{CI_TYPE}: WAR download URL to use for the specified CI type
@@ -723,6 +727,8 @@ def version():
 def extract_name_from_url(url):
     """
     Smart extraction of the controller name from the URL.
+
+    \b
     Extracts NAME from the following URL formats:
     - http://a.b.c/NAME/
     - http://a.b.c/NAME
@@ -748,12 +754,16 @@ def _extract_name_from_url(url):
         return subdomain
 
 @cli.command()
-@click.option('-U', '--url', help=f'The controller URL to test for (or use JENKINS_URL).')
+@click.option('-U', '--url', help=f'The controller URL to test for (JENKINS_URL).')
 @click.option('-v', '--ci-version', type=click.STRING, help=f'Optional version (taken from the remote instance otherwise).')
 @click.option('-b', '--bundles-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The directory containing the bundles.')
 @click.pass_context
 def find_bundle_by_url(ctx, url, ci_version, bundles_dir):
-    """Find a bundle by Jenkins URL and CI Version."""
+    """
+    Find a bundle by Jenkins URL and CI Version.
+
+    Use -v '.*' to match any version.
+    """
     set_logging(ctx)
     if not ctx.obj.get(BUNDLE_PROFILES, ''):  # if no bundle profiles are found, exit
         logging.error("No bundle profiles found. Exiting.")
@@ -829,10 +839,10 @@ def null_check(ctx, obj, obj_name, obj_env_var=None, mandatory=True, default='')
     return obj
 
 @cli.command()
-@click.option('-U', '--url', help=f'The controller URL to validate agianst (or use {BUNDLEUTILS_JENKINS_URL}).')
-@click.option('-u', '--username', help=f'Username for basic authentication (or use {BUNDLEUTILS_USERNAME}).')
-@click.option('-p', '--password', help=f'Password for basic authentication (or use {BUNDLEUTILS_PASSWORD}).')
-@click.option('-s', '--source-dir', required=True, type=click.Path(file_okay=False, dir_okay=True), help=f'The source directory for the YAML documents (or use {BUNDLEUTILS_VALIDATE_SOURCE_DIR}).')
+@click.option('-U', '--url', help=f'The controller URL to validate agianst ({BUNDLEUTILS_JENKINS_URL}).')
+@click.option('-u', '--username', help=f'Username for basic authentication ({BUNDLEUTILS_USERNAME}).')
+@click.option('-p', '--password', help=f'Password for basic authentication ({BUNDLEUTILS_PASSWORD}).')
+@click.option('-s', '--source-dir', required=True, type=click.Path(file_okay=False, dir_okay=True), help=f'The source directory for the YAML documents ({BUNDLEUTILS_VALIDATE_SOURCE_DIR}).')
 @click.option('-w', '--ignore-warnings', default=False, is_flag=True, help=f'Do not fail if warnings are found.')
 @click.pass_context
 def validate(ctx, url, username, password, source_dir, ignore_warnings):
