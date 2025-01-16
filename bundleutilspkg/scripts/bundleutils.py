@@ -510,8 +510,8 @@ def ci_setup(ctx, ci_version, ci_type, ci_server_home, source_dir, ci_bundle_tem
 
     \b
     Env vars:
-        BUNDLEUTILS_CB_DOCKER_IMAGE_{CI_TYPE}: Docker image to use for the specified CI type
-        BUNDLEUTILS_CB_WAR_DOWNLOAD_URL_{CI_TYPE}: WAR download URL to use for the specified CI type
+        BUNDLEUTILS_CB_DOCKER_IMAGE_{CI_TYPE}: Docker image for the CI_TYPE (MM, OC)
+        BUNDLEUTILS_CB_WAR_DOWNLOAD_URL_{CI_TYPE}: WAR download URL for the CI_TYPE (CM, OC_TRADITIONAL)
         BUNDLEUTILS_SKOPEO_COPY_OPTS: options to pass to skopeo copy command
     """
     set_logging(ctx)
