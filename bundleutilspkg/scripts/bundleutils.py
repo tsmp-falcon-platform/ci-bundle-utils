@@ -2013,23 +2013,25 @@ def _update_bundle(ctx, target_dir, description=None):
         else:
             prefixes = [key]
 
-        # if prefix.yaml exists, add
-        exact_match = None
         for prefix in prefixes:
+            # Add list of YAML files matching .*prefix.* and ending with .yaml
+            for file in os.listdir(target_dir):
+                if re.match(rf'.*{prefix}.*\.yaml', file) and not file == f'{prefix}.yaml':
+                    files.append(os.path.join(target_dir, file))
+        files = sorted(files)
+
+        for prefix in prefixes:
+            # if exact match exists, add to front
             exact_match = os.path.join(target_dir, f'{prefix}.yaml')
             if os.path.exists(exact_match):
-                files = [exact_match]
+                logging.info(f'Found exact match for {key}: {exact_match}')
+                files.insert(0, exact_match)
                 break
 
-        # Add list of YAML files matching .*prefix.* and ending with .yaml
-        for file in os.listdir(target_dir):
-            if re.match(rf'.*{prefix}.*\.yaml', file) and not file == f'{prefix}.yaml':
-                files.append(os.path.join(target_dir, file))
-
         # remove any empty files
-        files = sorted([file for file in files if _file_check(file)])
+        files = [file for file in files if _file_check(file)]
         for file in files:
-            logging.debug(f'File for {key}: {file}')
+            logging.info(f'File for {key}: {file}')
 
         # special case for 'plugins'. If any of the files does not contain the yaml key 'plugins', remove the key from the data
         if key == 'plugins':
