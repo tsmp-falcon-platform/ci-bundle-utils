@@ -191,6 +191,8 @@ Options:
   -v, --ci-version TEXT       The version of the CloudBees WAR file.
   -s, --source-dir DIRECTORY  The bundle to be validated.
   -w, --ignore-warnings       Do not fail if warnings are found.
+  -r, --external-rbac FILE    Path to an external rbac.yaml from an Operations
+                              Center bundle.
   --help                      Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils completion [OPTIONS]
@@ -326,7 +328,7 @@ Usage: bundleutils update-bundle [OPTIONS]
 
 Options:
   -t, --target-dir DIRECTORY  The target directory to update the bundle.yaml
-                              file.  [required]
+                              file (defaults to CWD).
   -d, --description TEXT      Optional description for the bundle (also
                               BUNDLEUTILS_BUNDLE_DESCRIPTION).
   --help                      Show this message and exit.
@@ -382,6 +384,8 @@ Options:
   -s, --source-dir DIRECTORY  The source directory for the YAML documents
                               (BUNDLEUTILS_VALIDATE_SOURCE_DIR).  [required]
   -w, --ignore-warnings       Do not fail if warnings are found.
+  -r, --external-rbac FILE    Path to an external rbac.yaml from an Operations
+                              Center bundle.
   --help                      Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils version [OPTIONS]

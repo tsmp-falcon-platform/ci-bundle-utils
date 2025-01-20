@@ -1,6 +1,8 @@
 from enum import Enum, auto
 import hashlib
 import json
+import subprocess
+import tempfile
 import jsonpatch
 import jsonpointer
 import zipfile
@@ -53,6 +55,7 @@ BUNDLEUTILS_BOOTSTRAP_SOURCE_BASE = 'BUNDLEUTILS_BOOTSTRAP_SOURCE_BASE'
 BUNDLEUTILS_BOOTSTRAP_PROFILE = 'BUNDLEUTILS_BOOTSTRAP_PROFILE'
 BUNDLEUTILS_BOOTSTRAP_UPDATE = 'BUNDLEUTILS_BOOTSTRAP_UPDATE'
 BUNDLEUTILS_SETUP_SOURCE_DIR = 'BUNDLEUTILS_SETUP_SOURCE_DIR'
+BUNDLEUTILS_VALIDATE_EXTERNAL_RBAC = 'BUNDLEUTILS_VALIDATE_EXTERNAL_RBAC'
 BUNDLEUTILS_VALIDATE_SOURCE_DIR = 'BUNDLEUTILS_VALIDATE_SOURCE_DIR'
 BUNDLEUTILS_TRANSFORM_SOURCE_DIR = 'BUNDLEUTILS_TRANSFORM_SOURCE_DIR'
 BUNDLEUTILS_TRANSFORM_TARGET_DIR = 'BUNDLEUTILS_TRANSFORM_TARGET_DIR'
@@ -102,6 +105,7 @@ CI_TYPE_ARG = 'ci_type'
 CI_SERVER_HOME_ARG = 'ci_server_home'
 SOURCE_DIR_ARG = 'source_dir'
 SOURCE_BASE_ARG = 'source_base'
+EXTERNAL_RBAC_ARG = 'external_rbac'
 TARGET_DIR_ARG = 'target_dir'
 PLUGIN_JSON_ADDITIONS_ARG = 'plugin_json_additions'
 PLUGIN_JSON_URL_ARG = 'plugin_json_url'
@@ -538,8 +542,9 @@ def ci_setup(ctx, ci_version, ci_type, ci_server_home, source_dir, ci_bundle_tem
 @server_options
 @click.option('-s', '--source-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The bundle to be validated.')
 @click.option('-w', '--ignore-warnings', default=False, is_flag=True, help=f'Do not fail if warnings are found.')
+@click.option('-r', '--external-rbac', type=click.Path(file_okay=True, dir_okay=False), help=f'Path to an external rbac.yaml from an Operations Center bundle.')
 @click.pass_context
-def ci_validate(ctx, ci_version, ci_type, ci_server_home, source_dir, ignore_warnings):
+def ci_validate(ctx, ci_version, ci_type, ci_server_home, source_dir, ignore_warnings, external_rbac):
     """Validate bundle against controller started with ci-start."""
     set_logging(ctx)
     ci_version, ci_type, ci_server_home = server_options_null_check(ci_version, ci_type, ci_server_home)
@@ -549,7 +554,7 @@ def ci_validate(ctx, ci_version, ci_type, ci_server_home, source_dir, ignore_war
     jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
     server_url, username, password = jenkins_manager.get_server_details()
     logging.debug(f"Server URL: {server_url}, Username: {username}, Password: {password}")
-    _validate(server_url, username, password, source_dir, ignore_warnings)
+    _validate(server_url, username, password, source_dir, ignore_warnings, external_rbac)
 
 @cli.command()
 @server_options
@@ -844,17 +849,24 @@ def null_check(ctx, obj, obj_name, obj_env_var=None, mandatory=True, default='')
 @click.option('-p', '--password', help=f'Password for basic authentication ({BUNDLEUTILS_PASSWORD}).')
 @click.option('-s', '--source-dir', required=True, type=click.Path(file_okay=False, dir_okay=True), help=f'The source directory for the YAML documents ({BUNDLEUTILS_VALIDATE_SOURCE_DIR}).')
 @click.option('-w', '--ignore-warnings', default=False, is_flag=True, help=f'Do not fail if warnings are found.')
+@click.option('-r', '--external-rbac', type=click.Path(file_okay=True, dir_okay=False), help=f'Path to an external rbac.yaml from an Operations Center bundle.')
 @click.pass_context
-def validate(ctx, url, username, password, source_dir, ignore_warnings):
+def validate(ctx, url, username, password, source_dir, ignore_warnings, external_rbac):
     """Validate bundle in source dir against URL."""
     set_logging(ctx)
-    _validate(url, username, password, source_dir, ignore_warnings)
+    _validate(url, username, password, source_dir, ignore_warnings, external_rbac)
 
-def _validate(url, username, password, source_dir, ignore_warnings):
+def _validate(url, username, password, source_dir, ignore_warnings, external_rbac):
     username = null_check(username, 'username', BUNDLEUTILS_USERNAME)
     password = null_check(password, 'password', BUNDLEUTILS_PASSWORD)
     source_dir = null_check(source_dir, 'source directory', BUNDLEUTILS_VALIDATE_SOURCE_DIR)
+    external_rbac = null_check(external_rbac, EXTERNAL_RBAC_ARG, BUNDLEUTILS_VALIDATE_EXTERNAL_RBAC, False)
     url = lookup_url(url)
+
+    if external_rbac:
+        if not os.path.exists(external_rbac):
+            die(f"RBAC configuration file not found in {external_rbac}")
+        logging.info(f"Using RBAC from {external_rbac}")
 
     # if the url does end with /casc-bundle-mgnt/casc-bundle-validate, append it
     if validate_url_path not in url:
@@ -864,13 +876,23 @@ def _validate(url, username, password, source_dir, ignore_warnings):
     headers = { 'Content-Type': 'application/zip' }
     if username and password:
         headers['Authorization'] = 'Basic ' + base64.b64encode(f'{username}:{password}'.encode('utf-8')).decode('utf-8')
-    # zip and post the YAML to the URL
-    with zipfile.ZipFile('bundle.zip', 'w') as zip_ref:
+
+    # create a temporary directory to store the bundle
+    with tempfile.TemporaryDirectory() as temp_dir:
+        logging.debug(f"Copying bundle files to {temp_dir}")
         for filename in os.listdir(source_dir):
-            zip_ref.write(os.path.join(source_dir, filename), filename)
-    with open('bundle.zip', 'rb') as f:
-        # post as binary file
-        response = requests.post(url, headers=headers, data=f)
+            subprocess.run(['cp', os.path.join(source_dir, filename), temp_dir], check=True)
+        if external_rbac:
+            logging.debug(f"Copying external RBAC file to {temp_dir}")
+            subprocess.run(['cp', external_rbac, temp_dir], check=True)
+        _update_bundle(temp_dir)
+        # zip and post the YAML to the URL
+        with zipfile.ZipFile('bundle.zip', 'w') as zip_ref:
+            for filename in os.listdir(temp_dir):
+                zip_ref.write(os.path.join(temp_dir, filename), filename)
+        with open('bundle.zip', 'rb') as f:
+            # post as binary file
+            response = requests.post(url, headers=headers, data=f)
     response.raise_for_status()
     # delete the zip file
     os.remove('bundle.zip')
@@ -1959,7 +1981,7 @@ def remove_empty_keys(data):
     return data
 
 @cli.command()
-@click.option('-t', '--target-dir', 'target_dir', required=True, type=click.Path(file_okay=False, dir_okay=True), help=f'The target directory to update the bundle.yaml file.')
+@click.option('-t', '--target-dir', 'target_dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The target directory to update the bundle.yaml file (defaults to CWD).')
 @click.option('-d', '--description', 'description', help=f'Optional description for the bundle (also {BUNDLEUTILS_BUNDLE_DESCRIPTION}).')
 @click.pass_context
 def update_bundle(ctx, target_dir, description):
@@ -1967,10 +1989,13 @@ def update_bundle(ctx, target_dir, description):
     set_logging(ctx)
     _update_bundle(target_dir, description)
 
-def _update_bundle(target_dir, description=None):
+@click.pass_context
+def _update_bundle(ctx, target_dir, description=None):
     description = null_check(description, 'description', BUNDLEUTILS_BUNDLE_DESCRIPTION, False)
     keys = ['jcasc', 'items', 'plugins', 'rbac', 'catalog', 'variables']
 
+    if not target_dir:
+        target_dir = ctx.obj.get(ORIGINAL_CWD)
     logging.info(f'Updating bundle in {target_dir}')
     # Load the YAML file
     with open(os.path.join(target_dir, 'bundle.yaml'), 'r') as file:
