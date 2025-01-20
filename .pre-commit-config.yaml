@@ -11,3 +11,10 @@ repos:
   hooks:
     - id: makefile-doc
       files: Makefile
+- repo: local
+  hooks:
+    - id: usage-to-readme
+      name: Extract Usage Pages
+      entry: ./scripts/update_readme.sh
+      language: script
+      files: bundleutilspkg/.*\.py$

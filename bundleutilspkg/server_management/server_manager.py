@@ -59,6 +59,12 @@ class JenkinsServerManager:
             os.makedirs(self.target_jenkins_webroot)
 
     def set_cloudbees_variables(self):
+        """
+        Set the CloudBees Docker image and WAR download URL based on the ci_type and ci_version.
+        Env vars:
+            BUNDLEUTILS_CB_DOCKER_IMAGE_{CI_TYPE}: Docker image for the CI_TYPE (MM, OC)
+            BUNDLEUTILS_CB_WAR_DOWNLOAD_URL_{CI_TYPE}: WAR download URL for the CI_TYPE (CM, OC_TRADITIONAL)
+        """
         cb_downloads_url = "https://downloads.cloudbees.com/cloudbees-core/traditional"
         cb_docker_image = None
         cb_war_download_url = None
@@ -72,15 +78,42 @@ class JenkinsServerManager:
         elif self.ci_type == "oc-traditional":
             cb_war_download_url = f"{cb_downloads_url}/operations-center/rolling/war/{self.ci_version}/cloudbees-core-oc.war"
         else:
-            self.die(f"CI_TYPE '{self.ci_type}' not recognised", file=sys.stderr)
+            self.die(f"BUNDLEUTILS_CI_TYPE '{self.ci_type}' not recognised", file=sys.stderr)
+
+        # check the environment variables:
+        cb_docker_image_env=f'BUNDLEUTILS_CB_DOCKER_IMAGE_{self.ci_type.upper()}'
+        cb_war_download_url_env=f'BUNDLEUTILS_CB_WAR_DOWNLOAD_URL_{self.ci_type.upper()}'
+        if cb_docker_image_env in os.environ:
+            logging.info(f"Overwriting with environment variable {cb_docker_image_env}")
+            cb_docker_image = os.environ[cb_docker_image_env]
+        else:
+            logging.info(f"Using default cloudbees image. Overwrite with environment variable {cb_war_download_url_env}")
+        if cb_war_download_url_env in os.environ:
+            logging.info(f"Overwriting with environment variable {cb_war_download_url_env}")
+            cb_war_download_url = os.environ[cb_war_download_url_env]
+        else:
+            logging.info(f"Using default cloudbees download URL. Overwrite with environment variable {cb_war_download_url_env}")
 
         return cb_docker_image, cb_war_download_url
 
     def copy_war_from_skopeo(self):
+        """
+        Copy the Jenkins WAR file from the Docker container to the target directory.
+        Env vars:
+            BUNDLEUTILS_SKOPEO_COPY_OPTS: options to pass to skopeo copy command
+        """
+        logging.info(f"Using skopeo to copy the WAR file from the Docker image {self.cb_docker_image}")
         if not os.path.exists(self.tar_cache_dir):
             os.makedirs(self.tar_cache_dir)
             # Copy image using skopeo
-            subprocess.run(['skopeo', 'copy', f'docker://{self.cb_docker_image}', f'dir:{self.tar_cache_dir}'], check=True)
+            skopeo_cmd = ['skopeo', 'copy']
+            if 'BUNDLEUTILS_SKOPEO_COPY_OPTS' in os.environ:
+                logging.info("Using skopeo copy options from environment variable BUNDLEUTILS_SKOPEO_COPY_OPTS")
+                skopeo_cmd.extend(os.environ['BUNDLEUTILS_SKOPEO_COPY_OPTS'].split())
+            else:
+                logging.info("Skopeo copy options such as '--src-creds USR:PWD' with environment variable BUNDLEUTILS_SKOPEO_COPY_OPTS")
+            skopeo_cmd.extend([f'docker://{self.cb_docker_image}', f'dir:{self.tar_cache_dir}'])
+            subprocess.run(skopeo_cmd, check=True)
         else:
             logging.info(f"Found image in {self.tar_cache_dir}")
 
@@ -104,6 +137,7 @@ class JenkinsServerManager:
     def copy_war_from_docker(self):
         """Copy the Jenkins WAR file from the Docker container to the target directory."""
         # Pull the Docker image
+        logging.info(f"Using docker to copy the WAR file from the Docker image {self.cb_docker_image}")
         subprocess.run(['docker', 'pull', f'{self.cb_docker_image}'], check=True)
 
         # Create a container without starting it
@@ -185,6 +219,7 @@ class JenkinsServerManager:
         """Create a startup bundle from the specified source directory and bundle template."""
         if not plugin_files:
             self.die(f"Plugin files not found in {plugin_files}")
+        logging.info(f"Using plugin files: {plugin_files}")
         # the validation template is a directory containing the configuration files to be used
         if not validation_template or os.path.exists(validation_template):
             # check if the validation-template directory exists in the current directory
@@ -206,8 +241,10 @@ class JenkinsServerManager:
                 src_file = os.path.join(root, file)
                 dest_file = os.path.join(self.target_jenkins_home_casc_startup_bundle, os.path.relpath(src_file, validation_template))
                 os.makedirs(os.path.dirname(dest_file), exist_ok=True)
+                logging.debug(f"Copying file {src_file} to {dest_file}")
                 subprocess.run(['cp', src_file, dest_file], check=True)
         for plugin_file in plugin_files:
+            logging.debug(f"Copying plugin file {plugin_file} to {self.target_jenkins_home_casc_startup_bundle}")
             subprocess.run(['cp', plugin_file, self.target_jenkins_home_casc_startup_bundle], check=True)
         logging.info(f"Created startup bundle in {self.target_jenkins_home_casc_startup_bundle}")
 
