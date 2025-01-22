@@ -64,6 +64,8 @@ class JenkinsServerManager:
         Env vars:
             BUNDLEUTILS_CB_DOCKER_IMAGE_{CI_TYPE}: Docker image for the CI_TYPE (MM, OC)
             BUNDLEUTILS_CB_WAR_DOWNLOAD_URL_{CI_TYPE}: WAR download URL for the CI_TYPE (CM, OC_TRADITIONAL)
+
+            NOTE: All occurences of BUNDLEUTILS_CI_VERSION will be replaced with the ci_version
         """
         cb_downloads_url = "https://downloads.cloudbees.com/cloudbees-core/traditional"
         cb_docker_image = None
@@ -86,22 +88,31 @@ class JenkinsServerManager:
         if cb_docker_image_env in os.environ:
             logging.info(f"Overwriting with environment variable {cb_docker_image_env}")
             cb_docker_image = os.environ[cb_docker_image_env]
+            cb_docker_image = cb_docker_image.replace('BUNDLEUTILS_CI_VERSION', self.ci_version)
+            # if the image does not include the pattern "[:@][^/:]+$ ]", append the ci_version
+            if not re.search(r'[:@][^/:]+$', cb_docker_image):
+                logging.info(f"Appending the ci_version {self.ci_version} to the image")
+                cb_docker_image = f"{cb_docker_image}:{self.ci_version}"
         else:
             logging.info(f"Using default cloudbees image. Overwrite with environment variable {cb_war_download_url_env}")
         if cb_war_download_url_env in os.environ:
             logging.info(f"Overwriting with environment variable {cb_war_download_url_env}")
             cb_war_download_url = os.environ[cb_war_download_url_env]
+            cb_war_download_url = cb_war_download_url.replace('BUNDLEUTILS_CI_VERSION', self.ci_version)
         else:
             logging.info(f"Using default cloudbees download URL. Overwrite with environment variable {cb_war_download_url_env}")
 
         return cb_docker_image, cb_war_download_url
 
-    def copy_war_from_skopeo(self):
+    def copy_war_from_skopeo(self, force=False):
         """
         Copy the Jenkins WAR file from the Docker container to the target directory.
         Env vars:
             BUNDLEUTILS_SKOPEO_COPY_OPTS: options to pass to skopeo copy command
         """
+        if force and os.path.exists(self.tar_cache_dir):
+            logging.info(f"Removing {self.tar_cache_dir}")
+            shutil.rmtree(self.tar_cache_dir)
         logging.info(f"Using skopeo to copy the WAR file from the Docker image {self.cb_docker_image}")
         if not os.path.exists(self.tar_cache_dir):
             os.makedirs(self.tar_cache_dir)
@@ -113,7 +124,10 @@ class JenkinsServerManager:
             else:
                 logging.info("Skopeo copy options such as '--src-creds USR:PWD' with environment variable BUNDLEUTILS_SKOPEO_COPY_OPTS")
             skopeo_cmd.extend([f'docker://{self.cb_docker_image}', f'dir:{self.tar_cache_dir}'])
-            subprocess.run(skopeo_cmd, check=True)
+            try:
+                subprocess.run(skopeo_cmd, check=True)
+            except subprocess.CalledProcessError:
+                self.die(f"Failed to copy the Docker image {self.cb_docker_image} to {self.tar_cache_dir}")
         else:
             logging.info(f"Found image in {self.tar_cache_dir}")
 
@@ -134,33 +148,46 @@ class JenkinsServerManager:
             if not jenkins_war_found:
                 self.die("jenkins.war not found after extracting the Docker image.")
 
-    def copy_war_from_docker(self):
+    def copy_war_from_docker(self, force=False):
         """Copy the Jenkins WAR file from the Docker container to the target directory."""
-        # Pull the Docker image
-        logging.info(f"Using docker to copy the WAR file from the Docker image {self.cb_docker_image}")
-        subprocess.run(['docker', 'pull', f'{self.cb_docker_image}'], check=True)
+        try:
+            # Pull the Docker image
+            logging.info(f"Using docker to copy the WAR file from the Docker image {self.cb_docker_image}")
+            subprocess.run(['docker', 'pull', f'{self.cb_docker_image}'], check=True)
+        except subprocess.CalledProcessError:
+            self.die(f"Failed to pull the Docker image {self.cb_docker_image}")
 
-        # Create a container without starting it
-        container_id = subprocess.check_output(['docker', 'create', f'{self.cb_docker_image}']).decode().strip()
+        try:
+            # Create a container without starting it
+            container_id = subprocess.check_output(['docker', 'create', f'{self.cb_docker_image}']).decode().strip()
 
-        # Copy the Jenkins WAR file from the created container
-        subprocess.run(['docker', 'cp', f'{container_id}:/usr/share/jenkins/jenkins.war', self.war_cache_file], check=True)
-
-        # Remove the created container
-        subprocess.run(['docker', 'rm', container_id], check=True)
+            # Copy the Jenkins WAR file from the created container
+            subprocess.run(['docker', 'cp', f'{container_id}:/usr/share/jenkins/jenkins.war', self.war_cache_file], check=True)
+        except subprocess.CalledProcessError:
+            self.die(f"Failed to copy the Jenkins WAR file from the Docker image {self.cb_docker_image}")
+        finally:
+            if container_id:
+                try:
+                    # Remove the created container
+                    subprocess.run(['docker', 'rm', '-f', container_id], check=True)
+                except subprocess.CalledProcessError:
+                    self.die(f"Failed to remove the Docker container {container_id}")
         logging.info(f"Copied WAR file to {self.war_cache_file}")
 
-    def get_war(self):
+    def get_war(self, force=False):
         """Download the Jenkins WAR file for the specified type and version."""
+        if force and os.path.exists(self.war_cache_file):
+            logging.info(f"Removing {self.war_cache_file}")
+            os.remove(self.war_cache_file)
         if not os.path.exists(self.war_cache_file):
             if not os.path.exists(self.war_cache_dir):
                 os.makedirs(self.war_cache_dir)
             if self.cb_docker_image:
                 # if docker on path or BUNDLEUTILS_USE_SKOPEO=1, use docker to copy the war file
                 if shutil.which('docker') and os.getenv('BUNDLEUTILS_USE_SKOPEO') != '1':
-                    self.copy_war_from_docker()
+                    self.copy_war_from_docker(force)
                 elif shutil.which('skopeo'):
-                    self.copy_war_from_skopeo()
+                    self.copy_war_from_skopeo(force)
                 else:
                     self.die("Docker or Skopeo not found in path. No way of getting the WAR file from the docker image")
             elif self.cb_war_download_url:
