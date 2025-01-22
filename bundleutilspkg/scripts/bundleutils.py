@@ -509,8 +509,9 @@ def help_pages(ctx):
 @server_options
 @click.option('-s', '--source-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The bundle to be validated (startup will use the plugins from here).')
 @click.option('-T', '--ci-bundle-template', type=click.Path(file_okay=False, dir_okay=True), required=False, help=f'Path to a template bundle used to start the test server (defaults to in-built tempalte).')
+@click.option('-f', '--force', default=False, is_flag=True, help=f'Force download of the WAR file even if exists.')
 @click.pass_context
-def ci_setup(ctx, ci_version, ci_type, ci_server_home, source_dir, ci_bundle_template):
+def ci_setup(ctx, ci_version, ci_type, ci_server_home, source_dir, ci_bundle_template, force):
     """
     Download CloudBees WAR file, and setup the starter bundle.
 
@@ -519,6 +520,17 @@ def ci_setup(ctx, ci_version, ci_type, ci_server_home, source_dir, ci_bundle_tem
         BUNDLEUTILS_CB_DOCKER_IMAGE_{CI_TYPE}: Docker image for the CI_TYPE (MM, OC)
         BUNDLEUTILS_CB_WAR_DOWNLOAD_URL_{CI_TYPE}: WAR download URL for the CI_TYPE (CM, OC_TRADITIONAL)
         BUNDLEUTILS_SKOPEO_COPY_OPTS: options to pass to skopeo copy command
+
+    \b
+        NOTE:
+        - All occurences of BUNDLEUTILS_CI_VERSION in the env var value will be replaced.
+        - If the value does not include a tag, the CI_VERSION will be appended to it.
+
+    \b
+        e.g. Use either...
+            BUNDLEUTILS_CB_DOCKER_IMAGE_MM=my-registry/cloudbees-core-mm:BUNDLEUTILS_CI_VERSION
+            BUNDLEUTILS_CB_DOCKER_IMAGE_MM=my-registry/cloudbees-core-mm
+
     """
     set_logging(ctx)
     ci_version, ci_type, ci_server_home = server_options_null_check(ci_version, ci_type, ci_server_home)
@@ -536,7 +548,7 @@ def ci_setup(ctx, ci_version, ci_type, ci_server_home, source_dir, ci_bundle_tem
                 for plugin_file in bundle_yaml[key]:
                     plugin_files.append(os.path.join(source_dir, plugin_file))
     jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
-    jenkins_manager.get_war()
+    jenkins_manager.get_war(force)
     jenkins_manager.create_startup_bundle(plugin_files, ci_bundle_template)
     _update_bundle(jenkins_manager.target_jenkins_home_casc_startup_bundle)
 

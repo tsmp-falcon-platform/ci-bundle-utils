@@ -146,6 +146,14 @@ Usage: bundleutils ci-setup [OPTIONS]
       BUNDLEUTILS_CB_WAR_DOWNLOAD_URL_{CI_TYPE}: WAR download URL for the CI_TYPE (CM, OC_TRADITIONAL)
       BUNDLEUTILS_SKOPEO_COPY_OPTS: options to pass to skopeo copy command
 
+      NOTE:
+      - All occurences of BUNDLEUTILS_CI_VERSION in the env var value will be replaced.
+      - If the value does not include a tag, the CI_VERSION will be appended to it.
+
+      e.g. Use either...
+          BUNDLEUTILS_CB_DOCKER_IMAGE_MM=my-registry/cloudbees-core-mm:BUNDLEUTILS_CI_VERSION
+          BUNDLEUTILS_CB_DOCKER_IMAGE_MM=my-registry/cloudbees-core-mm
+
 Options:
   -H, --ci-server-home TEXT       Defaults to
                                   /tmp/ci_server_home/<ci_type>/<ci_version>.
@@ -156,6 +164,8 @@ Options:
   -T, --ci-bundle-template DIRECTORY
                                   Path to a template bundle used to start the
                                   test server (defaults to in-built tempalte).
+  -f, --force                     Force download of the WAR file even if
+                                  exists.
   --help                          Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils ci-start [OPTIONS]
