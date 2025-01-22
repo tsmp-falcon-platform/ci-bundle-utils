@@ -163,11 +163,14 @@ Usage: bundleutils ci-start [OPTIONS]
   Start CloudBees Server
 
 Options:
-  -H, --ci-server-home TEXT  Defaults to
-                             /tmp/ci_server_home/<ci_type>/<ci_version>.
-  -t, --ci-type TEXT         The type of the CloudBees server.
-  -v, --ci-version TEXT      The version of the CloudBees WAR file.
-  --help                     Show this message and exit.
+  -H, --ci-server-home TEXT       Defaults to
+                                  /tmp/ci_server_home/<ci_type>/<ci_version>.
+  -t, --ci-type TEXT              The type of the CloudBees server.
+  -v, --ci-version TEXT           The version of the CloudBees WAR file.
+  -M, --ci-max-start-time INTEGER
+                                  Max minutes to start.  [env var:
+                                  BUNDLEUTILS_CI_MAX_START_TIME]
+  --help                          Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils ci-stop [OPTIONS]
 
