@@ -45,6 +45,7 @@ default_auto_env_file = 'bundle-profiles.yaml'
 BUNDLEUTILS_CI_VERSION = 'BUNDLEUTILS_CI_VERSION'
 BUNDLEUTILS_CI_TYPE = 'BUNDLEUTILS_CI_TYPE'
 BUNDLEUTILS_CI_SERVER_HOME = 'BUNDLEUTILS_CI_SERVER_HOME'
+BUNDLEUTILS_CI_MAX_START_TIME = 'BUNDLEUTILS_CI_MAX_START_TIME'
 BUNDLEUTILS_LOG_LEVEL = 'BUNDLEUTILS_LOG_LEVEL'
 BUNDLEUTILS_AUTO_ENV_FILE = 'BUNDLEUTILS_AUTO_ENV_FILE'
 BUNDLEUTILS_ENV = 'BUNDLEUTILS_ENV'
@@ -103,6 +104,7 @@ BUNDLES_DIR_ARG = 'bundles_dir'
 CI_VERSION_ARG = 'ci_version'
 CI_TYPE_ARG = 'ci_type'
 CI_SERVER_HOME_ARG = 'ci_server_home'
+CI_MAX_START_TIME_ARG = 'ci_max_start_time'
 SOURCE_DIR_ARG = 'source_dir'
 SOURCE_BASE_ARG = 'source_base'
 EXTERNAL_RBAC_ARG = 'external_rbac'
@@ -636,13 +638,14 @@ def ci_sanitize_plugins(ctx, ci_version, ci_type, ci_server_home, source_dir, pi
 
 @cli.command()
 @server_options
+@click.option('-M', '--ci-max-start-time', default=120, envvar=BUNDLEUTILS_CI_MAX_START_TIME, show_envvar=True, required=False, type=click.INT, help=f'Max minutes to start.')
 @click.pass_context
-def ci_start(ctx, ci_version, ci_type, ci_server_home):
+def ci_start(ctx, ci_version, ci_type, ci_server_home, ci_max_start_time):
     """Start CloudBees Server"""
     set_logging(ctx)
     ci_version, ci_type, ci_server_home = server_options_null_check(ci_version, ci_type, ci_server_home)
     jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
-    jenkins_manager.start_server()
+    jenkins_manager.start_server(ci_max_start_time)
 
 @cli.command()
 @server_options

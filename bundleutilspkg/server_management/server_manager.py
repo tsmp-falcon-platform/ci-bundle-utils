@@ -248,7 +248,7 @@ class JenkinsServerManager:
             subprocess.run(['cp', plugin_file, self.target_jenkins_home_casc_startup_bundle], check=True)
         logging.info(f"Created startup bundle in {self.target_jenkins_home_casc_startup_bundle}")
 
-    def start_server(self):
+    def start_server(self, ci_max_start_time):
         """Start the Jenkins server using the downloaded WAR file."""
         if not os.path.exists(self.war_path):
             logging.info("WAR file does not exist. Getting now...")
@@ -358,7 +358,7 @@ class JenkinsServerManager:
             file.write(str(process.pid))
         logging.info(f"Jenkins server starting with PID {process.pid}")
         logging.info(f"Jenkins server logging to {self.target_jenkins_log}")
-        self.wait_for_server()
+        self.wait_for_server(ci_max_start_time)
         self.check_auth_token()
         # look for any WARN or ERROR messages in the log, and print the log line if found
         logging.info("Jenkins server - Checking for WARN or ERROR messages in the Jenkins log...")
@@ -428,12 +428,11 @@ class JenkinsServerManager:
             # print the response
             logging.info(f"Authentication successful. Response: {response_json}")
 
-    def wait_for_server(self):
+    def wait_for_server(self, ci_max_start_time):
         """Wait for the Jenkins server to start."""
         server_started = False
-        CONNECT_MAX_WAIT = 60
-        end_time = time.time() + CONNECT_MAX_WAIT
-        logging.info("Waiting for server to start...")
+        end_time = time.time() + ci_max_start_time
+        logging.info(f"Waiting max {ci_max_start_time} minutes for server to start...")
         server_url = self.get_server_url()
         while time.time() < end_time:
             try:
