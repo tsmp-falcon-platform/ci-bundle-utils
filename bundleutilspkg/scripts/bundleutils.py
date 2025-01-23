@@ -280,7 +280,7 @@ def _check_cwd_for_bundle_auto_vars(ctx):
     # if the BUNDLE_PROFILES exists, then the BUNDLEUTILS_ENV must also exist
     auto_env_file_path_dir = os.path.dirname(ctx.obj.get(BUNDLEUTILS_ENV))
     bundle_profiles = ctx.obj.get(BUNDLE_PROFILES)
-    bundle_name = os.path.basename(cwd)
+    bundle_name = _basename(cwd)
 
     # if the cwd is a subdirectory of auto_env_file_path_dir, create a relative path
     bundle_audit_target_dir = None
@@ -446,7 +446,7 @@ def bootstrap(ctx, source_dir, source_base, profile, update, url, ci_version):
     bootstrap_update = null_check(update, 'update', BUNDLEUTILS_BOOTSTRAP_UPDATE, False, 'false')
     if bootstrap_profile:
         bundle_profiles = ctx.obj.get(BUNDLE_PROFILES)
-        bundle_name = os.path.basename(source_dir)
+        bundle_name = _basename(source_dir)
         if bootstrap_profile in bundle_profiles['profiles']:
             default_url = ''
             default_ci_version = ''
@@ -2004,6 +2004,9 @@ def update_bundle(ctx, target_dir, description):
     set_logging(ctx)
     _update_bundle(target_dir, description)
 
+def _basename(dir):
+    return os.path.basename(os.path.normpath(dir))
+
 @click.pass_context
 def _update_bundle(ctx, target_dir, description=None):
     description = null_check(description, 'description', BUNDLEUTILS_BUNDLE_DESCRIPTION, False)
@@ -2093,7 +2096,7 @@ def _update_bundle(ctx, target_dir, description=None):
                         os.remove(file)
 
         # Remove the target_dir path and sort the files, ensuring exact match come first
-        files = [os.path.basename(file) for file in files]
+        files = [_basename(file) for file in files]
 
         # if no files found, remove the key from the data if it exists
         if not files:
@@ -2109,7 +2112,7 @@ def _update_bundle(ctx, target_dir, description=None):
         all_files.extend(files)
 
     # update the id key with the basename of the target_dir
-    data['id'] = os.path.basename(target_dir)
+    data['id'] = _basename(target_dir)
     data['description'] = f"Bundle for {data['id']}" if not description else description
 
     # update the version key with the md5sum of the content of all files
