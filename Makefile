@@ -6,6 +6,16 @@ DOCKER_IMAGE	  ?= ghcr.io/tsmp-falcon-platform/ci-bundle-utils
 DOCKER_NAME		  ?= bundleutils
 BUNDLES_WORKSPACE ?= $(MKFILE_DIR)
 
+.PHONY: setup
+setup: ## Setup the development environment
+	python -m venv .venv
+	source .venv/bin/activate
+	pip install -e "bundleutilspkg[dev]"
+
+.PHONY: test
+test: ## Run the pytest suite
+	pytest bundleutilspkg/tests -v
+
 .PHONY: compose/start-dev
 compose/start-dev: ## Start the bundleutils container
 compose/start-dev: compose/stop

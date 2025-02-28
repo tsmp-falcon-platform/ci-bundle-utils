@@ -1,0 +1,5 @@
+plugins:
+- id: cloudbees-casc-client
+  version: 1.0.0
+- id: cloudbees-casc-items-controller
+- id: cloudbees-github-reporting
