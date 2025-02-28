@@ -80,6 +80,8 @@ Commands:
   fetch                  Fetch YAML documents from a URL or path.
   find-bundle-by-url     Find a bundle by Jenkins URL and CI Version.
   help-pages             Show all help pages by running 'bundleutils...
+  merge-bundles          Used for merging bundles.
+  merge-yamls            Used for merging YAML files of the same type...
   normalize              Transform using the normalize.yaml for better...
   transform              Transform using a custom transformation config.
   update-bundle          Update the bundle.yaml file in the target...
@@ -310,6 +312,39 @@ Usage: bundleutils help-pages [OPTIONS]
 
 Options:
   --help  Show this message and exit.
+------------------------------------------------------------------------------------------------------------------------
+Usage: bundleutils merge-bundles [OPTIONS]
+
+  Used for merging bundles. Given a list of bundles, merge them into a single
+  bundle.
+
+  The merging strategy is defined in a merge config file similar to the merge command.
+
+  Given at least two bundles, it will:
+  - for each section of the bundle.yaml (plugins, catalog, items, etc)
+  - collect all the referenced files in order of the bundles
+  - merge them together
+  - write the result to the outdir or stdout if not provided
+  - update the outdir/bundle.yaml with the new references
+
+Options:
+  -m, --config FILE        An optional custom merge config file if needed.
+  -b, --bundles DIRECTORY  The bundles to be rendered.
+  -o, --outdir DIRECTORY   The target for the merged file.
+  --help                   Show this message and exit.
+------------------------------------------------------------------------------------------------------------------------
+Usage: bundleutils merge-yamls [OPTIONS]
+
+  Used for merging YAML files of the same type (jcasc, plugins, items, rbac,
+  etc).
+
+  The merging strategy is defined in a merge-config file. The default contents are shown on execution.
+
+Options:
+  -m, --config FILE   An optional custom merge config file if needed.
+  -f, --files FILE    The files to be merged.
+  -o, --outfile FILE  The target for the merged file.
+  --help              Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils normalize [OPTIONS]
 
