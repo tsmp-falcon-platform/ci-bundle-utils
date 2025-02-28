@@ -98,7 +98,7 @@ Options:
                               Defaults to the source directory suffixed with
                               -transformed.
   -s, --source-dir DIRECTORY  The source directory for the YAML documents.
-  -c, --config TEXT           The transformation config(s).
+  -c, --config FILE           The transformation config(s).
   -S, --strict                Fail when referencing non-existent files - warn
                               otherwise.
   -H, --hash-seed TEXT        Optional prefix for the hashing process (also
@@ -319,7 +319,7 @@ Options:
                               Defaults to the source directory suffixed with
                               -transformed.
   -s, --source-dir DIRECTORY  The source directory for the YAML documents.
-  -c, --config TEXT           The transformation config(s).
+  -c, --config FILE           The transformation config(s).
   -S, --strict                Fail when referencing non-existent files - warn
                               otherwise.
   --help                      Show this message and exit.
@@ -333,7 +333,7 @@ Options:
                               Defaults to the source directory suffixed with
                               -transformed.
   -s, --source-dir DIRECTORY  The source directory for the YAML documents.
-  -c, --config TEXT           The transformation config(s).
+  -c, --config FILE           The transformation config(s).
   -S, --strict                Fail when referencing non-existent files - warn
                               otherwise.
   --help                      Show this message and exit.
@@ -424,7 +424,10 @@ Python virtualenv setup:
 
 ```sh
 # setup local python environment
-make dev/setup
+make setup
+
+# run the tests
+make test
 ```
 
 ### Code Completion
