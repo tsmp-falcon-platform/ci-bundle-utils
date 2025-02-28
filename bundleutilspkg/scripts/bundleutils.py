@@ -24,7 +24,9 @@ from deepdiff.helper import CannotCompare
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap
 from ruamel.yaml.comments import CommentedSeq
+from bundle_renderer.yaml_merger import YAMLMerger
 from server_management.server_manager import JenkinsServerManager
+# from bundle_renderer.bundle_renderer import BundleGenerator
 from urllib.parse import urlparse
 
 locale.setlocale(locale.LC_ALL, "C")
@@ -40,6 +42,8 @@ validate_url_path = '/casc-bundle-mgnt/casc-bundle-validate'
 
 default_target = 'target/docs'
 default_auto_env_file = 'bundle-profiles.yaml'
+
+bundle_yaml_keys = {'jcasc': 'jenkins.yaml', 'items': 'items.yaml', 'plugins': 'plugins.yaml', 'rbac': 'rbac.yaml', 'catalog': 'plugin-catalog.yaml', 'variables': 'variables.yaml'}
 
 # environment variables
 BUNDLEUTILS_CI_VERSION = 'BUNDLEUTILS_CI_VERSION'
@@ -190,7 +194,7 @@ def server_options_null_check(ci_version, ci_type, ci_server_home):
 
 def transform_options(func):
     func = click.option('-S', '--strict', default=False, is_flag=True, help=f'Fail when referencing non-existent files - warn otherwise.')(func)
-    func = click.option('-c', '--config', 'configs', multiple=True, help=f'The transformation config(s).')(func)
+    func = click.option('-c', '--config', 'configs', type=click.Path(file_okay=True, dir_okay=False), multiple=True, help=f'The transformation config(s).')(func)
     func = click.option('-s', '--source-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The source directory for the YAML documents.')(func)
     func = click.option('-t', '--target-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The target directory for the YAML documents. Defaults to the source directory suffixed with -transformed.')(func)
     return func
@@ -1719,6 +1723,9 @@ def handle_patches(patches, target_dir):
     # for each key in the patches, open the file and apply the patch
     for filename, patch in patches.items():
         filename = os.path.join(target_dir, filename)
+        if not _file_check(filename):
+            logging.info(f'File {filename} does not exist. Skipping patching.')
+            continue
         logging.info(f'Transform: applying JSON patches to {filename}')
         apply_patch(filename, patch)
 
@@ -2010,7 +2017,6 @@ def _basename(dir):
 @click.pass_context
 def _update_bundle(ctx, target_dir, description=None):
     description = null_check(description, 'description', BUNDLEUTILS_BUNDLE_DESCRIPTION, False)
-    keys = ['jcasc', 'items', 'plugins', 'rbac', 'catalog', 'variables']
 
     if not target_dir:
         target_dir = ctx.obj.get(ORIGINAL_CWD)
@@ -2020,8 +2026,8 @@ def _update_bundle(ctx, target_dir, description=None):
         data = yaml.load(file)
 
     all_files = []
-    # Iterate over the keys
-    for key in keys:
+    # Iterate over the bundle_yaml_keys
+    for key in bundle_yaml_keys.keys():
         files = []
         # Special case for 'jcasc'
         if key == 'jcasc':
@@ -2106,6 +2112,7 @@ def _update_bundle(ctx, target_dir, description=None):
             continue
 
         # Update the key in the data
+        logging.debug(f'Updated {key} to {files}')
         data[key] = files
 
         # Add the files to the all_files list
