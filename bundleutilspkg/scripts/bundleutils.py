@@ -1893,7 +1893,7 @@ def audit(ctx, strict, configs, source_dir, target_dir, hash_seed):
 @transform_options
 @click.pass_context
 def transform(ctx, strict, configs, source_dir, target_dir):
-    """Transform using a custom transformation config"""
+    """Transform using a custom transformation config."""
     set_logging(ctx)
     source_dir = null_check(source_dir, SOURCE_DIR_ARG, BUNDLEUTILS_TRANSFORM_SOURCE_DIR)
     target_dir = null_check(target_dir, TARGET_DIR_ARG, BUNDLEUTILS_TRANSFORM_TARGET_DIR)
