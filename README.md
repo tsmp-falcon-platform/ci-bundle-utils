@@ -10,6 +10,9 @@
 - [Commands](#commands)
 - [Help Pages](#help-pages)
 - [Local Development](#local-development)
+  - [Setup](#setup)
+  - [Code Completion](#code-completion)
+  - [Makefile](#makefile)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -410,21 +413,25 @@ Options:
 ```
 <!-- END help-pages-doc -->
 
-
 ## Local Development
 
-To run locally:
+> [!TIP]
+> Checkout the commands in the [Makefile](./Makefile) for more information on what is run.
+
+### Setup
+
+Python virtualenv setup:
 
 ```sh
-# create a virtual environment
-python -m venv .venv
+# setup local python environment
+make dev/setup
+```
 
-# install dependencies in edit mode
-pip install -e bundleutilspkg
+### Code Completion
 
-# activate environment
-source .venv/bin/activate
+Activate code completion:
 
+```sh
 # show shell completion options on ZSH
 bundleutils completion -s zsh
 
@@ -432,7 +439,9 @@ bundleutils completion -s zsh
 bundleutils completion -s bash
 ```
 
-Alternatively, the provided [Makefile](./Makefile) contains some targets for running local docker environments.
+### Makefile
+
+The provided [Makefile](./Makefile) contains some targets for running local docker environments.
 
 <!-- START makefile-doc -->
 ```bash
@@ -443,6 +452,8 @@ Usage:
   make <target>
 
 Targets:
+  setup                  Setup the development environment
+  test                   Run the pytest suite
   compose/start-dev      Start the bundleutils container
   compose/start          Start the bundleutils container
   compose/stop           Stop the bundleutils container

@@ -43,9 +43,12 @@ setup(
         'jsonpatch',
         'packaging',
     ],
+    extras_require={
+        "dev": ["pytest"],
+    },
     entry_points={
         'console_scripts': [
-            'bundleutils = scripts.bundleutils:cli',
+            'bundleutils = scripts.bundleutils:bundleutils',
         ],
     },
 )

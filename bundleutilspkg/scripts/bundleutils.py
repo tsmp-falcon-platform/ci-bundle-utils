@@ -352,7 +352,7 @@ def set_logging(ctx):
 @click.group(invoke_without_command=True)
 @common_options
 @click.pass_context
-def cli(ctx, log_level, env_file, interactive):
+def bundleutils(ctx, log_level, env_file, interactive):
     """A tool to fetch and transform YAML documents."""
     ctx.ensure_object(dict)
     ctx.max_content_width=120
@@ -410,7 +410,7 @@ def lookup_url(url, default_url = '', mandatory = True):
         url_env = BUNDLEUTILS_JENKINS_URL
     return null_check(url, URL_ARG, url_env, mandatory, default_url)
 
-@cli.command()
+@bundleutils.command()
 @click.pass_context
 @click.option('-s', '--source-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The bundle to be bootstrapped.')
 @click.option('-S', '--source-base', type=click.Path(file_okay=False, dir_okay=True), help=f'Specify parent dir of source-dir, bundle name taken from URL.')
@@ -490,7 +490,7 @@ def bootstrap(ctx, source_dir, source_base, profile, update, url, ci_version):
         else:
             die(f'No bundle profile found for {bootstrap_profile}')
 
-@cli.command()
+@bundleutils.command()
 @click.pass_context
 def help_pages(ctx):
     """
@@ -498,14 +498,14 @@ def help_pages(ctx):
     """
     click.echo(ctx.parent.get_help())
     # get all sub commands in alphabetical order
-    commands = sorted(cli.commands.keys())
+    commands = sorted(bundleutils.commands.keys())
 
     for key in commands:
-        command = cli.commands[key]
+        command = bundleutils.commands[key]
         click.echo('-' * 120)
         click.echo(command.get_help(ctx.parent).replace('Usage: bundleutils', f'Usage: bundleutils {command.name}'))
 
-@cli.command()
+@bundleutils.command()
 @server_options
 @click.option('-s', '--source-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The bundle to be validated (startup will use the plugins from here).')
 @click.option('-T', '--ci-bundle-template', type=click.Path(file_okay=False, dir_okay=True), required=False, help=f'Path to a template bundle used to start the test server (defaults to in-built tempalte).')
@@ -552,7 +552,7 @@ def ci_setup(ctx, ci_version, ci_type, ci_server_home, source_dir, ci_bundle_tem
     jenkins_manager.create_startup_bundle(plugin_files, ci_bundle_template)
     _update_bundle(jenkins_manager.target_jenkins_home_casc_startup_bundle)
 
-@cli.command()
+@bundleutils.command()
 @server_options
 @click.option('-s', '--source-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The bundle to be validated.')
 @click.option('-w', '--ignore-warnings', default=False, is_flag=True, help=f'Do not fail if warnings are found.')
@@ -570,7 +570,7 @@ def ci_validate(ctx, ci_version, ci_type, ci_server_home, source_dir, ignore_war
     logging.debug(f"Server URL: {server_url}, Username: {username}, Password: {password}")
     _validate(server_url, username, password, source_dir, ignore_warnings, external_rbac)
 
-@cli.command()
+@bundleutils.command()
 @server_options
 @click.option('-s', '--source-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The bundle of the plugins to be sanitized.')
 @click.option('-p', '--pin-plugins', default=False, is_flag=True, help=f'Add versions to 3rd party plugins (only available for apiVersion 2).')
@@ -648,7 +648,7 @@ def ci_sanitize_plugins(ctx, ci_version, ci_type, ci_server_home, source_dir, pi
         yaml.dump(plugins_data, f)  # Write the updated data back to the file
     _update_bundle(source_dir)
 
-@cli.command()
+@bundleutils.command()
 @server_options
 @click.option('-M', '--ci-max-start-time', default=120, envvar=BUNDLEUTILS_CI_MAX_START_TIME, show_envvar=True, required=False, type=click.INT, help=f'Max minutes to start.')
 @click.pass_context
@@ -659,7 +659,7 @@ def ci_start(ctx, ci_version, ci_type, ci_server_home, ci_max_start_time):
     jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
     jenkins_manager.start_server(ci_max_start_time)
 
-@cli.command()
+@bundleutils.command()
 @server_options
 @click.pass_context
 def ci_stop(ctx, ci_version, ci_type, ci_server_home):
@@ -670,7 +670,7 @@ def ci_stop(ctx, ci_version, ci_type, ci_server_home):
     jenkins_manager.stop_server()
 
 # add a diff command to diff two directories by calling the diff command on each file
-@cli.command()
+@bundleutils.command()
 @click.argument('src1', type=click.Path(exists=True))
 @click.argument('src2', type=click.Path(exists=True))
 @click.pass_context
@@ -715,7 +715,7 @@ def diff2(file1, file2):
         logging.info(f"No diff between {file1} and {file2}")
         return False
 
-@cli.command()
+@bundleutils.command()
 @click.pass_context
 def config(ctx):
     """List evaluated config based on cwd and env file."""
@@ -732,7 +732,7 @@ def config(ctx):
             lines.append(f'{key}={value}')
     click.echo('\n'.join(lines))
 
-@cli.command()
+@bundleutils.command()
 def version():
     """Show the app version."""
     try:
@@ -742,7 +742,7 @@ def version():
     except PackageNotFoundError:
         click.echo("Package is not installed. Please ensure it's built and installed correctly.")
 
-@cli.command()
+@bundleutils.command()
 @click.option('-u', '--url', help=f'The URL to extract the controller name from.')
 def extract_name_from_url(url):
     """
@@ -773,7 +773,7 @@ def _extract_name_from_url(url):
         subdomain = parsed.netloc.split('.')[0]
         return subdomain
 
-@cli.command()
+@bundleutils.command()
 @click.option('-U', '--url', help=f'The controller URL to test for (JENKINS_URL).')
 @click.option('-v', '--ci-version', type=click.STRING, help=f'Optional version (taken from the remote instance otherwise).')
 @click.option('-b', '--bundles-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The directory containing the bundles.')
@@ -815,7 +815,7 @@ def find_bundle_by_url(ctx, url, ci_version, bundles_dir):
 
 # add completion command which takes the shell as an argument
 # shell can only be bash, fish, or zsh
-@cli.command()
+@bundleutils.command()
 @click.option('-s', '--shell', required=True, type=click.Choice(['bash', 'fish', 'zsh']), help=f'The shell to generate completion script for.')
 @click.pass_context
 def completion(ctx, shell):
@@ -858,7 +858,7 @@ def null_check(ctx, obj, obj_name, obj_env_var=None, mandatory=True, default='')
     ctx.obj[obj_name] = obj
     return obj
 
-@cli.command()
+@bundleutils.command()
 @click.option('-U', '--url', help=f'The controller URL to validate agianst ({BUNDLEUTILS_JENKINS_URL}).')
 @click.option('-u', '--username', help=f'Username for basic authentication ({BUNDLEUTILS_USERNAME}).')
 @click.option('-p', '--password', help=f'Password for basic authentication ({BUNDLEUTILS_PASSWORD}).')
@@ -981,7 +981,7 @@ def fetch_options_null_check(ctx, url, path, username, password, target_dir, plu
         elif len(plugin_json_files) > 1:
             die('Multiple plugins*.json files found in the current directory')
 
-@cli.command()
+@bundleutils.command()
 @fetch_options
 @click.pass_context
 def fetch(ctx, url, path, username, password, target_dir, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, offline, cap):
@@ -1284,7 +1284,7 @@ def find_plugin_by_id(plugins, plugin_id):
             return plugin
     return None
 
-@cli.command()
+@bundleutils.command()
 @fetch_options
 @click.pass_context
 def update_plugins(ctx, url, path, username, password, target_dir, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, offline, cap):
@@ -1833,7 +1833,7 @@ def recursive_merge(obj1, obj2):
     return obj1
 
 
-@cli.command()
+@bundleutils.command()
 @transform_options
 @click.pass_context
 def normalize(ctx, strict, configs, source_dir, target_dir):
@@ -1853,7 +1853,7 @@ def normalize(ctx, strict, configs, source_dir, target_dir):
             configs = [path]
     _transform(configs, source_dir, target_dir)
 
-@cli.command()
+@bundleutils.command()
 @transform_options
 @click.option('-H', '--hash-seed', help=f"""
     Optional prefix for the hashing process (also {BUNDLEUTILS_CREDENTIAL_HASH_SEED}).
@@ -1889,11 +1889,11 @@ def audit(ctx, strict, configs, source_dir, target_dir, hash_seed):
             configs = [path]
     _transform(configs, source_dir, target_dir)
 
-@cli.command()
+@bundleutils.command()
 @transform_options
 @click.pass_context
 def transform(ctx, strict, configs, source_dir, target_dir):
-    """Transform using a custom transformation config."""
+    """Transform using a custom transformation config"""
     set_logging(ctx)
     source_dir = null_check(source_dir, SOURCE_DIR_ARG, BUNDLEUTILS_TRANSFORM_SOURCE_DIR)
     target_dir = null_check(target_dir, TARGET_DIR_ARG, BUNDLEUTILS_TRANSFORM_TARGET_DIR)
@@ -1995,7 +1995,7 @@ def remove_empty_keys(data):
     # For scalar values, just return as-is
     return data
 
-@cli.command()
+@bundleutils.command()
 @click.option('-t', '--target-dir', 'target_dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The target directory to update the bundle.yaml file (defaults to CWD).')
 @click.option('-d', '--description', 'description', help=f'Optional description for the bundle (also {BUNDLEUTILS_BUNDLE_DESCRIPTION}).')
 @click.pass_context
