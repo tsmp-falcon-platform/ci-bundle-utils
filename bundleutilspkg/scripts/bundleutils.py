@@ -557,6 +557,122 @@ def ci_setup(ctx, ci_version, ci_type, ci_server_home, source_dir, ci_bundle_tem
     _update_bundle(jenkins_manager.target_jenkins_home_casc_startup_bundle)
 
 @bundleutils.command()
+@click.option('-m', '--config', type=click.Path(file_okay=True, dir_okay=False), help=f'An optional custom merge config file if needed.')
+@click.option('-f', '--files', multiple=True, type=click.Path(file_okay=True, dir_okay=False), help=f'The files to be merged.')
+@click.option('-o', '--outfile', type=click.Path(file_okay=True, dir_okay=False), help=f'The target for the merged file.')
+@click.pass_context
+def merge_yamls(ctx, config, files, outfile = None):
+    """
+    Used for merging YAML files of the same type (jcasc, plugins, items, rbac, etc).
+
+    \b
+    The merging strategy is defined in a merge-config file. The default contents are shown on execution.
+    """
+
+    merge_configs = None
+    if config:
+        if not os.path.exists(config):
+            die(f"Config file '{config}' does not exist")
+        else:
+            logging.debug(f"Using config file: {config}")
+            merge_configs = yaml2dict(config)
+
+    merger = YAMLMerger(merge_configs)
+    # warn if less than two files are provided
+    if len(files) < 1:
+        die(f"Please provide at least one file to merge")
+    if len(files) < 2:
+        logging.warning(f"Merging only makes sense with two files. Returning the first file.")
+    # merge the files sequentially using the last result as the base
+    output = merger.merge_yaml_files(merger, files)
+    if not outfile:
+        yaml.dump(output, sys.stdout)
+    else:
+        with open(outfile, "w") as f:
+            yaml.dump(output, f)
+
+@bundleutils.command()
+@click.option('-m', '--config', type=click.Path(file_okay=True, dir_okay=False), help=f'An optional custom merge config file if needed.')
+@click.option('-b', '--bundles', multiple=True, type=click.Path(file_okay=False, dir_okay=True, exists=True), help=f'The bundles to be rendered.')
+@click.option('-o', '--outdir', type=click.Path(file_okay=False, dir_okay=True), help=f'The target for the merged file.')
+@click.pass_context
+def merge_bundles(ctx, config, bundles, outdir = None):
+    """
+    Used for merging bundles. Given a list of bundles, merge them into a single bundle.
+
+    \b
+    The merging strategy is defined in a merge config file similar to the merge command.
+
+    \b
+    Given at least two bundles, it will:
+    - for each section of the bundle.yaml (plugins, catalog, items, etc)
+    - collect all the referenced files in order of the bundles
+    - merge them together
+    - write the result to the outdir or stdout if not provided
+    - update the outdir/bundle.yaml with the new references
+
+    """
+
+    merge_configs = None
+    if config:
+        if not os.path.exists(config):
+            die(f"Config file '{config}' does not exist")
+        else:
+            logging.debug(f"Using config file: {config}")
+            merge_configs = yaml2dict(config)
+
+    merger = YAMLMerger(merge_configs)  # Merge lists of dicts by 'name' field
+    # ensure at least two files are provided
+    if len(bundles) < 1:
+        die(f"Please provide at least one bundle to merge")
+
+    # ensure the outdir and a bundle.yaml exist
+    if outdir:
+        if not os.path.exists(outdir):
+            os.makedirs(outdir)
+        out_bundle_yaml = os.path.join(outdir, 'bundle.yaml')
+        last_bundle_yaml = os.path.join(bundles[-1], 'bundle.yaml')
+        if os.path.exists(last_bundle_yaml):
+            # copy the last bundle.yaml to the outdir
+            with open(last_bundle_yaml, 'r') as file:
+                with open(out_bundle_yaml, 'w') as out_file:
+                    out_file.write(file.read())
+        else:
+            die(f"The last bundle specified must include a bundle.yaml. Bundle file '{last_bundle_yaml}' does not exist.")
+
+    # load the bundle.yaml files
+    bundle_yamls = {}
+    for bundle in bundles:
+        bundle_yaml = os.path.join(bundle, 'bundle.yaml')
+        if not os.path.exists(bundle_yaml):
+            die(f"Bundle file '{bundle_yaml}' does not exist")
+        bundle_yamls[bundle] = yaml2dict(bundle_yaml)
+
+    # merge the sections
+    for section, section_file in bundle_yaml_keys.items():
+        output = {}
+        section_files = []
+        for bundle, bundle_yaml in bundle_yamls.items():
+            if section in bundle_yaml:
+                for file in bundle_yaml[section]:
+                    section_files.append(os.path.join(bundle, file))
+        if not section_files:
+            logging.debug(f"No files found for section: {section}")
+            continue
+        # merge the files sequentially using the last result as the base
+        output = merger.merge_yaml_files(merger, section_files)
+
+        if not outdir:
+            print(f"# {section}.yaml")
+            yaml.dump(output, sys.stdout)
+        else:
+            out_section_yaml = os.path.join(outdir, section_file)
+            with open(out_section_yaml, "w") as f:
+                logging.info(f"Writing section: {section} to {out_section_yaml}")
+                yaml.dump(output, f)
+            _update_bundle(outdir)
+
+@bundleutils.command()
 @server_options
 @click.option('-s', '--source-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The bundle to be validated.')
 @click.option('-w', '--ignore-warnings', default=False, is_flag=True, help=f'Do not fail if warnings are found.')
