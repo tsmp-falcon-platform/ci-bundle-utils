@@ -584,7 +584,7 @@ def merge_yamls(ctx, config, files, outfile = None):
     if len(files) < 2:
         logging.warning(f"Merging only makes sense with two files. Returning the first file.")
     # merge the files sequentially using the last result as the base
-    output = merger.merge_yaml_files(merger, files)
+    output = merger.merge_yaml_files(files)
     if not outfile:
         yaml.dump(output, sys.stdout)
     else:
@@ -660,7 +660,7 @@ def merge_bundles(ctx, config, bundles, outdir = None):
             logging.debug(f"No files found for section: {section}")
             continue
         # merge the files sequentially using the last result as the base
-        output = merger.merge_yaml_files(merger, section_files)
+        output = merger.merge_yaml_files(section_files)
 
         if not outdir:
             print(f"# {section}.yaml")
