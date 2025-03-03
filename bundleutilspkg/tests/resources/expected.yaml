@@ -67,10 +67,6 @@ jenkins:
   - responseTime
   numExecutors: 1
   primaryView:
-    all:
-      name: all
-    all2:
-      name: all2
     list:
       columns:
       - status

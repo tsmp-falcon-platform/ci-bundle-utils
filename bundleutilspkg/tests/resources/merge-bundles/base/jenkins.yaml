@@ -9,18 +9,8 @@ jenkins:
           - key: "VAR2"
             value: "value-var2"
   primaryView:
-    list:
-      columns:
-      - status
-      - jobName
-      - lastSuccess
-      - lastFailure
-      - lastDuration
-      - buildButton
-      filterExecutors: true
-      filterQueue: true
-      includeRegex: (casc-custom-.*|casc-local-.*)
-      name: Bundles
+    all:
+      name: all
   views:
   - list:
       columns:

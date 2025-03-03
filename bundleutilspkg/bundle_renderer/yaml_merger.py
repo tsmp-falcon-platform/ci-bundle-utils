@@ -76,8 +76,8 @@ class YAMLMerger:
         Checks if a custom key is defined for the given key and path.
         """
         custom_strategy = None
+        logging.debug(f"Checking custom strategy pattern for path: '{path}' and default: '{default}'")
         for custom_pattern, custom_value  in strategy_config.items():
-            logging.debug(f"Checking custom strategy pattern: {custom_pattern} against path: {path} and default: {default}")
             count_star = custom_pattern.count("*")
             if count_star == 0:
                 if path == custom_pattern:
@@ -137,8 +137,13 @@ class YAMLMerger:
         """Recursively merges child into parent, handling lists based on specified strategies and exclusions."""
         logging.info(f"Deep merging path: {path}")
         if isinstance(parent, dict) and isinstance(child, dict):
+            strategy = self._check_custom_strategy(self.dict_strategy_config, path, "n/a")
+            if strategy == "replace":
+                logging.debug(f"Replacing entire dict at path: {path}")
+                return child
             for key, value in child.items():
                 new_path = f"{path}.{key}" if path else key
+                logging.debug(f"Handling dict key: {key} at path: {new_path}")
                 strategy = self._check_custom_strategy(self.dict_strategy_config, path, "merge")
                 logging.debug(f"Handling dict at path: {new_path} with strategy: {strategy}")
                 if key not in parent or strategy == "replace":
