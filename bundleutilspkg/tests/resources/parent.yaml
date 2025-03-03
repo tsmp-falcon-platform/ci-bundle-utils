@@ -59,8 +59,6 @@ jenkins:
   primaryView:
     all:
       name: all
-    all2:
-      name: all2
   views:
   - all:
       name: all

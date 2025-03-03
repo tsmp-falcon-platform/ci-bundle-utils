@@ -1,9 +1,11 @@
 import os
+import logging
 import ruamel.yaml
 import pytest
 from bundle_renderer.yaml_merger import YAMLMerger
 
 yaml = ruamel.yaml.YAML(typ="rt")
+logging.basicConfig(level=logging.DEBUG)
 
 @pytest.fixture
 def merger():
