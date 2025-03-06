@@ -44,7 +44,7 @@ setup(
         'packaging',
     ],
     extras_require={
-        "dev": ["pytest"],
+        "dev": ["pytest", "pyinstaller"],
     },
     entry_points={
         'console_scripts': [

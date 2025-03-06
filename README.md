@@ -327,10 +327,21 @@ Usage: bundleutils merge-bundles [OPTIONS]
   - write the result to the outdir or stdout if not provided
   - update the outdir/bundle.yaml with the new references
 
+  Optionally, it can:
+  - transform the merged bundle using the transformation configs
+  - perform a diff check against the source bundle and the transformed bundle
+
 Options:
+  -S, --strict             Fail when referencing non-existent files - warn
+                           otherwise.
   -m, --config FILE        An optional custom merge config file if needed.
   -b, --bundles DIRECTORY  The bundles to be rendered.
-  -o, --outdir DIRECTORY   The target for the merged file.
+  -o, --outdir DIRECTORY   The target for the merged bundle.
+  -t, --transform          Optionally transform using the transformation
+                           configs (BUNDLEUTILS_MERGE_TRANSFORM_PERFORM).
+  -d, --diffcheck          Optionally perform bundleutils diff against the
+                           original source bundle and expected bundle
+                           (BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK).
   --help                   Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils merge-yamls [OPTIONS]
@@ -376,7 +387,15 @@ Options:
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils update-bundle [OPTIONS]
 
-  Update the bundle.yaml file in the target directory.
+  Update the bundle.yaml file in the target directory:
+  - Updating keys according to the files found
+  - Removing keys that have no files
+  - Generating a new UUID for the id key
+
+  Bundle version generation:
+  - Sorts files alphabetically to ensure consistent order.
+  - Sorts YAML keys recursively inside each file.
+  - Generates a SHA-256 hash and converts it into a UUID.
 
 Options:
   -t, --target-dir DIRECTORY  The target directory to update the bundle.yaml
