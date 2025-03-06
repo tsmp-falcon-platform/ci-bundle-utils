@@ -1,0 +1,33 @@
+# bundleutils.spec
+from PyInstaller.utils.hooks import collect_data_files
+from PyInstaller.building.build_main import Analysis, PYZ, EXE
+from PyInstaller.utils.hooks import copy_metadata
+
+data_files = collect_data_files("defaults/configs")
+metadata_files = copy_metadata("bundleutilspkg")  # Ensure package metadata is included
+data_files.extend(metadata_files)
+
+a = Analysis(
+    ['scripts/bundleutils.py'],  # Run as a module
+    pathex=['.'],
+    datas=data_files,
+    hiddenimports=[
+        'bundle_renderer',       # Explicitly include bundle_renderer
+        'server_management',     # Explicitly include server_management
+    ],
+    hookspath=[],
+    runtime_hooks=[],
+    excludes=[],
+    noarchive=False,
+)
+
+pyz = PYZ(a.pure)
+
+exe = EXE(
+    pyz, a.scripts, a.binaries, a.zipfiles, a.datas,
+    name='bundleutils',
+    debug=False,
+    strip=False,
+    upx=True,
+    console=True  # Keep console mode enabled for Click
+)
