@@ -961,7 +961,7 @@ def version():
     try:
         package_name = 'bundleutilspkg'
         pkg_metadata = metadata(package_name)
-        click.echo(f"{pkg_metadata['Summary']}")
+        click.echo(f"{pkg_metadata['Version']}")
     except PackageNotFoundError:
         click.echo("Package is not installed. Please ensure it's built and installed correctly.")
 

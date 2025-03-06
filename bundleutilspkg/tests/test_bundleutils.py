@@ -24,7 +24,7 @@ def test_hello_command_missing_argument(runner):
 def test_merge_bundles_1(request, runner):
     testdir = os.path.dirname(__file__)
     outdir = os.path.join(testdir, 'resources', 'target', request.node.name)
-    assert outdir == '/home/sboardwell/Workspace/tsmp-falcon-platform/ci-bundle-utils/bundleutilspkg/tests/resources/target/test_merge_bundles_1'
+    assert outdir.endswith('tests/resources/target/test_merge_bundles_1')
     # delete the output directory recursively if it exists
     shutil.rmtree(outdir, ignore_errors=True)
     os.makedirs(outdir, exist_ok=True)
