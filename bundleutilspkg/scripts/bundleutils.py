@@ -26,9 +26,8 @@ from deepdiff.helper import CannotCompare
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap
 from ruamel.yaml.comments import CommentedSeq
-from bundle_renderer.yaml_merger import YAMLMerger
-from server_management.server_manager import JenkinsServerManager
-# from bundle_renderer.bundle_renderer import BundleGenerator
+from bundleutilspkg.bundle_renderer.yaml_merger import YAMLMerger
+from bundleutilspkg.server_management.server_manager import JenkinsServerManager
 from urllib.parse import urlparse
 
 locale.setlocale(locale.LC_ALL, "C")
@@ -1781,7 +1780,7 @@ def replace_carriage_returns(ctx, response_text):
                 logging.warning(f'Found catalog warnings: {line}')
             if catalog_warnings_strategy == CatalogWarningsStrategy.COMMENT:
                 logging.warning(f'Found catalog warnings in the response. Converting to comments according to strategy {catalog_warnings_strategy.name}')
-                response_text = re.sub(r'^--- .*$','# \g<0>', response_text, flags=re.MULTILINE)
+                response_text = re.sub(r'^--- .*$',r'# \g<0>', response_text, flags=re.MULTILINE)
             elif catalog_warnings_strategy == CatalogWarningsStrategy.FAIL:
                 die(f'''
                     Found catalog warnings in the response. Exiting according to strategy {catalog_warnings_strategy.name}
