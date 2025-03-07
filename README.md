@@ -512,6 +512,7 @@ Usage:
 Targets:
   setup                  Setup the development environment
   test                   Run the pytest suite
+  pyinstaller            Build the bundleutils package
   compose/start-dev      Start the bundleutils container
   compose/start          Start the bundleutils container
   compose/stop           Stop the bundleutils container

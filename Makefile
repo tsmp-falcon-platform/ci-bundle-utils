@@ -16,6 +16,15 @@ setup: ## Setup the development environment
 test: ## Run the pytest suite
 	pytest bundleutilspkg/tests -v
 
+.PHONY: pyinstaller
+pyinstaller: ## Build the bundleutils package
+	pyinstaller --noconfirm --clean --onedir \
+  --hidden-import bundleutilspkg.bundle_renderer \
+  --hidden-import bundleutilspkg.server_management \
+  --collect-submodules bundleutilspkg.bundle_renderer \
+  --collect-submodules bundleutilspkg.server_management \
+  bundleutilspkg/scripts/bundleutils.py
+
 .PHONY: compose/start-dev
 compose/start-dev: ## Start the bundleutils container
 compose/start-dev: compose/stop
