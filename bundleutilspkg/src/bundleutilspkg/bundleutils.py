@@ -2176,7 +2176,7 @@ def _transform(configs, source_dir, target_dir):
     # if the target directory is not set, use the source directory suffixed with -transformed
     if not target_dir:
         target_dir = source_dir + '-transformed'
-    target_dir = os.pa
+    target_dir = os.path.normpath(target_dir)
     logging.info(f'Transform: source {source_dir} to target {target_dir}')
     # create the target directory if it does not exist, delete all files in it
     os.makedirs(target_dir, exist_ok=True)
