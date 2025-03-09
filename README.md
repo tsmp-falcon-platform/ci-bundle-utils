@@ -511,6 +511,8 @@ Usage:
 
 Targets:
   setup                  Setup the development environment
+  install                Setup the development environment
+  install-dev            Setup the development environment
   test                   Run the pytest suite
   pyinstaller            Build the bundleutils package
   compose/start-dev      Start the bundleutils container

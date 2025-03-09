@@ -22,13 +22,19 @@ dependencies = [
 dev = ["pytest", "pyinstaller"]
 
 [project.scripts]
-bundleutils = "scripts.bundleutils:bundleutils"
+bundleutils = "bundleutilspkg.bundleutils:bundleutils"
 
 [tool.setuptools.packages.find]
-where = ["."]
+where = ["src"]
 
 [tool.setuptools.package-data]
-defaults = ["configs/**/*", "configs/*"]
+bundleutilspkg = ["data/configs/**/*"]
 
 [tool.setuptools.dynamic]
-version = { attr = "scripts._version.__version__" }
+version = { attr = "bundleutilspkg._version.__version__" }
+
+[tool.pytest.ini_options]
+addopts = [
+    "--import-mode=importlib",
+]
+pythonpath = "src"

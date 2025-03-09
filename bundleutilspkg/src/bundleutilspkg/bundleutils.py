@@ -1,5 +1,6 @@
 from enum import Enum, auto
 import hashlib
+import importlib
 import json
 from pathlib import Path
 import subprocess
@@ -26,9 +27,10 @@ from deepdiff.helper import CannotCompare
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap
 from ruamel.yaml.comments import CommentedSeq
-from bundleutilspkg.bundle_renderer.yaml_merger import YAMLMerger
-from bundleutilspkg.server_management.server_manager import JenkinsServerManager
+from bundleutilspkg.yaml_merger import YAMLMerger
+from bundleutilspkg.server_manager import JenkinsServerManager
 from urllib.parse import urlparse
+from bundleutilspkg._version import __version__
 
 locale.setlocale(locale.LC_ALL, "C")
 
@@ -962,6 +964,10 @@ def version():
         pkg_metadata = metadata(package_name)
         click.echo(f"{pkg_metadata['Version']}")
     except PackageNotFoundError:
+        try:
+            click.echo(__version__)
+        except AttributeError:
+            click.echo("Cannot determine version.")
         click.echo("Package is not installed. Please ensure it's built and installed correctly.")
 
 @bundleutils.command()
@@ -2057,6 +2063,14 @@ def recursive_merge(obj1, obj2):
         logging.debug(f'Unkown type: {type(obj2)}')
     return obj1
 
+def get_config_file(filename):
+    """Load a YAML config file from bundleutilspkg.data.configs."""
+    if getattr(sys, 'frozen', False):  # PyInstaller build
+        base_path = Path(sys._MEIPASS) / "data/configs"
+    else:
+        base_path = importlib.resources.files("bundleutilspkg.data.configs")
+
+    return base_path / filename
 
 @bundleutils.command()
 @transform_options
@@ -2074,7 +2088,7 @@ def normalize(ctx, strict, configs, source_dir, target_dir):
             logging.info('Using normalize.yaml in the current directory')
             configs = ['normalize.yaml']
         else:
-            path = pkg_resources.files('defaults.configs') / 'normalize.yaml'
+            path = get_config_file('normalize.yaml')
             configs = [path]
     _transform(configs, source_dir, target_dir)
 
@@ -2110,7 +2124,7 @@ def audit(ctx, strict, configs, source_dir, target_dir, hash_seed):
             logging.info('Using normalize.yaml in the current directory')
             configs = ['normalize.yaml']
         else:
-            path = pkg_resources.files('defaults.configs') / 'normalize.yaml'
+            path = get_config_file('normalize.yaml')
             configs = [path]
     _transform(configs, source_dir, target_dir)
 
@@ -2161,6 +2175,7 @@ def _transform(configs, source_dir, target_dir):
             merged_config = recursive_merge(merged_config, obj)
 
     logging.debug(f'Merged config:\n' + printYaml(merged_config))
+    source_dir = os.path.abspath(source_dir)
     # if the target directory is not set, use the source directory suffixed with -transformed
     if not target_dir:
         target_dir = source_dir + '-transformed'

@@ -2,7 +2,7 @@ import os
 import logging
 import ruamel.yaml
 import pytest
-from bundleutilspkg.bundle_renderer.yaml_merger import YAMLMerger
+from bundleutilspkg.yaml_merger import YAMLMerger
 
 yaml = ruamel.yaml.YAML(typ="rt")
 logging.basicConfig(level=logging.DEBUG)

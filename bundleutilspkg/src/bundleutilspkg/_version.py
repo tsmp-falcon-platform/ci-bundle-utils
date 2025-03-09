@@ -9,8 +9,9 @@ def get_version():
 
     if not (release_version and release_hash):
         try:
-            release_version = subprocess.check_output(["git", "describe", "--tags"], text=True).strip()
-            release_hash = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+            # do not print any stderr output
+            release_version = subprocess.check_output(["git", "describe", "--tags"], text=True, stderr=subprocess.DEVNULL).strip()
+            release_hash = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True, stderr=subprocess.DEVNULL).strip()
         except Exception:
             release_version = "0.0.0"
             release_hash = "unknown"

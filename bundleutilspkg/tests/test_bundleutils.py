@@ -3,7 +3,7 @@ import os
 import ruamel.yaml
 import shutil
 from click.testing import CliRunner
-from scripts.bundleutils import bundleutils
+from bundleutilspkg.bundleutils import bundleutils
 
 yaml = ruamel.yaml.YAML(typ="rt")
 
