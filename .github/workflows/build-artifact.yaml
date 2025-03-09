@@ -1,0 +1,53 @@
+# This workflow uses actions that are not certified by GitHub.
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+
+# GitHub recommends pinning actions to a commit SHA.
+# To get a newer version, you will need to update the SHA.
+# You can also reference a tag or branch, but the action may change without warning.
+
+name: Create and add an artifact to a release
+
+on:
+  workflow_dispatch:
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-publish-artifact:
+    name: Build Executables
+    runs-on: ${{ matrix.os }}
+
+    # this job needs write permissions to the repository
+    permissions:
+      contents: write
+    strategy:
+      matrix:
+        os: [ubuntu-20.04, macos-13]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          make install-dev
+
+      - name: Build Executable with PyInstaller (Linux/macOS)
+        run: |
+          make pyinstaller
+          cd bundleutilspkg
+          ls -al dist
+          mv dist/bundleutils dist/bundleutils-${{ runner.os }}
+          ls -al dist
+          gh run upload-artifact --name dist/bundleutils-${{ runner.os }} --path dist/dist/bundleutils-${{ runner.os }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
