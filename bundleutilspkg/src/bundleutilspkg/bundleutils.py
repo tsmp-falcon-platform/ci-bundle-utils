@@ -2072,7 +2072,7 @@ def get_config_file(filename):
 
     return base_path / filename
 
-def source_target_prep(source_dir, target_dir, suffix, filename):
+def source_target_prep(source_dir, target_dir, configs, suffix, filename):
     if not source_dir:
         source_dir = default_target
     source_dir = os.path.normpath(source_dir)
@@ -2095,7 +2095,7 @@ def source_target_prep(source_dir, target_dir, suffix, filename):
 def normalize(ctx, strict, configs, source_dir, target_dir):
     """Transform using the normalize.yaml for better comparison."""
     set_logging(ctx)
-    source_dir, target_dir, configs = source_target_prep(source_dir, target_dir, '-normalized', 'normalize.yaml')
+    source_dir, target_dir, configs = source_target_prep(source_dir, target_dir, configs, '-normalized', 'normalize.yaml')
     _transform(configs, source_dir, target_dir)
 
 @bundleutils.command()
@@ -2120,7 +2120,7 @@ def audit(ctx, strict, configs, source_dir, target_dir, hash_seed):
     os.environ[BUNDLEUTILS_CREDENTIAL_HASH] = 'true'
     null_check(hash_seed, 'hash_seed', BUNDLEUTILS_CREDENTIAL_HASH_SEED, False,'')
 
-    source_dir, target_dir, configs = source_target_prep(source_dir, target_dir, '-audit', 'normalize.yaml')
+    source_dir, target_dir, configs = source_target_prep(source_dir, target_dir, configs, '-audit', 'normalize.yaml')
     _transform(configs, source_dir, target_dir)
 
 @bundleutils.command()
