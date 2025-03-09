@@ -7,7 +7,7 @@
 # To get a newer version, you will need to update the SHA.
 # You can also reference a tag or branch, but the action may change without warning.
 
-name: Create and add an artifact to a release
+name: Create and add artifact to the workflow run
 
 on:
   workflow_dispatch:
@@ -53,4 +53,4 @@ jobs:
         with:
           name: bundleutils-${{ runner.os }}
           path: |
-            dist/bundleutils-${{ runner.os }}
+            bundleutilspkg/dist/bundleutils-${{ runner.os }}
