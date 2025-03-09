@@ -19,7 +19,6 @@ import locale
 import logging
 import re
 import sys
-import importlib.resources as pkg_resources
 from importlib.metadata import metadata, PackageNotFoundError
 from collections import OrderedDict, defaultdict
 from deepdiff import DeepDiff
@@ -593,6 +592,7 @@ def ci_setup(ctx, ci_version, ci_type, ci_server_home, source_dir, ci_bundle_tem
     set_logging(ctx)
     ci_version, ci_type, ci_server_home = server_options_null_check(ci_version, ci_type, ci_server_home)
     source_dir = null_check(source_dir, SOURCE_DIR_ARG, BUNDLEUTILS_SETUP_SOURCE_DIR)
+    source_dir = os.path.normpath(source_dir)
     if not os.path.exists(source_dir):
         die(f"Source directory '{source_dir}' does not exist")
     # parse the source directory bundle.yaml file and copy the files under the plugins and catalog keys to the target_jenkins_home_casc_startup_bundle directory
@@ -2072,24 +2072,30 @@ def get_config_file(filename):
 
     return base_path / filename
 
+def source_target_prep(source_dir, target_dir, suffix, filename):
+    if not source_dir:
+        source_dir = default_target
+    source_dir = os.path.normpath(source_dir)
+    if not target_dir:
+        target_dir = source_dir + suffix
+    target_dir = os.path.normpath(target_dir)
+    if not configs:
+        # if a normalize.yaml file is found in the current directory, use it
+        if os.path.exists(filename):
+            logging.info(f'Using {filename} in the current directory')
+            configs = [filename]
+        else:
+            path = get_config_file(filename)
+            configs = [path]
+    return source_dir, target_dir, configs
+
 @bundleutils.command()
 @transform_options
 @click.pass_context
 def normalize(ctx, strict, configs, source_dir, target_dir):
     """Transform using the normalize.yaml for better comparison."""
     set_logging(ctx)
-    if not source_dir:
-        source_dir = default_target
-    if not target_dir:
-        target_dir = source_dir + '-normalized'
-    if not configs:
-        # if a normalize.yaml file is found in the current directory, use it
-        if os.path.exists('normalize.yaml'):
-            logging.info('Using normalize.yaml in the current directory')
-            configs = ['normalize.yaml']
-        else:
-            path = get_config_file('normalize.yaml')
-            configs = [path]
+    source_dir, target_dir, configs = source_target_prep(source_dir, target_dir, '-normalized', 'normalize.yaml')
     _transform(configs, source_dir, target_dir)
 
 @bundleutils.command()
@@ -2114,18 +2120,7 @@ def audit(ctx, strict, configs, source_dir, target_dir, hash_seed):
     os.environ[BUNDLEUTILS_CREDENTIAL_HASH] = 'true'
     null_check(hash_seed, 'hash_seed', BUNDLEUTILS_CREDENTIAL_HASH_SEED, False,'')
 
-    if not source_dir:
-        source_dir = default_target
-    if not target_dir:
-        target_dir = source_dir + '-audit'
-    if not configs:
-        # if a normalize.yaml file is found in the current directory, use it
-        if os.path.exists('normalize.yaml'):
-            logging.info('Using normalize.yaml in the current directory')
-            configs = ['normalize.yaml']
-        else:
-            path = get_config_file('normalize.yaml')
-            configs = [path]
+    source_dir, target_dir, configs = source_target_prep(source_dir, target_dir, '-audit', 'normalize.yaml')
     _transform(configs, source_dir, target_dir)
 
 @bundleutils.command()
@@ -2135,7 +2130,9 @@ def transform(ctx, strict, configs, source_dir, target_dir):
     """Transform using a custom transformation config."""
     set_logging(ctx)
     source_dir = null_check(source_dir, SOURCE_DIR_ARG, BUNDLEUTILS_TRANSFORM_SOURCE_DIR)
+    source_dir = os.path.normpath(source_dir)
     target_dir = null_check(target_dir, TARGET_DIR_ARG, BUNDLEUTILS_TRANSFORM_TARGET_DIR)
+    target_dir = os.path.normpath(target_dir)
     configs = null_check(configs, 'configs', BUNDLEUTILS_TRANSFORM_CONFIGS, False)
     _transform(configs, source_dir, target_dir)
 
@@ -2175,10 +2172,11 @@ def _transform(configs, source_dir, target_dir):
             merged_config = recursive_merge(merged_config, obj)
 
     logging.debug(f'Merged config:\n' + printYaml(merged_config))
-    source_dir = os.path.abspath(source_dir)
+    source_dir = os.path.normpath(source_dir)
     # if the target directory is not set, use the source directory suffixed with -transformed
     if not target_dir:
         target_dir = source_dir + '-transformed'
+    target_dir = os.pa
     logging.info(f'Transform: source {source_dir} to target {target_dir}')
     # create the target directory if it does not exist, delete all files in it
     os.makedirs(target_dir, exist_ok=True)
