@@ -39,7 +39,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          make install
+          make install-dev install
 
       - name: Build Executable with PyInstaller (Linux/macOS)
         run: |
