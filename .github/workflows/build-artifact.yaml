@@ -48,6 +48,8 @@ jobs:
           ls -al dist
           mv dist/bundleutils dist/bundleutils-${{ runner.os }}
           ls -al dist
+          cp -r dist/bundleutils-${{ runner.os }} /tmp/bundleutils-${{ runner.os }}
+          /tmp/bundleutils-${{ runner.os }} version
       - name: Archive artifacts
         uses: actions/upload-artifact@v4
         with:
