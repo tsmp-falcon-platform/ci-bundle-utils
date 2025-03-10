@@ -1,0 +1,19 @@
+jenkins:
+  authorizationStrategy: cloudBeesRoleBasedAccessControl
+  securityRealm: operationsCenter
+security:
+  anonymizeSupportBundle:
+    enabled: false
+  apiToken:
+    creationOfLegacyTokenEnabled: false
+    tokenGenerationOnCreationEnabled: false
+    usageStatisticsEnabled: true
+  cps:
+    hideSandbox: true
+  gitHooks:
+    allowedOnAgents: false
+    allowedOnController: false
+  gitHostKeyVerificationConfiguration:
+    sshHostKeyVerificationStrategy: knownHostsFileVerificationStrategy
+  scriptApproval:
+    forceSandbox: false

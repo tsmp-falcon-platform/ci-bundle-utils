@@ -18,3 +18,4 @@ repos:
       entry: ./scripts/update_readme.sh
       language: script
       files: bundleutilspkg/.*\.py$
+      require_serial: true

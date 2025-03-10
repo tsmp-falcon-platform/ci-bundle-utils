@@ -1,0 +1,97 @@
+jenkins:
+  authorizationStrategy: cloudBeesRoleBasedAccessControl
+  clouds:
+  - operationsCenterAgentProvisioningService
+  - kubernetes:
+      containerCap: 10
+      containerCapStr: '10'
+      name: bundleutils-cloud
+      templates:
+      - id: 75582751-5e50-403e-8c0c-961b99fd33a0
+        label: bundleutils
+        name: bundleutils
+        serviceAccount: bundle-mgr
+      - id: 75582751-5e50-403e-8c0c-961b99fd33a1
+        label: bundleutils2
+        name: bundleutils2
+        serviceAccount: bundle-mgr
+      webSocket: true
+  - kubernetes:
+      containerCap: 10
+      containerCapStr: "10"
+      name: "k1"
+  - kubernetes:
+      containerCap: 10
+      containerCapStr: "10"
+      name: "k2"
+      templates:
+      - id: 75582751-5e50-403e-8c0c-961b99fd33a2
+        label: k2-1
+        name: k2-1
+        serviceAccount: k2-mgr
+  crumbIssuer:
+    standard:
+      excludeClientIPFromCrumb: false
+  disableRememberMe: false
+  disabledAdministrativeMonitors:
+  - hudson.util.DoubleLaunchChecker
+  markupFormatter: plainText
+  noUsageStatistics: true
+  globalNodeProperties:
+    - envVars:
+        env:
+          - key: "VAR1"
+            value: "value-var1"
+          - key: "VAR2"
+            value: "value-var2"
+  nodeMonitors:
+  - architecture
+  - clock
+  - diskSpace:
+      freeSpaceThreshold: 1GiB
+      freeSpaceWarningThreshold: 2GiB
+  - swapSpace
+  - tmpSpace:
+      freeSpaceThreshold: 1GiB
+      freeSpaceWarningThreshold: 2GiB
+  - responseTime
+  numExecutors: 0
+  primaryView:
+    all:
+      name: all
+  views:
+  - all:
+      name: all
+  viewsTabBar: standard
+beekeeper:
+  enabled: true
+  securityWarnings:
+    enabledForCore: true
+    enabledForPlugins: true
+  upgrades:
+    autoDowngradePlugins: false
+    autoUpgradePlugins: true
+support:
+  automatedBundleConfiguration:
+    componentIds:
+    - CloudBeesAssuranceSupport
+    - CloudBeesCasCUpdateLogBundlesSupport
+    - AgentsConfigFile
+    - ConfigFileComponent
+    - OtherConfigFilesComponent
+    - AboutBrowser
+    enabled: true
+    period: 1
+unclassified:
+  buildDiscarders:
+    configuredBuildDiscarders:
+    - jobBuildDiscarder
+  bundleUpdateTiming:
+    automaticReload: true
+    automaticRestart: true
+    rejectWarnings: true
+    reloadAlwaysOnRestart: false
+    skipNewVersions: false
+  cascItemsConfiguration:
+    variableInterpolationEnabledForAdmin: false
+    variableInterpolationEnabledForNonAdmin: false

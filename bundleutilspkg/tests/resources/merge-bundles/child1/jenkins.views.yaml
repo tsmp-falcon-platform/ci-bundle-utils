@@ -1,0 +1,41 @@
+jenkins:
+  primaryView:
+    list:
+      columns:
+      - status
+      - jobName
+      - lastSuccess
+      - lastFailure
+      - lastDuration
+      - buildButton
+      filterExecutors: true
+      filterQueue: true
+      includeRegex: (bla-.*|bla-.*)
+      name: Bla
+  views:
+  - list:
+      columns:
+      - status
+      - jobName
+      - lastSuccess
+      - lastFailure
+      - lastDuration
+      - buildButton
+      filterExecutors: true
+      filterQueue: true
+      includeRegex: (casc-custom-.*|casc-local-.*)
+      name: Bundles
+  - list:
+      columns:
+      - status
+      - jobName
+      - lastSuccess
+      - lastFailure
+      - lastDuration
+      - buildButton
+      filterExecutors: true
+      filterQueue: true
+      includeRegex: (bla-.*|bla-.*)
+      name: Bla
+  - all:
+      name: all

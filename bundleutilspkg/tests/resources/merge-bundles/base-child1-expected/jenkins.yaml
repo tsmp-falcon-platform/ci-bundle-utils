@@ -1,0 +1,259 @@
+jenkins:
+  clouds:
+  - operationsCenterAgentProvisioningService
+  globalNodeProperties:
+  - envVars:
+      env:
+      - key: VAR1
+        value: value-var1
+      - key: VAR2
+        value: value-var2
+  primaryView:
+    list:
+      columns:
+      - status
+      - jobName
+      - lastSuccess
+      - lastFailure
+      - lastDuration
+      - buildButton
+      filterExecutors: true
+      filterQueue: true
+      includeRegex: (bla-.*|bla-.*)
+      name: Bla
+  views:
+  - list:
+      columns:
+      - status
+      - jobName
+      - lastSuccess
+      - lastFailure
+      - lastDuration
+      - buildButton
+      filterExecutors: true
+      filterQueue: true
+      includeRegex: (casc-custom-.*|casc-local-.*)
+      name: Bundles
+  - list:
+      columns:
+      - status
+      - jobName
+      - lastSuccess
+      - lastFailure
+      - lastDuration
+      - buildButton
+      filterExecutors: true
+      filterQueue: true
+      includeRegex: (bla-.*|bla-.*)
+      name: Bla
+  - all:
+      name: all
+  crumbIssuer:
+    standard:
+      excludeClientIPFromCrumb: false
+  disableRememberMe: false
+  disabledAdministrativeMonitors:
+  - hudson.util.DoubleLaunchChecker
+  markupFormatter: plainText
+  mode: NORMAL
+  myViewsTabBar: standard
+  noUsageStatistics: true
+  nodeMonitors:
+  - architecture
+  - clock
+  - diskSpace:
+      freeSpaceThreshold: 1GiB
+      freeSpaceWarningThreshold: 2GiB
+  - swapSpace
+  - tmpSpace:
+      freeSpaceThreshold: 1GiB
+      freeSpaceWarningThreshold: 2GiB
+  - responseTime
+  numExecutors: 0
+  projectNamingStrategy: standard
+  quietPeriod: 5
+  scmCheckoutRetryCount: 0
+  viewsTabBar: standard
+  authorizationStrategy: cloudBeesRoleBasedAccessControl
+  securityRealm: operationsCenter
+support:
+  automatedBundleConfiguration:
+    componentIds:
+    - CloudBeesAssuranceSupport
+    - CloudBeesCasCUpdateLogBundlesSupport
+    - AgentsConfigFile
+    - ConfigFileComponent
+    - OtherConfigFilesComponent
+    - AboutBrowser
+    - AboutJenkins
+    - AboutUser
+    - AdministrativeMonitors
+    - BuildQueue
+    - CustomLogs
+    - DumpExportTable
+    - EnvironmentVariables
+    - FileDescriptorLimit
+    - GCLogs
+    - HeapUsageHistogram
+    - ItemsContent
+    - AgentsJVMProcessSystemMetricsContents
+    - MasterJVMProcessSystemMetricsContents
+    - JenkinsLogs
+    - LoadStats
+    - LoggerManager
+    - Metrics
+    - NetworkInterfaces
+    - NodeExecutors
+    - NodeMonitors
+    - OtherLogs
+    - ReverseProxy
+    - RootCAs
+    - RunningBuilds
+    - SlaveCommandStatistics
+    - SlaveLaunchLogs
+    - SlaveLogs
+    - AgentsSystemConfiguration
+    - MasterSystemConfiguration
+    - SystemProperties
+    - TaskLogs
+    - ThreadDumps
+    - UpdateCenter
+    - UserCount
+    - ComponentImpl
+    - SlowRequestComponent
+    - SlowRequestThreadDumpsComponent
+    - HighLoadComponent
+    - DeadlockRequestComponent
+    - OperationsCenterSupportComponent
+    - FIPSSupport
+    - UserActivityComponent
+    - PipelineInternalCalls
+    - PipelineTimings
+    - PipelineThreadDump
+    enabled: true
+    period: 1
+
+unclassified:
+  bundleUpdateTiming:
+    automaticReload: true
+    automaticRestart: true
+    rejectWarnings: true
+    reloadAlwaysOnRestart: true
+    skipNewVersions: false
+  cascItemsConfiguration:
+    variableInterpolationEnabledForAdmin: false
+    variableInterpolationEnabledForNonAdmin: false
+  hibernationConfiguration:
+    activities:
+    - build
+    - web
+    enabled: true
+    gracePeriod: 7200
+  buildDiscarders:
+    configuredBuildDiscarders:
+    - jobBuildDiscarder
+  cloudBeesSCMReporting:
+    enabled: true
+  cloudbeesPipelineExplorer:
+    autoPollingEnabled: true
+    autoPollingIntervalSeconds: 10
+    enabled: true
+    searchMaxIndexSize: 1000
+  experimentalPlugins:
+    enabled: false
+  fingerprints:
+    fingerprintCleanupDisabled: false
+    storage: file
+  gitHubConfiguration:
+    apiRateLimitChecker: ThrottleForNormalize
+  gitHubPluginConfig:
+    hookUrl: https://child1.eks.sboardwell.aws.ps.beescloud.com/github-webhook/
+  junitTestResultStorage:
+    storage: file
+  location:
+    adminAddress: child1@acme-org.org
+    url: https://child1.eks.sboardwell.aws.ps.beescloud.com/
+  mailer:
+    charset: UTF-8
+    useSsl: false
+    useTls: false
+  pollSCM:
+    pollingThreadCount: 10
+  scmGit:
+    addGitTagAction: false
+    allowSecondFetch: false
+    createAccountBasedOnEmail: false
+    disableGitToolChooser: false
+    hideCredentials: false
+    showEntireCommitSummaryInChanges: false
+    useExistingAccountWithSameEmail: false
+  usageStatisticsCloudBees:
+    disabledJenkinsUsageStatistics: true
+    usageStatisticsCollected: true
+  validationVisualization:
+    quiet: false
+beekeeper:
+  enabled: true
+  securityWarnings:
+    enabledForCore: true
+    enabledForPlugins: true
+  upgrades:
+    autoDowngradePlugins: false
+    autoUpgradePlugins: true
+notificationConfiguration:
+  enabled: true
+  router: operationsCenter
+kube:
+  podTemplatesConfiguration:
+    templates:
+    - containers:
+      - alwaysPullImage: true
+        args: '9999999'
+        command: sleep
+        image: catthehacker/ubuntu:act-latest
+        livenessProbe:
+          failureThreshold: 0
+          initialDelaySeconds: 0
+          periodSeconds: 0
+          successThreshold: 0
+          timeoutSeconds: 0
+        name: ubuntu
+        workingDir: /home/jenkins/agent
+      id: 7fd5f534-28d7-406e-a765-397a525c5eb9
+      label: my-agent
+      name: my-agent
+      showRawYaml: false
+      yamlMergeStrategy: override
+appearance:
+  prism:
+    theme: PRISM
+tool:
+  cloudbeesPluginUsageAnalyzer:
+    enabled: true
+  git:
+    installations:
+    - home: git
+      name: Default
+  mavenGlobalConfig:
+    globalSettingsProvider: standard
+    settingsProvider: standard
+globalCredentialsConfiguration:
+  configuration:
+    providerFilter: none
+    typeFilter: none
+security:
+  anonymizeSupportBundle:
+    enabled: false
+  apiToken:
+    creationOfLegacyTokenEnabled: false
+    tokenGenerationOnCreationEnabled: false
+    usageStatisticsEnabled: true
+  cps:
+    hideSandbox: true
+  gitHooks:
+    allowedOnAgents: false
+    allowedOnController: false
+  gitHostKeyVerificationConfiguration:
+    sshHostKeyVerificationStrategy: knownHostsFileVerificationStrategy
+  scriptApproval:
+    forceSandbox: false

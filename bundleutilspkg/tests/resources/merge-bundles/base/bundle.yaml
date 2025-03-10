@@ -1,0 +1,10 @@
+apiVersion: '2'
+id: base
+description: Bundle for base
+version: 7cc600e6e85aba3217bea301236e22a4
+jcasc:
+- jenkins.yaml
+plugins:
+- plugins.yaml
+items:
+- items.yaml

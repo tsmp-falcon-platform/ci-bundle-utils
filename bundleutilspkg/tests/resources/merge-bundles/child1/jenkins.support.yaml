@@ -1,0 +1,6 @@
+support:
+  automatedBundleConfiguration:
+    componentIds:
+    - PipelineThreadDump
+    enabled: true
+    period: 1

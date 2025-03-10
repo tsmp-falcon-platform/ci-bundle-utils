@@ -1,0 +1,356 @@
+removeStrategy:
+  rbac: SYNC
+  items: NONE
+items:
+- kind: freeStyle
+  name: casc-custom-validate
+  blockBuildWhenDownstreamBuilding: false
+  blockBuildWhenUpstreamBuilding: false
+  buildDiscarder:
+    logRotator:
+      removeLastBuild: false
+      artifactDaysToKeep: -1
+      artifactNumToKeep: -1
+      daysToKeep: 30
+      numToKeep: 30
+  buildWrappers:
+  - secretBuildWrapper:
+      bindings:
+      - gitUsernamePassword:
+          gitToolName: Default
+          credentialsId: github-token-rw
+      - string:
+          variable: CASC_VALIDATION_LICENSE_KEY
+          credentialsId: casc-validation-key
+      - string:
+          variable: CASC_VALIDATION_LICENSE_CERT
+          credentialsId: casc-validation-cert
+      - usernamePassword:
+          usernameVariable: BUNDLEUTILS_USERNAME
+          passwordVariable: BUNDLEUTILS_PASSWORD
+          credentialsId: bundleutils-creds
+  builders:
+  - shell:
+      command: |-
+        set -e
+        echo "BUNDLE_REGEX='$BUNDLE_REGEX'"
+        echo "DRY_RUN='$DRY_RUN'"
+
+        for bundle in $(make find BP="$BUNDLE_REGEX"); do
+          echo "Running main target for '$bundle'..."
+          make run/"$bundle"/validate
+        done
+        #export -p > $WORKSPACE_TMP/ENV
+        #sleep 600
+  concurrentBuild: false
+  description: "This job WILL NOT FETCH AND TRANSFORM bundles. It will ONLY VALIDATE
+    EXISTING bundles.\n\nThis is useful for testing feature branches for changes not
+    made through the UI."
+  disabled: false
+  displayName: ''
+  label: bundleutils
+  parameters:
+  - string:
+      trim: false
+      defaultValue: (oc-bundle)
+      name: BUNDLE_REGEX
+      description: Regex to match bundle names. e.g. (oc-bundle|controller-a) or (controller-.*)
+  - string:
+      trim: true
+      defaultValue: main
+      name: VALIDATION_BRANCH
+      description: Branch to use for the bundles validation.
+  scm:
+    scmGit:
+      extensions:
+      - localBranch: {}
+      - cloneOption:
+          reference: ''
+          noTags: true
+          honorRefspec: false
+          shallow: false
+      - userIdentity:
+          name: bundleutils-bot
+          email: bundleutils-bot@example.org
+      userRemoteConfigs:
+      - userRemoteConfig:
+          credentialsId: github-token-rw
+          url: https://github.com/acme-org/acme-repo
+      branches:
+      - branchSpec:
+          name: refs/heads/${VALIDATION_BRANCH}
+  scmCheckoutStrategy:
+    standard: {}
+- kind: pipeline
+  name: child1-audit
+  concurrentBuild: false
+  definition:
+    cpsScmFlowDefinition:
+      scriptPath: job-scripts/child1-sync.jenkinsfile
+      scm:
+        scmGit:
+          extensions:
+          - wipeWorkspace: {}
+          - localBranch: {}
+          userRemoteConfigs:
+          - userRemoteConfig:
+              credentialsId: github-token-rw
+              url: https://github.com/acme-org/acme-repo
+          branches:
+          - branchSpec:
+              name: refs/heads/main
+      lightweight: true
+  description: Use this job to SYNC THE OBFUSCATED BUNDLE to the MAIN BRANCH of the
+    AUDIT REPO.
+  disabled: false
+  displayName: ''
+  properties:
+  - buildDiscarder:
+      strategy:
+        logRotator:
+          removeLastBuild: false
+          artifactDaysToKeep: -1
+          artifactNumToKeep: -1
+          daysToKeep: 30
+          numToKeep: 30
+  - githubProjectProperty:
+      displayName: ''
+      projectUrlStr: https://github.com/acme-org/acme-repo/
+  resumeBlocked: false
+- kind: pipeline
+  name: child1-bootstrap
+  concurrentBuild: false
+  definition:
+    cpsScmFlowDefinition:
+      scriptPath: job-scripts/child1-sync.jenkinsfile
+      scm:
+        scmGit:
+          extensions:
+          - wipeWorkspace: {}
+          - localBranch: {}
+          userRemoteConfigs:
+          - userRemoteConfig:
+              credentialsId: github-token-rw
+              url: https://github.com/acme-org/acme-repo
+          branches:
+          - branchSpec:
+              name: refs/heads/main
+      lightweight: true
+  description: Use this job to CREATE THE ENTRY in the bundle-profiles.yaml file for
+    the current controller.
+  disabled: false
+  displayName: ''
+  properties:
+  - buildDiscarder:
+      strategy:
+        logRotator:
+          removeLastBuild: false
+          artifactDaysToKeep: -1
+          artifactNumToKeep: -1
+          daysToKeep: 30
+          numToKeep: 30
+  - githubProjectProperty:
+      displayName: ''
+      projectUrlStr: https://github.com/acme-org/acme-repo/
+  - parameters:
+      parameterDefinitions:
+      - string:
+          trim: true
+          defaultValue: controller-common
+          name: BUNDLEUTILS_BOOTSTRAP_PROFILE
+          description: Bootstrap profile to use
+  resumeBlocked: false
+- kind: pipeline
+  name: child1-direct
+  concurrentBuild: false
+  definition:
+    cpsScmFlowDefinition:
+      scriptPath: job-scripts/child1-sync.jenkinsfile
+      scm:
+        scmGit:
+          extensions:
+          - wipeWorkspace: {}
+          - localBranch: {}
+          userRemoteConfigs:
+          - userRemoteConfig:
+              credentialsId: github-token-rw
+              url: https://github.com/acme-org/acme-repo
+          branches:
+          - branchSpec:
+              name: refs/heads/main
+      lightweight: true
+  description: Use this job to sync the server configuration directly to the main
+    branch bypassing the drift branch and PR process.
+  disabled: false
+  displayName: ''
+  properties:
+  - buildDiscarder:
+      strategy:
+        logRotator:
+          removeLastBuild: false
+          artifactDaysToKeep: -1
+          artifactNumToKeep: -1
+          daysToKeep: 30
+          numToKeep: 30
+  - githubProjectProperty:
+      displayName: ''
+      projectUrlStr: https://github.com/acme-org/acme-repo/
+  resumeBlocked: false
+- kind: pipeline
+  name: child1-drift
+  concurrentBuild: false
+  definition:
+    cpsScmFlowDefinition:
+      scriptPath: job-scripts/child1-sync.jenkinsfile
+      scm:
+        scmGit:
+          extensions:
+          - wipeWorkspace: {}
+          - localBranch: {}
+          userRemoteConfigs:
+          - userRemoteConfig:
+              credentialsId: github-token-rw
+              url: https://github.com/acme-org/acme-repo
+          branches:
+          - branchSpec:
+              name: refs/heads/main
+      lightweight: true
+  description: Use this job to sync the server configuration to the drift branch for
+    PR and merge. This will now be picked up.
+  disabled: false
+  displayName: ''
+  properties:
+  - buildDiscarder:
+      strategy:
+        logRotator:
+          removeLastBuild: false
+          artifactDaysToKeep: -1
+          artifactNumToKeep: -1
+          daysToKeep: 30
+          numToKeep: 30
+  - githubProjectProperty:
+      displayName: ''
+      projectUrlStr: https://github.com/acme-org/acme-repo/
+  - rebuildSettings:
+      rebuildDisabled: false
+      autoRebuild: false
+  - parameters:
+      parameterDefinitions:
+      - booleanParam:
+          defaultValue: false
+          name: PERFORM_VALIDATION
+          description: Perform validation
+  resumeBlocked: false
+- kind: pipeline
+  name: child1-update
+  concurrentBuild: false
+  definition:
+    cpsScmFlowDefinition:
+      scriptPath: job-scripts/child1-sync.jenkinsfile
+      scm:
+        scmGit:
+          extensions:
+          - wipeWorkspace: {}
+          - localBranch: {}
+          userRemoteConfigs:
+          - userRemoteConfig:
+              credentialsId: github-token-rw
+              url: https://github.com/acme-org/acme-repo
+          branches:
+          - branchSpec:
+              name: refs/heads/main
+      lightweight: true
+  description: Use this job to UPDATE THE ENTRY in the bundle-profiles.yaml file for
+    the current controller.
+  disabled: false
+  displayName: ''
+  properties:
+  - buildDiscarder:
+      strategy:
+        logRotator:
+          removeLastBuild: false
+          artifactDaysToKeep: -1
+          artifactNumToKeep: -1
+          daysToKeep: 30
+          numToKeep: 30
+  - githubProjectProperty:
+      displayName: ''
+      projectUrlStr: https://github.com/acme-org/acme-repo/
+  - parameters:
+      parameterDefinitions:
+      - string:
+          trim: true
+          defaultValue: controller-common
+          name: BUNDLEUTILS_BOOTSTRAP_PROFILE
+          description: Bootstrap profile to use
+  resumeBlocked: false
+- kind: pipeline
+  name: shared-agent-test
+  concurrentBuild: true
+  definition:
+    cpsFlowDefinition:
+      sandbox: true
+      script: |
+        pipeline {
+            agent { label 'shared' }
+
+            stages {
+                stage('Hello') {
+                    steps {
+                        echo 'Hello World'
+                        sh 'sleep 30'
+                    }
+                }
+            }
+            post {
+                always {
+                    publishEvent simpleEvent('free-agent')
+                }
+            }
+        }
+  description: ''
+  disabled: false
+  displayName: ''
+  properties:
+  - rebuildSettings:
+      rebuildDisabled: false
+      autoRebuild: false
+  resumeBlocked: false
+- kind: pipeline
+  name: zip-test
+  concurrentBuild: false
+  definition:
+    cpsFlowDefinition:
+      sandbox: true
+      script: |
+        // Uses Declarative syntax to run commands inside a container.
+        pipeline {
+            agent {
+                kubernetes {
+                    inheritFrom 'my-agent'
+                }
+            }
+            stages {
+                stage('Main') {
+                    steps {
+                        sh 'echo hi'
+                    }
+                }
+            }
+        }
+  description: ''
+  disabled: false
+  displayName: ''
+  properties:
+  - buildDiscarder:
+      strategy:
+        logRotator:
+          removeLastBuild: false
+          artifactDaysToKeep: -1
+          artifactNumToKeep: -1
+          daysToKeep: 30
+          numToKeep: 30
+  - rebuildSettings:
+      rebuildDisabled: false
+      autoRebuild: false
+  resumeBlocked: false

@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bundleutilspkg"
+dynamic = ["version"]
+description = "Bundleutils package"
+authors = [{ name = "Steve Boardwell", email = "steve.boardwell@gmail.com" }]
+dependencies = [
+    "click",
+    "glob2",
+    "ruamel.yaml",
+    "ruamel.yaml.clib",
+    "deepdiff",
+    "requests",
+    "jsonpatch",
+    "packaging"
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pyinstaller"]
+
+[project.scripts]
+bundleutils = "bundleutilspkg.bundleutils:bundleutils"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+bundleutilspkg = ["data/configs/**/*"]
+
+[tool.setuptools.dynamic]
+version = { attr = "bundleutilspkg._version.__version__" }
+
+[tool.pytest.ini_options]
+addopts = [
+    "--import-mode=importlib",
+]
+pythonpath = "src"

@@ -1,10 +1,38 @@
 .DEFAULT_GOAL	  := help
-SHELL			  := /bin/bash
+SHELL			  := /usr/bin/env bash
 MAKEFLAGS		  += --no-print-directory
 MKFILE_DIR		  := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 DOCKER_IMAGE	  ?= ghcr.io/tsmp-falcon-platform/ci-bundle-utils
 DOCKER_NAME		  ?= bundleutils
 BUNDLES_WORKSPACE ?= $(MKFILE_DIR)
+
+.PHONY: setup
+setup: ## Setup the development environment
+	python -m venv .venv
+	@echo -e "\n**NOW RUN** >>>>> source .venv/bin/activate"
+
+.PHONY: install
+install: ## Setup the development environment
+	cd bundleutilspkg && \
+	pip install "."
+
+.PHONY: install-dev
+install-dev: ## Setup the development environment
+	cd bundleutilspkg && \
+	pip install -e ".[dev]"
+
+.PHONY: test
+test: ## Run the pytest suite
+	cd bundleutilspkg && \
+	pytest -v
+
+.PHONY: pyinstaller
+pyinstaller: ## Build the bundleutils package
+	cd bundleutilspkg && \
+	pyinstaller --noconfirm --clean --onedir \
+	--add-data "src/bundleutilspkg/data/configs:data/configs" \
+	--copy-metadata bundleutilspkg \
+	src/bundleutilspkg/bundleutils.py
 
 .PHONY: compose/start-dev
 compose/start-dev: ## Start the bundleutils container
