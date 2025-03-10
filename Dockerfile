@@ -8,15 +8,6 @@ ARG BUNDLEUTILS_RELEASE_HASH
 # TODO: make multi-stage build
 # COPY --from=builder /opt/venv /opt/venv
 
-# Set environment variables
-ENV KUBECTL_VERSION=v1.28.0
-
-# Download kubectl binary
-RUN curl -LO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" && \
-    chmod +x kubectl && \
-    mv kubectl /usr/local/bin/ && \
-    kubectl version --client
-
 # Install any needed packages specified in setup.py
 RUN apt-get update && apt-get install -y --no-install-recommends \
     less \
