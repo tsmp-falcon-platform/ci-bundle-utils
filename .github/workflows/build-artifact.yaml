@@ -26,6 +26,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-20.04, macos-13]
+        python-version: ["3.10", "3.12"]
 
     steps:
       - name: Checkout code
@@ -37,7 +38,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.10"
+          python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
         run: |
@@ -49,13 +50,13 @@ jobs:
           make pyinstaller
           cd bundleutilspkg
           ls -al dist
-          mv dist/bundleutils dist/bundleutils-${{ runner.os }}
+          mv dist/bundleutils dist/bundleutils-${{ runner.os }}-py${{ matrix.python-version }}
           ls -al dist
-          cp -r dist/bundleutils-${{ runner.os }} /tmp/bundleutils-${{ runner.os }}
-          /tmp/bundleutils-${{ runner.os }}/bundleutils version
+          cp -r dist/bundleutils-${{ runner.os }}-py${{ matrix.python-version }} /tmp/bundleutils-${{ runner.os }}-py${{ matrix.python-version }}
+          /tmp/bundleutils-${{ runner.os }}-py${{ matrix.python-version }}/bundleutils version
       - name: Archive artifacts
         uses: actions/upload-artifact@v4
         with:
           name: bundleutils-${{ runner.os }}
           path: |
-            bundleutilspkg/dist/bundleutils-${{ runner.os }}
+            bundleutilspkg/dist/bundleutils-${{ runner.os }}-py${{ matrix.python-version }}
