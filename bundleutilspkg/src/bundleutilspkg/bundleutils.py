@@ -649,6 +649,66 @@ def merge_yamls(ctx, config, files, outfile = None):
         with open(outfile, "w") as f:
             yaml.dump(output, f)
 
+def _merge_bundles(bundles, outdir, config):
+    merge_configs = None
+    if config:
+        if not os.path.exists(config):
+            die(f"Config file '{config}' does not exist")
+        else:
+            logging.debug(f"Using config file: {config}")
+            merge_configs = yaml2dict(config)
+
+    merger = YAMLMerger(merge_configs)  # Merge lists of dicts by 'name' field
+    # ensure at least two files are provided
+    if len(bundles) < 1:
+        die(f"Please provide at least one bundle to merge")
+
+    # ensure the outdir and a bundle.yaml exist
+    if outdir:
+        if not os.path.exists(outdir):
+            os.makedirs(outdir)
+        out_bundle_yaml = os.path.join(outdir, 'bundle.yaml')
+        last_bundle_yaml = os.path.join(bundles[-1], 'bundle.yaml')
+        if os.path.exists(last_bundle_yaml):
+            # copy the last bundle.yaml to the outdir
+            with open(last_bundle_yaml, 'r') as file:
+                with open(out_bundle_yaml, 'w') as out_file:
+                    out_file.write(file.read())
+        else:
+            die(f"The last bundle specified must include a bundle.yaml. Bundle file '{last_bundle_yaml}' does not exist.")
+
+    # load the bundle.yaml files
+    bundle_yamls = {}
+    for bundle in bundles:
+        bundle_yaml = os.path.join(bundle, 'bundle.yaml')
+        if not os.path.exists(bundle_yaml):
+            die(f"Bundle file '{bundle_yaml}' does not exist")
+        bundle_yamls[bundle] = yaml2dict(bundle_yaml)
+
+    # merge the sections
+    for section, section_file in bundle_yaml_keys.items():
+        output = {}
+        section_files = []
+        for bundle, bundle_yaml in bundle_yamls.items():
+            if section in bundle_yaml:
+                for file in bundle_yaml[section]:
+                    section_files.append(os.path.join(bundle, file))
+        if not section_files:
+            logging.debug(f"No files found for section: {section}")
+            continue
+        # merge the files sequentially using the last result as the base
+        output = merger.merge_yaml_files(section_files)
+
+        if not outdir:
+            print(f"# {section}.yaml")
+            yaml.dump(output, sys.stdout)
+        else:
+            out_section_yaml = os.path.join(outdir, section_file)
+            with open(out_section_yaml, "w") as f:
+                logging.info(f"Writing section: {section} to {out_section_yaml}")
+                yaml.dump(output, f)
+            _update_bundle(outdir)
+
 @bundleutils.command()
 @click.option('-S', '--strict', default=False, is_flag=True, help=f'Fail when referencing non-existent files - warn otherwise.')
 @click.option('-m', '--config', type=click.Path(file_okay=True, dir_okay=False), help=f'An optional custom merge config file if needed.')
@@ -708,64 +768,7 @@ def merge_bundles(ctx, strict, config, bundles, outdir, transform, diffcheck):
     if isinstance(bundles, str):
         bundles = bundles.split()
 
-    merge_configs = None
-    if config:
-        if not os.path.exists(config):
-            die(f"Config file '{config}' does not exist")
-        else:
-            logging.debug(f"Using config file: {config}")
-            merge_configs = yaml2dict(config)
-
-    merger = YAMLMerger(merge_configs)  # Merge lists of dicts by 'name' field
-    # ensure at least two files are provided
-    if len(bundles) < 1:
-        die(f"Please provide at least one bundle to merge")
-
-    # ensure the outdir and a bundle.yaml exist
-    if outdir:
-        if not os.path.exists(outdir):
-            os.makedirs(outdir)
-        out_bundle_yaml = os.path.join(outdir, 'bundle.yaml')
-        last_bundle_yaml = os.path.join(bundles[-1], 'bundle.yaml')
-        if os.path.exists(last_bundle_yaml):
-            # copy the last bundle.yaml to the outdir
-            with open(last_bundle_yaml, 'r') as file:
-                with open(out_bundle_yaml, 'w') as out_file:
-                    out_file.write(file.read())
-        else:
-            die(f"The last bundle specified must include a bundle.yaml. Bundle file '{last_bundle_yaml}' does not exist.")
-
-    # load the bundle.yaml files
-    bundle_yamls = {}
-    for bundle in bundles:
-        bundle_yaml = os.path.join(bundle, 'bundle.yaml')
-        if not os.path.exists(bundle_yaml):
-            die(f"Bundle file '{bundle_yaml}' does not exist")
-        bundle_yamls[bundle] = yaml2dict(bundle_yaml)
-
-    # merge the sections
-    for section, section_file in bundle_yaml_keys.items():
-        output = {}
-        section_files = []
-        for bundle, bundle_yaml in bundle_yamls.items():
-            if section in bundle_yaml:
-                for file in bundle_yaml[section]:
-                    section_files.append(os.path.join(bundle, file))
-        if not section_files:
-            logging.debug(f"No files found for section: {section}")
-            continue
-        # merge the files sequentially using the last result as the base
-        output = merger.merge_yaml_files(section_files)
-
-        if not outdir:
-            print(f"# {section}.yaml")
-            yaml.dump(output, sys.stdout)
-        else:
-            out_section_yaml = os.path.join(outdir, section_file)
-            with open(out_section_yaml, "w") as f:
-                logging.info(f"Writing section: {section} to {out_section_yaml}")
-                yaml.dump(output, f)
-            _update_bundle(outdir)
+    _merge_bundles(bundles, outdir, config)
 
     if transform:
         announce(f"Performing transform on merged bundle from {transform_srcdir} to {transform_outdir}")
@@ -894,15 +897,19 @@ def ci_stop(ctx, ci_version, ci_type, ci_server_home):
     jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
     jenkins_manager.stop_server()
 
-# add a diff command to diff two directories by calling the diff command on each file
 @bundleutils.command()
-@click.argument('src1', type=click.Path(exists=True))
-@click.argument('src2', type=click.Path(exists=True))
+@click.option('-s', '--sources', multiple=True, type=click.Path(file_okay=False, dir_okay=True, exists=True), help=f'The directories or files to be diffed.')
 @click.pass_context
-def diff(ctx, src1, src2):
+def diff(ctx, sources):
     """Diff two YAML directories or files."""
     set_logging(ctx, False)
     diff_detected = False
+    # if src1 is a directory, ensure src2 is also directory
+    if sources and len(sources) == 2:
+        src1 = sources[0]
+        src2 = sources[1]
+    else:
+        die("Please provide two directories or files.")
     # if src1 is a directory, ensure src2 is also directory
     if os.path.isdir(src1) and os.path.isdir(src2):
         diff_detected = diff_dirs(src1, src2)
@@ -911,6 +918,35 @@ def diff(ctx, src1, src2):
             diff_detected = True
     else:
         die("src1 and src2 must both be either directories or files")
+    if diff_detected:
+        die("Differences detected")
+
+@bundleutils.command()
+@click.option('-m', '--config', type=click.Path(file_okay=True, dir_okay=False), help=f'An optional custom merge config file if needed.')
+@click.option('-s', '--sources', multiple=True, type=click.Path(file_okay=False, dir_okay=True, exists=True), help=f'The bundles to be diffed.')
+@click.pass_context
+def diff_merged(ctx, config, sources):
+    """Diff two bundle directories by temporarily merging both before the diff."""
+    set_logging(ctx, False)
+    diff_detected = False
+    # if src1 is a directory, ensure src2 is also directory
+    if sources and len(sources) == 2:
+        src1 = sources[0]
+        src2 = sources[1]
+    else:
+        die("Please provide two bundle directories")
+
+    if os.path.isdir(src1) and os.path.isdir(src2):
+        # create a temporary directory to store the merged bundle
+        with tempfile.TemporaryDirectory() as temp_dir:
+            merged1 = os.path.join(temp_dir, 'merged1', 'dummy')
+            merged2 = os.path.join(temp_dir, 'merged2', 'dummy')
+            _merge_bundles([src1], merged1, config)
+            _merge_bundles([src2], merged2, config)
+            diff_detected = diff_dirs(merged1, merged2)
+    else:
+        die("src1 and src2 must both be directories")
+
     if diff_detected:
         die("Differences detected")
 

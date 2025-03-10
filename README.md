@@ -76,6 +76,7 @@ Commands:
   completion             Print the shell completion script
   config                 List evaluated config based on cwd and env file.
   diff                   Diff two YAML directories or files.
+  diff-merged            Diff two bundle directories by temporarily...
   extract-name-from-url  Smart extraction of the controller name from the...
   fetch                  Fetch YAML documents from a URL or path.
   find-bundle-by-url     Find a bundle by Jenkins URL and CI Version.
@@ -230,12 +231,22 @@ Usage: bundleutils config [OPTIONS]
 Options:
   --help  Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
-Usage: bundleutils diff [OPTIONS] SRC1 SRC2
+Usage: bundleutils diff [OPTIONS]
 
   Diff two YAML directories or files.
 
 Options:
-  --help  Show this message and exit.
+  -s, --sources DIRECTORY  The directories or files to be diffed.
+  --help                   Show this message and exit.
+------------------------------------------------------------------------------------------------------------------------
+Usage: bundleutils diff-merged [OPTIONS]
+
+  Diff two bundle directories by temporarily merging both before the diff.
+
+Options:
+  -m, --config FILE        An optional custom merge config file if needed.
+  -s, --sources DIRECTORY  The bundles to be diffed.
+  --help                   Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils extract-name-from-url [OPTIONS]
 
