@@ -57,6 +57,6 @@ jobs:
       - name: Archive artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: bundleutils-${{ runner.os }}
+          name: bundleutils-${{ runner.os }}-py${{ matrix.python-version }}
           path: |
             bundleutilspkg/dist/bundleutils-${{ runner.os }}-py${{ matrix.python-version }}
