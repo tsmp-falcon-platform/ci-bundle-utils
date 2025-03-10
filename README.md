@@ -329,7 +329,9 @@ Usage: bundleutils merge-bundles [OPTIONS]
 
   Optionally, it can:
   - transform the merged bundle using the transformation configs
+      (BUNDLEUTILS_TRANSFORM_CONFIGS and BUNDLEUTILS_TRANSFORM_SOURCE_DIR needed for this)
   - perform a diff check against the source bundle and the transformed bundle
+      (BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK_SOURCE_DIR needed for this)
 
 Options:
   -S, --strict             Fail when referencing non-existent files - warn
@@ -402,6 +404,8 @@ Options:
                               file (defaults to CWD).
   -d, --description TEXT      Optional description for the bundle (also
                               BUNDLEUTILS_BUNDLE_DESCRIPTION).
+  -o, --output-sorted TEXT    Optional place to put the sorted yaml string
+                              used to created the version.
   --help                      Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils update-plugins [OPTIONS]

@@ -178,13 +178,13 @@ def ordered_yaml_dump(data):
     ordered_data = recursive_sort(data)
     return printYaml(ordered_data)
 
-def generate_collection_uuid(yaml_files):
+def generate_collection_uuid(target_dir, yaml_files, output_sorted=None):
     """Generate a stable UUID for a collection of YAML files."""
     yaml = YAML()
     combined_yaml_data = OrderedDict()
 
     for file in sorted(yaml_files):  # Ensure consistent file order
-        file_path = Path(file)
+        file_path = Path(target_dir) / file
         if file_path.exists():
             with open(file_path, 'r', encoding='utf-8') as f:
                 data = yaml.load(f)
@@ -193,6 +193,10 @@ def generate_collection_uuid(yaml_files):
 
     ordered_yaml_str = ordered_yaml_dump(combined_yaml_data)
     yaml_hash = hashlib.sha256(ordered_yaml_str.encode()).hexdigest()
+    if output_sorted:
+        with open(output_sorted, 'w') as f:
+            logging.info(f"Writing {yaml_hash} ({uuid.UUID(yaml_hash[:32])}) sorted YAML to {output_sorted}")
+            f.write(ordered_yaml_str)
     return str(uuid.UUID(yaml_hash[:32]))  # Convert first 32 chars to UUID format
 
 def get_value_from_enum(value, my_enum):
@@ -671,7 +675,9 @@ def merge_bundles(ctx, strict, config, bundles, outdir, transform, diffcheck):
     \b
     Optionally, it can:
     - transform the merged bundle using the transformation configs
+        (BUNDLEUTILS_TRANSFORM_CONFIGS and BUNDLEUTILS_TRANSFORM_SOURCE_DIR needed for this)
     - perform a diff check against the source bundle and the transformed bundle
+        (BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK_SOURCE_DIR needed for this)
     """
     set_logging(ctx)
 
@@ -2234,10 +2240,11 @@ def remove_empty_keys(data):
     return data
 
 @bundleutils.command()
-@click.option('-t', '--target-dir', 'target_dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The target directory to update the bundle.yaml file (defaults to CWD).')
-@click.option('-d', '--description', 'description', help=f'Optional description for the bundle (also {BUNDLEUTILS_BUNDLE_DESCRIPTION}).')
+@click.option('-t', '--target-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The target directory to update the bundle.yaml file (defaults to CWD).')
+@click.option('-d', '--description', help=f'Optional description for the bundle (also {BUNDLEUTILS_BUNDLE_DESCRIPTION}).')
+@click.option('-o', '--output-sorted', help=f'Optional place to put the sorted yaml string used to created the version.')
 @click.pass_context
-def update_bundle(ctx, target_dir, description):
+def update_bundle(ctx, target_dir, description, output_sorted):
     """
     \b
     Update the bundle.yaml file in the target directory:
@@ -2252,13 +2259,13 @@ def update_bundle(ctx, target_dir, description):
     - Generates a SHA-256 hash and converts it into a UUID.
     """
     set_logging(ctx)
-    _update_bundle(target_dir, description)
+    _update_bundle(target_dir, description, output_sorted)
 
 def _basename(dir):
     return os.path.basename(os.path.normpath(dir))
 
 @click.pass_context
-def _update_bundle(ctx, target_dir, description=None):
+def _update_bundle(ctx, target_dir, description=None, output_sorted=None):
     description = null_check(description, 'description', BUNDLEUTILS_BUNDLE_DESCRIPTION, False)
 
     if not target_dir:
@@ -2366,7 +2373,7 @@ def _update_bundle(ctx, target_dir, description=None):
     data['description'] = f"Bundle for {data['id']}" if not description else description
 
     # update the version key with the md5sum of the content of all files
-    data['version'] = generate_collection_uuid(all_files)
+    data['version'] = generate_collection_uuid(target_dir, all_files, output_sorted)
     logging.info(f'Updated version to {data["version"]}')
 
     # Save the YAML file
