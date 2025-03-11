@@ -71,6 +71,8 @@ jobs:
             echo "Dry run mode enabled. Skipping release upload."
             exit 0
           fi
-          gh release upload ${{ github.event.inputs.tag_name }} bundleutilspkg/dist/bundleutils-${{ runner.os }}-py${{ matrix.python-version }}
+          cd bundleutilspkg/dist
+          zip -r bundleutils-${{ runner.os }}-py${{ matrix.python-version }}.zip bundleutils-${{ runner.os }}-py${{ matrix.python-version }}
+          gh release upload ${{ github.event.inputs.tag_name }} bundleutils-${{ runner.os }}-py${{ matrix.python-version }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
