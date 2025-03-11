@@ -1,0 +1,10 @@
+apiVersion: '2'
+id: base-expected
+description: Bundle for base-expected
+version: ee35cdf2-0eee-4639-1a2f-494fc6918cbc
+jcasc:
+- jenkins.yaml
+items:
+- items.yaml
+plugins:
+- plugins.yaml
