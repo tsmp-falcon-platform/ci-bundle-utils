@@ -67,7 +67,7 @@ jobs:
       - name: Add binary to release if it is a release
         if: github.event_name == 'release'
         run: |
-          gh release upload ${{ github.event.release.tag_name }} dist/bundleutils-${{ runner.os }}-py${{ matrix.python-version }}
+          gh release upload ${{ github.event.release.tag_name }} bundleutilspkg/dist/bundleutils-${{ runner.os }}-py${{ matrix.python-version }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
