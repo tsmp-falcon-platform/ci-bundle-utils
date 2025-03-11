@@ -44,6 +44,7 @@ validate_url_path = '/casc-bundle-mgnt/casc-bundle-validate'
 
 default_target = 'target/docs'
 default_auto_env_file = 'bundle-profiles.yaml'
+default_bundle_api_version = '2'
 
 bundle_yaml_keys = {'jcasc': 'jenkins.yaml', 'items': 'items.yaml', 'plugins': 'plugins.yaml', 'rbac': 'rbac.yaml', 'catalog': 'plugin-catalog.yaml', 'variables': 'variables.yaml'}
 
@@ -649,7 +650,7 @@ def merge_yamls(ctx, config, files, outfile = None):
         with open(outfile, "w") as f:
             yaml.dump(output, f)
 
-def _merge_bundles(bundles, outdir, config):
+def _merge_bundles(bundles, outdir, config, api_version = None):
     merge_configs = None
     if config:
         if not os.path.exists(config):
@@ -669,33 +670,37 @@ def _merge_bundles(bundles, outdir, config):
             os.makedirs(outdir)
         out_bundle_yaml = os.path.join(outdir, 'bundle.yaml')
         last_bundle_yaml = os.path.join(bundles[-1], 'bundle.yaml')
-        if os.path.exists(last_bundle_yaml):
-            # copy the last bundle.yaml to the outdir
-            with open(last_bundle_yaml, 'r') as file:
-                with open(out_bundle_yaml, 'w') as out_file:
-                    out_file.write(file.read())
-        else:
-            die(f"The last bundle specified must include a bundle.yaml. Bundle file '{last_bundle_yaml}' does not exist.")
+        if not api_version:
+            if os.path.exists(last_bundle_yaml):
+                # get the apiVersion and kind from the last bundle.yaml
+                last_bundle_yaml_dict = yaml2dict(last_bundle_yaml)
+                if 'apiVersion' in last_bundle_yaml_dict:
+                    api_version = last_bundle_yaml_dict['apiVersion']
+                else:
+                    logging.warning(f"Bundle file '{last_bundle_yaml}' does not contain an apiVersion. Using default apiVersion: {default_bundle_api_version}")
+                    api_version = default_bundle_api_version
+            else:
+                logging.debug(f"Bundle file '{last_bundle_yaml}' does not exist. Using default apiVersion: {api_version}")
+                api_version = default_bundle_api_version
 
-    # load the bundle.yaml files
-    bundle_yamls = {}
-    for bundle in bundles:
-        bundle_yaml = os.path.join(bundle, 'bundle.yaml')
-        if not os.path.exists(bundle_yaml):
-            die(f"Bundle file '{bundle_yaml}' does not exist")
-        bundle_yamls[bundle] = yaml2dict(bundle_yaml)
+        with open(out_bundle_yaml, "w") as f:
+            logging.info(f"Writing bundle.yaml to {out_bundle_yaml}")
+            f.write(f"apiVersion: {api_version}\n")
+            f.write(f"id: ''\n")
+            f.write(f"description: ''\n")
+            f.write(f"version: ''\n")
 
     # merge the sections
     for section, section_file in bundle_yaml_keys.items():
         output = {}
         section_files = []
-        for bundle, bundle_yaml in bundle_yamls.items():
-            if section in bundle_yaml:
-                for file in bundle_yaml[section]:
-                    section_files.append(os.path.join(bundle, file))
+        for bundle in bundles:
+            section_files.extend(_get_files_for_key(bundle, section))
         if not section_files:
-            logging.debug(f"No files found for section: {section}")
+            logging.info(f"No files found for section: {section}")
             continue
+        else:
+            logging.info(f"Found files for section: {section}")
         # merge the files sequentially using the last result as the base
         output = merger.merge_yaml_files(section_files)
 
@@ -714,15 +719,20 @@ def _merge_bundles(bundles, outdir, config):
 @click.option('-m', '--config', type=click.Path(file_okay=True, dir_okay=False), help=f'An optional custom merge config file if needed.')
 @click.option('-b', '--bundles', multiple=True, type=click.Path(file_okay=False, dir_okay=True, exists=True), help=f'The bundles to be rendered.')
 @click.option('-o', '--outdir', type=click.Path(file_okay=False, dir_okay=True), help=f'The target for the merged bundle.')
+@click.option('-a', '--api-version', help=f'Optional apiVersion. Defaults to {default_bundle_api_version}')
 @click.option('-t', '--transform', default=False, is_flag=True, help=f'Optionally transform using the transformation configs ({BUNDLEUTILS_MERGE_TRANSFORM_PERFORM}).')
 @click.option('-d', '--diffcheck', default=False, is_flag=True, help=f'Optionally perform bundleutils diff against the original source bundle and expected bundle ({BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK}).')
 @click.pass_context
-def merge_bundles(ctx, strict, config, bundles, outdir, transform, diffcheck):
+def merge_bundles(ctx, strict, config, bundles, outdir, transform, diffcheck, api_version):
     """
     Used for merging bundles. Given a list of bundles, merge them into a single bundle.
 
     \b
     The merging strategy is defined in a merge config file similar to the merge command.
+    The api_version is taken from either (in order):
+    - the api_version parameter
+    - the last bundle.yaml file in the list of bundles if available
+    - the default api_version
 
     \b
     Given at least two bundles, it will:
@@ -768,7 +778,7 @@ def merge_bundles(ctx, strict, config, bundles, outdir, transform, diffcheck):
     if isinstance(bundles, str):
         bundles = bundles.split()
 
-    _merge_bundles(bundles, outdir, config)
+    _merge_bundles(bundles, outdir, config, api_version)
 
     if transform:
         announce(f"Performing transform on merged bundle from {transform_srcdir} to {transform_outdir}")
@@ -924,8 +934,9 @@ def diff(ctx, sources):
 @bundleutils.command()
 @click.option('-m', '--config', type=click.Path(file_okay=True, dir_okay=False), help=f'An optional custom merge config file if needed.')
 @click.option('-s', '--sources', multiple=True, type=click.Path(file_okay=False, dir_okay=True, exists=True), help=f'The bundles to be diffed.')
+@click.option('-a', '--apiVersion', help=f'Optional apiVersion in case bundle does not contain a bundle.yaml. Defaults to {default_bundle_api_version}')
 @click.pass_context
-def diff_merged(ctx, config, sources):
+def diff_merged(ctx, config, sources, apiVersion):
     """Diff two bundle directories by temporarily merging both before the diff."""
     set_logging(ctx, False)
     diff_detected = False
@@ -941,8 +952,8 @@ def diff_merged(ctx, config, sources):
         with tempfile.TemporaryDirectory() as temp_dir:
             merged1 = os.path.join(temp_dir, 'merged1', 'dummy')
             merged2 = os.path.join(temp_dir, 'merged2', 'dummy')
-            _merge_bundles([src1], merged1, config)
-            _merge_bundles([src2], merged2, config)
+            _merge_bundles([src1], merged1, config, apiVersion)
+            _merge_bundles([src2], merged2, config, apiVersion)
             diff_detected = diff_dirs(merged1, merged2)
     else:
         die("src1 and src2 must both be directories")
@@ -2300,20 +2311,7 @@ def update_bundle(ctx, target_dir, description, output_sorted):
 def _basename(dir):
     return os.path.basename(os.path.normpath(dir))
 
-@click.pass_context
-def _update_bundle(ctx, target_dir, description=None, output_sorted=None):
-    description = null_check(description, 'description', BUNDLEUTILS_BUNDLE_DESCRIPTION, False)
-
-    if not target_dir:
-        target_dir = ctx.obj.get(ORIGINAL_CWD)
-    logging.info(f'Updating bundle in {target_dir}')
-    # Load the YAML file
-    with open(os.path.join(target_dir, 'bundle.yaml'), 'r') as file:
-        data = yaml.load(file)
-
-    all_files = []
-    # Iterate over the bundle_yaml_keys
-    for key in bundle_yaml_keys.keys():
+def _get_files_for_key(target_dir, key):
         files = []
         # Special case for 'jcasc'
         if key == 'jcasc':
@@ -2386,6 +2384,24 @@ def _update_bundle(ctx, target_dir, description=None, output_sorted=None):
                         logging.info(f'Removing {file} from the list due to missing or empty roles and groups')
                         files.remove(file)
                         os.remove(file)
+        logging.info(f'Files for {key}: {files}')
+        return files
+
+@click.pass_context
+def _update_bundle(ctx, target_dir, description=None, output_sorted=None):
+    description = null_check(description, 'description', BUNDLEUTILS_BUNDLE_DESCRIPTION, False)
+
+    if not target_dir:
+        target_dir = ctx.obj.get(ORIGINAL_CWD)
+    logging.info(f'Updating bundle in {target_dir}')
+    # Load the YAML file
+    with open(os.path.join(target_dir, 'bundle.yaml'), 'r') as file:
+        data = yaml.load(file)
+
+    all_files = []
+    # Iterate over the bundle_yaml_keys
+    for key in bundle_yaml_keys.keys():
+        files = _get_files_for_key(target_dir, key)
 
         # Remove the target_dir path and sort the files, ensuring exact match come first
         files = [_basename(file) for file in files]
