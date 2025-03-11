@@ -4,10 +4,10 @@
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 
-- [Show me the money](#show-me-the-money)
 - [What is it?](#what-is-it)
 - [Why create it?](#why-create-it)
-- [Where can I run it?](#where-can-i-run-it)
+- [How can I run it?](#how-can-i-run-it)
+- [Walkthrough](#walkthrough)
 - [Commands](#commands)
 - [Help Pages](#help-pages)
 - [Local Development](#local-development)
@@ -16,10 +16,6 @@
   - [Makefile](#makefile)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
-
-## Show me the money
-
-If you don't like reading documentation and just want to try it out in your current setup, see [this document](./docs/show-me-the-money.md).
 
 ## What is it?
 
@@ -35,8 +31,9 @@ The simple use-cases are:
 
 - [validating your existing CasC bundles](./docs/use-case-validating-exsting-bundles.md)
 - [fetching, transforming, and validating CasC bundles from existing servers](./docs/use-case-validating-exsting-bundles.md)
+- [merge multiple bundles into one](./docs/use-case-merging-bundles.md)
 
-## Where can I run it?
+## How can I run it?
 
 Runtime variants explained here include:
 
@@ -47,11 +44,21 @@ Runtime variants explained here include:
 
 **Since it is a container, it can be run virtually anywhere.**
 
+## Walkthrough
+
+A [walkthrough](https://dictionary.cambridge.org/dictionary/english/walkthrough) setup has been provided at [example-bundles-drift](https://github.com/tsmp-falcon-platform/example-bundles-drift).
+
+The walkthough contains a comprehensive list of steps to setting up bundle management.
+
+TODO: An issue has been created to add a "merge bundles" workflow to the walkthrough - see [Issue #70](https://github.com/tsmp-falcon-platform/ci-bundle-utils/issues/70)
+
 ## Commands
 
 For a summary of commands, see [explaining the main commands](./docs/explaining-commands.md)
 
 ## Help Pages
+
+Below is a list of the current help pages coming from the `bundleutils` tool. Ideally, the tools help pages will contain enough information to be self explanatory.
 
 <!-- START help-pages-doc -->
 ```mono
