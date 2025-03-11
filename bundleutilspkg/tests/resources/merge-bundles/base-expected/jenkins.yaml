@@ -1,0 +1,100 @@
+jenkins:
+  clouds:
+  - operationsCenterAgentProvisioningService
+  globalNodeProperties:
+  - envVars:
+      env:
+      - key: VAR1
+        value: value-var1
+      - key: VAR2
+        value: value-var2
+  primaryView:
+    all:
+      name: all
+  views:
+  - list:
+      columns:
+      - status
+      - jobName
+      - lastSuccess
+      - lastFailure
+      - lastDuration
+      - buildButton
+      filterExecutors: true
+      filterQueue: true
+      includeRegex: (casc-custom-.*|casc-local-.*)
+      name: Bundles
+  - all:
+      name: all
+support:
+  automatedBundleConfiguration:
+    componentIds:
+    - CloudBeesAssuranceSupport
+    - CloudBeesCasCUpdateLogBundlesSupport
+    - AgentsConfigFile
+    - ConfigFileComponent
+    - OtherConfigFilesComponent
+    - AboutBrowser
+    - AboutJenkins
+    - AboutUser
+    - AdministrativeMonitors
+    - BuildQueue
+    - CustomLogs
+    - DumpExportTable
+    - EnvironmentVariables
+    - FileDescriptorLimit
+    - GCLogs
+    - HeapUsageHistogram
+    - ItemsContent
+    - AgentsJVMProcessSystemMetricsContents
+    - MasterJVMProcessSystemMetricsContents
+    - JenkinsLogs
+    - LoadStats
+    - LoggerManager
+    - Metrics
+    - NetworkInterfaces
+    - NodeExecutors
+    - NodeMonitors
+    - OtherLogs
+    - ReverseProxy
+    - RootCAs
+    - RunningBuilds
+    - SlaveCommandStatistics
+    - SlaveLaunchLogs
+    - SlaveLogs
+    - AgentsSystemConfiguration
+    - MasterSystemConfiguration
+    - SystemProperties
+    - TaskLogs
+    - ThreadDumps
+    - UpdateCenter
+    - UserCount
+    - ComponentImpl
+    - SlowRequestComponent
+    - SlowRequestThreadDumpsComponent
+    - HighLoadComponent
+    - DeadlockRequestComponent
+    - OperationsCenterSupportComponent
+    - FIPSSupport
+    - UserActivityComponent
+    - PipelineInternalCalls
+    - PipelineTimings
+    enabled: true
+    period: 1
+
+unclassified:
+  bundleUpdateTiming:
+    automaticReload: true
+    automaticRestart: true
+    rejectWarnings: true
+    reloadAlwaysOnRestart: false
+    skipNewVersions: false
+  cascItemsConfiguration:
+    variableInterpolationEnabledForAdmin: false
+    variableInterpolationEnabledForNonAdmin: false
+  hibernationConfiguration:
+    activities:
+    - build
+    - web
+    enabled: true
+    gracePeriod: 3600

@@ -8,15 +8,6 @@ ARG BUNDLEUTILS_RELEASE_HASH
 # TODO: make multi-stage build
 # COPY --from=builder /opt/venv /opt/venv
 
-# Set environment variables
-ENV KUBECTL_VERSION=v1.28.0
-
-# Download kubectl binary
-RUN curl -LO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" && \
-    chmod +x kubectl && \
-    mv kubectl /usr/local/bin/ && \
-    kubectl version --client
-
 # Install any needed packages specified in setup.py
 RUN apt-get update && apt-get install -y --no-install-recommends \
     less \
@@ -53,7 +44,7 @@ ENV PATH="/opt/bundleutils/.venv/bin:$PATH" BUNDLEUTILS_CACHE_DIR="/opt/bundleut
 
 # Install any needed packages specified in setup.py
 RUN pip install --upgrade pip \
-    && pip install wheel
+    && pip install wheel pyinstaller
 
 # Set environment variables for runtime access
 ENV BUNDLEUTILS_RELEASE_VERSION=$BUNDLEUTILS_RELEASE_VERSION
@@ -65,7 +56,12 @@ ADD examples /opt/bundleutils/work/examples
 ADD README.md /opt/bundleutils/work/README.md
 
 # Install any needed packages specified in setup.py
-RUN pip install /opt/bundleutils/.app/bundleutilspkg
+RUN cd /opt/bundleutils/.app/bundleutilspkg \
+    && pip install ".[dev]" \
+    && pyinstaller --noconfirm --clean --onedir \
+	--add-data "src/bundleutilspkg/data/configs:data/configs" \
+	--copy-metadata bundleutilspkg \
+	src/bundleutilspkg/bundleutils.py
 
 # Install any needed packages specified in setup.py
 RUN useradd -m -u 1000 bundle-user
