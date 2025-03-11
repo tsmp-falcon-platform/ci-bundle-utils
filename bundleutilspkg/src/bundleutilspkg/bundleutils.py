@@ -1,8 +1,11 @@
 from enum import Enum, auto
 import hashlib
+import importlib
 import json
+from pathlib import Path
 import subprocess
 import tempfile
+import uuid
 import jsonpatch
 import jsonpointer
 import zipfile
@@ -16,16 +19,17 @@ import locale
 import logging
 import re
 import sys
-import importlib.resources as pkg_resources
 from importlib.metadata import metadata, PackageNotFoundError
-from collections import defaultdict
+from collections import OrderedDict, defaultdict
 from deepdiff import DeepDiff
 from deepdiff.helper import CannotCompare
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap
 from ruamel.yaml.comments import CommentedSeq
-from server_management.server_manager import JenkinsServerManager
+from bundleutilspkg.yaml_merger import YAMLMerger
+from bundleutilspkg.server_manager import JenkinsServerManager
 from urllib.parse import urlparse
+from bundleutilspkg._version import __version__
 
 locale.setlocale(locale.LC_ALL, "C")
 
@@ -40,6 +44,8 @@ validate_url_path = '/casc-bundle-mgnt/casc-bundle-validate'
 
 default_target = 'target/docs'
 default_auto_env_file = 'bundle-profiles.yaml'
+
+bundle_yaml_keys = {'jcasc': 'jenkins.yaml', 'items': 'items.yaml', 'plugins': 'plugins.yaml', 'rbac': 'rbac.yaml', 'catalog': 'plugin-catalog.yaml', 'variables': 'variables.yaml'}
 
 # environment variables
 BUNDLEUTILS_CI_VERSION = 'BUNDLEUTILS_CI_VERSION'
@@ -71,7 +77,14 @@ BUNDLEUTILS_USERNAME = 'BUNDLEUTILS_USERNAME'
 BUNDLEUTILS_PASSWORD = 'BUNDLEUTILS_PASSWORD'
 BUNDLEUTILS_PATH = 'BUNDLEUTILS_PATH'
 BUNDLEUTILS_FETCH_TARGET_DIR = 'BUNDLEUTILS_FETCH_TARGET_DIR'
-
+BUNDLEUTILS_MERGE_CONFIG = 'BUNDLEUTILS_MERGE_CONFIG'
+BUNDLEUTILS_MERGE_BUNDLES = 'BUNDLEUTILS_MERGE_BUNDLES'
+BUNDLEUTILS_MERGE_OUTDIR = 'BUNDLEUTILS_MERGE_OUTDIR'
+BUNDLEUTILS_MERGE_TRANSFORM_PERFORM = 'BUNDLEUTILS_MERGE_TRANSFORM_PERFORM'
+BUNDLEUTILS_MERGE_TRANSFORM_SOURCE_DIR = 'BUNDLEUTILS_MERGE_TRANSFORM_SOURCE_DIR'
+BUNDLEUTILS_MERGE_TRANSFORM_TARGET_DIR = 'BUNDLEUTILS_MERGE_TRANSFORM_TARGET_DIR'
+BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK = 'BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK'
+BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK_SOURCE_DIR = 'BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK_SOURCE_DIR'
 # The strategy for handling warnings when fetching the catalog.
 # These warning make the yaml purposely invalid so that people cannot simply use the output
 # without fixing the issues.
@@ -116,7 +129,9 @@ PATH_ARG = 'path'
 URL_ARG = 'url'
 USERNAME_ARG = 'username'
 PASSWORD_ARG = 'password'
-
+MERGE_CONFIG_ARG = 'config'
+BUNDLES_ARG = 'bundles'
+OUTDIR_ARG = 'outdir'
 
 def die(msg):
     logging.error(f"{msg}\n")
@@ -144,6 +159,45 @@ class PluginJsonListStrategy(Enum):
     ROOTS = auto()
     ROOTS_AND_DEPS = auto()
     ALL = auto()
+
+def ordered_yaml_dump(data):
+    """Convert YAML object to a consistent ordered string."""
+    yaml = YAML()
+    yaml.default_flow_style = False
+    yaml.indent(mapping=2, sequence=4, offset=2)
+    yaml.preserve_quotes = True
+
+    def recursive_sort(obj):
+        """Recursively sort dictionary keys to ensure a consistent order."""
+        if isinstance(obj, dict):
+            return OrderedDict(sorted((k, recursive_sort(v)) for k, v in obj.items()))
+        elif isinstance(obj, list):
+            return [recursive_sort(i) for i in obj]
+        return obj
+
+    ordered_data = recursive_sort(data)
+    return printYaml(ordered_data)
+
+def generate_collection_uuid(target_dir, yaml_files, output_sorted=None):
+    """Generate a stable UUID for a collection of YAML files."""
+    yaml = YAML()
+    combined_yaml_data = OrderedDict()
+
+    for file in sorted(yaml_files):  # Ensure consistent file order
+        file_path = Path(target_dir) / file
+        if file_path.exists():
+            with open(file_path, 'r', encoding='utf-8') as f:
+                data = yaml.load(f)
+                if data:  # Only merge non-empty files
+                    combined_yaml_data[file_path.name] = data  # Use filename as key to preserve structure
+
+    ordered_yaml_str = ordered_yaml_dump(combined_yaml_data)
+    yaml_hash = hashlib.sha256(ordered_yaml_str.encode()).hexdigest()
+    if output_sorted:
+        with open(output_sorted, 'w') as f:
+            logging.info(f"Writing {yaml_hash} ({uuid.UUID(yaml_hash[:32])}) sorted YAML to {output_sorted}")
+            f.write(ordered_yaml_str)
+    return str(uuid.UUID(yaml_hash[:32]))  # Convert first 32 chars to UUID format
 
 def get_value_from_enum(value, my_enum):
     try:
@@ -190,7 +244,7 @@ def server_options_null_check(ci_version, ci_type, ci_server_home):
 
 def transform_options(func):
     func = click.option('-S', '--strict', default=False, is_flag=True, help=f'Fail when referencing non-existent files - warn otherwise.')(func)
-    func = click.option('-c', '--config', 'configs', multiple=True, help=f'The transformation config(s).')(func)
+    func = click.option('-c', '--config', 'configs', type=click.Path(file_okay=True, dir_okay=False), multiple=True, help=f'The transformation config(s).')(func)
     func = click.option('-s', '--source-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The source directory for the YAML documents.')(func)
     func = click.option('-t', '--target-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The target directory for the YAML documents. Defaults to the source directory suffixed with -transformed.')(func)
     return func
@@ -261,7 +315,7 @@ def _check_for_env_file(ctx):
         ctx.obj[BUNDLEUTILS_ENV] = ''
         logging.debug(f'No env file provided or found')
 
-def _check_cwd_for_bundle_auto_vars(ctx):
+def _check_cwd_for_bundle_auto_vars(ctx, switch_dirs = True):
     """Check the current working directory for a bundle.yaml file and set the auto vars if found"""
     # no bundle_profiles found, no need to check
     if not ctx.obj.get(BUNDLE_PROFILES, ''):
@@ -285,8 +339,11 @@ def _check_cwd_for_bundle_auto_vars(ctx):
     # if the cwd is a subdirectory of auto_env_file_path_dir, create a relative path
     bundle_audit_target_dir = None
     logging.debug(f'Current working directory: {cwd}')
-    logging.debug(f'Switching to the base directory of env file: {auto_env_file_path_dir}')
-    os.chdir(auto_env_file_path_dir)
+    if switch_dirs:
+        logging.debug(f'Switching to the base directory of env file: {auto_env_file_path_dir}')
+        os.chdir(auto_env_file_path_dir)
+    else:
+        logging.debug(f'Not switching directories')
 
     # if the cwd contains a file bundle.yaml
     adhoc_profile = os.environ.get(BUNDLEUTILS_USE_PROFILE, '')
@@ -298,7 +355,7 @@ def _check_cwd_for_bundle_auto_vars(ctx):
         if adhoc_profile in bundle_profiles['profiles']:
             logging.info(f'Using adhoc bundle config for {bundle_name}')
             env_vars = bundle_profiles['profiles'][adhoc_profile]
-            for key in ['BUNDLEUTILS_CI_VERSION', 'BUNDLEUTILS_JENKINS_URL']:
+            for key in [BUNDLEUTILS_CI_VERSION, BUNDLEUTILS_JENKINS_URL]:
                 if key in bundle_env_vars:
                     logging.info(f'Adding {key}={bundle_env_vars[key]} from bundle config')
                     env_vars[key] = bundle_env_vars[key]
@@ -332,11 +389,15 @@ def _check_cwd_for_bundle_auto_vars(ctx):
                 logging.info(f'Ignoring passed env, setting: {key}={value}')
                 os.environ[key] = str(value)
         # set the BUNDLEUTILS_FETCH_TARGET_DIR and BUNDLEUTILS_TRANSFORM_SOURCE_DIR to the default target/docs
-        _set_env_if_not_set('AUTOSET', BUNDLEUTILS_FETCH_TARGET_DIR, f'target/docs-{bundle_name}')
+        _set_env_if_not_set('AUTOSET', BUNDLEUTILS_FETCH_TARGET_DIR, f'target/fetched/{bundle_name}')
         _set_env_if_not_set('AUTOSET', BUNDLEUTILS_TRANSFORM_SOURCE_DIR, os.environ.get(BUNDLEUTILS_FETCH_TARGET_DIR))
         _set_env_if_not_set('AUTOSET', BUNDLEUTILS_TRANSFORM_TARGET_DIR, bundle_target_dir)
         _set_env_if_not_set('AUTOSET', BUNDLEUTILS_SETUP_SOURCE_DIR, os.environ.get(BUNDLEUTILS_TRANSFORM_TARGET_DIR))
         _set_env_if_not_set('AUTOSET', BUNDLEUTILS_VALIDATE_SOURCE_DIR, os.environ.get(BUNDLEUTILS_TRANSFORM_TARGET_DIR))
+        _set_env_if_not_set('AUTOSET', BUNDLEUTILS_MERGE_OUTDIR, f'target/merged/{bundle_name}')
+        _set_env_if_not_set('AUTOSET', BUNDLEUTILS_MERGE_TRANSFORM_SOURCE_DIR, os.environ.get(BUNDLEUTILS_MERGE_OUTDIR))
+        _set_env_if_not_set('AUTOSET', BUNDLEUTILS_MERGE_TRANSFORM_TARGET_DIR, f'target/expected/{bundle_name}')
+        _set_env_if_not_set('AUTOSET', BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK_SOURCE_DIR, bundle_target_dir)
         # special case for audit, set the source dir to the fetch target dir and the target dir to the audit target dir
         if bundle_audit_target_dir is not None:
             _set_env_if_not_set('AUTOSET', BUNDLEUTILS_AUDIT_SOURCE_DIR, os.environ.get(BUNDLEUTILS_FETCH_TARGET_DIR))
@@ -345,14 +406,14 @@ def _check_cwd_for_bundle_auto_vars(ctx):
 def is_truthy(value):
     return value.lower() in ['true', '1', 't', 'y', 'yes']
 
-def set_logging(ctx):
+def set_logging(ctx, switch_dirs = True):
     _check_for_env_file(ctx)
-    _check_cwd_for_bundle_auto_vars(ctx)
+    _check_cwd_for_bundle_auto_vars(ctx, switch_dirs)
 
 @click.group(invoke_without_command=True)
 @common_options
 @click.pass_context
-def cli(ctx, log_level, env_file, interactive):
+def bundleutils(ctx, log_level, env_file, interactive):
     """A tool to fetch and transform YAML documents."""
     ctx.ensure_object(dict)
     ctx.max_content_width=120
@@ -410,7 +471,7 @@ def lookup_url(url, default_url = '', mandatory = True):
         url_env = BUNDLEUTILS_JENKINS_URL
     return null_check(url, URL_ARG, url_env, mandatory, default_url)
 
-@cli.command()
+@bundleutils.command()
 @click.pass_context
 @click.option('-s', '--source-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The bundle to be bootstrapped.')
 @click.option('-S', '--source-base', type=click.Path(file_okay=False, dir_okay=True), help=f'Specify parent dir of source-dir, bundle name taken from URL.')
@@ -490,7 +551,7 @@ def bootstrap(ctx, source_dir, source_base, profile, update, url, ci_version):
         else:
             die(f'No bundle profile found for {bootstrap_profile}')
 
-@cli.command()
+@bundleutils.command()
 @click.pass_context
 def help_pages(ctx):
     """
@@ -498,14 +559,14 @@ def help_pages(ctx):
     """
     click.echo(ctx.parent.get_help())
     # get all sub commands in alphabetical order
-    commands = sorted(cli.commands.keys())
+    commands = sorted(bundleutils.commands.keys())
 
     for key in commands:
-        command = cli.commands[key]
+        command = bundleutils.commands[key]
         click.echo('-' * 120)
         click.echo(command.get_help(ctx.parent).replace('Usage: bundleutils', f'Usage: bundleutils {command.name}'))
 
-@cli.command()
+@bundleutils.command()
 @server_options
 @click.option('-s', '--source-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The bundle to be validated (startup will use the plugins from here).')
 @click.option('-T', '--ci-bundle-template', type=click.Path(file_okay=False, dir_okay=True), required=False, help=f'Path to a template bundle used to start the test server (defaults to in-built tempalte).')
@@ -535,6 +596,7 @@ def ci_setup(ctx, ci_version, ci_type, ci_server_home, source_dir, ci_bundle_tem
     set_logging(ctx)
     ci_version, ci_type, ci_server_home = server_options_null_check(ci_version, ci_type, ci_server_home)
     source_dir = null_check(source_dir, SOURCE_DIR_ARG, BUNDLEUTILS_SETUP_SOURCE_DIR)
+    source_dir = os.path.normpath(source_dir)
     if not os.path.exists(source_dir):
         die(f"Source directory '{source_dir}' does not exist")
     # parse the source directory bundle.yaml file and copy the files under the plugins and catalog keys to the target_jenkins_home_casc_startup_bundle directory
@@ -552,7 +614,173 @@ def ci_setup(ctx, ci_version, ci_type, ci_server_home, source_dir, ci_bundle_tem
     jenkins_manager.create_startup_bundle(plugin_files, ci_bundle_template)
     _update_bundle(jenkins_manager.target_jenkins_home_casc_startup_bundle)
 
-@cli.command()
+@bundleutils.command()
+@click.option('-m', '--config', type=click.Path(file_okay=True, dir_okay=False), help=f'An optional custom merge config file if needed.')
+@click.option('-f', '--files', multiple=True, type=click.Path(file_okay=True, dir_okay=False), help=f'The files to be merged.')
+@click.option('-o', '--outfile', type=click.Path(file_okay=True, dir_okay=False), help=f'The target for the merged file.')
+@click.pass_context
+def merge_yamls(ctx, config, files, outfile = None):
+    """
+    Used for merging YAML files of the same type (jcasc, plugins, items, rbac, etc).
+
+    \b
+    The merging strategy is defined in a merge-config file. The default contents are shown on execution.
+    """
+
+    merge_configs = None
+    if config:
+        if not os.path.exists(config):
+            die(f"Config file '{config}' does not exist")
+        else:
+            logging.debug(f"Using config file: {config}")
+            merge_configs = yaml2dict(config)
+
+    merger = YAMLMerger(merge_configs)
+    # warn if less than two files are provided
+    if len(files) < 1:
+        die(f"Please provide at least one file to merge")
+    if len(files) < 2:
+        logging.warning(f"Merging only makes sense with two files. Returning the first file.")
+    # merge the files sequentially using the last result as the base
+    output = merger.merge_yaml_files(files)
+    if not outfile:
+        yaml.dump(output, sys.stdout)
+    else:
+        with open(outfile, "w") as f:
+            yaml.dump(output, f)
+
+def _merge_bundles(bundles, outdir, config):
+    merge_configs = None
+    if config:
+        if not os.path.exists(config):
+            die(f"Config file '{config}' does not exist")
+        else:
+            logging.debug(f"Using config file: {config}")
+            merge_configs = yaml2dict(config)
+
+    merger = YAMLMerger(merge_configs)  # Merge lists of dicts by 'name' field
+    # ensure at least two files are provided
+    if len(bundles) < 1:
+        die(f"Please provide at least one bundle to merge")
+
+    # ensure the outdir and a bundle.yaml exist
+    if outdir:
+        if not os.path.exists(outdir):
+            os.makedirs(outdir)
+        out_bundle_yaml = os.path.join(outdir, 'bundle.yaml')
+        last_bundle_yaml = os.path.join(bundles[-1], 'bundle.yaml')
+        if os.path.exists(last_bundle_yaml):
+            # copy the last bundle.yaml to the outdir
+            with open(last_bundle_yaml, 'r') as file:
+                with open(out_bundle_yaml, 'w') as out_file:
+                    out_file.write(file.read())
+        else:
+            die(f"The last bundle specified must include a bundle.yaml. Bundle file '{last_bundle_yaml}' does not exist.")
+
+    # load the bundle.yaml files
+    bundle_yamls = {}
+    for bundle in bundles:
+        bundle_yaml = os.path.join(bundle, 'bundle.yaml')
+        if not os.path.exists(bundle_yaml):
+            die(f"Bundle file '{bundle_yaml}' does not exist")
+        bundle_yamls[bundle] = yaml2dict(bundle_yaml)
+
+    # merge the sections
+    for section, section_file in bundle_yaml_keys.items():
+        output = {}
+        section_files = []
+        for bundle, bundle_yaml in bundle_yamls.items():
+            if section in bundle_yaml:
+                for file in bundle_yaml[section]:
+                    section_files.append(os.path.join(bundle, file))
+        if not section_files:
+            logging.debug(f"No files found for section: {section}")
+            continue
+        # merge the files sequentially using the last result as the base
+        output = merger.merge_yaml_files(section_files)
+
+        if not outdir:
+            print(f"# {section}.yaml")
+            yaml.dump(output, sys.stdout)
+        else:
+            out_section_yaml = os.path.join(outdir, section_file)
+            with open(out_section_yaml, "w") as f:
+                logging.info(f"Writing section: {section} to {out_section_yaml}")
+                yaml.dump(output, f)
+            _update_bundle(outdir)
+
+@bundleutils.command()
+@click.option('-S', '--strict', default=False, is_flag=True, help=f'Fail when referencing non-existent files - warn otherwise.')
+@click.option('-m', '--config', type=click.Path(file_okay=True, dir_okay=False), help=f'An optional custom merge config file if needed.')
+@click.option('-b', '--bundles', multiple=True, type=click.Path(file_okay=False, dir_okay=True, exists=True), help=f'The bundles to be rendered.')
+@click.option('-o', '--outdir', type=click.Path(file_okay=False, dir_okay=True), help=f'The target for the merged bundle.')
+@click.option('-t', '--transform', default=False, is_flag=True, help=f'Optionally transform using the transformation configs ({BUNDLEUTILS_MERGE_TRANSFORM_PERFORM}).')
+@click.option('-d', '--diffcheck', default=False, is_flag=True, help=f'Optionally perform bundleutils diff against the original source bundle and expected bundle ({BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK}).')
+@click.pass_context
+def merge_bundles(ctx, strict, config, bundles, outdir, transform, diffcheck):
+    """
+    Used for merging bundles. Given a list of bundles, merge them into a single bundle.
+
+    \b
+    The merging strategy is defined in a merge config file similar to the merge command.
+
+    \b
+    Given at least two bundles, it will:
+    - for each section of the bundle.yaml (plugins, catalog, items, etc)
+    - collect all the referenced files in order of the bundles
+    - merge them together
+    - write the result to the outdir or stdout if not provided
+    - update the outdir/bundle.yaml with the new references
+
+    \b
+    Optionally, it can:
+    - transform the merged bundle using the transformation configs
+        (BUNDLEUTILS_TRANSFORM_CONFIGS and BUNDLEUTILS_TRANSFORM_SOURCE_DIR needed for this)
+    - perform a diff check against the source bundle and the transformed bundle
+        (BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK_SOURCE_DIR needed for this)
+    """
+    set_logging(ctx)
+
+    config = null_check(config, MERGE_CONFIG_ARG, BUNDLEUTILS_MERGE_CONFIG, False, '')
+    bundles = null_check(bundles, BUNDLES_ARG, BUNDLEUTILS_MERGE_BUNDLES, False, '')
+    outdir = null_check(outdir, OUTDIR_ARG, BUNDLEUTILS_MERGE_OUTDIR, False, '')
+
+    transform = null_check(transform, 'transform', BUNDLEUTILS_MERGE_TRANSFORM_PERFORM, False, '')
+    if transform:
+        logging.debug(f"Transforming detected. Looking for transform options")
+        transform_outdir = null_check('', 'transform_outdir', BUNDLEUTILS_MERGE_TRANSFORM_TARGET_DIR)
+        transform_srcdir = null_check(outdir, OUTDIR_ARG, BUNDLEUTILS_MERGE_TRANSFORM_SOURCE_DIR)
+        transform_configs = null_check('', 'configs', BUNDLEUTILS_TRANSFORM_CONFIGS)
+
+    diffcheck = null_check(diffcheck, 'diffcheck', BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK, False, '')
+    if diffcheck:
+        logging.debug(f"Diffcheck detected. Looking for diffcheck options")
+        diffcheck_source_bundle = null_check('', 'diffcheck_source_bundle', BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK_SOURCE_DIR)
+    # sanity check
+    if transform:
+        if transform_outdir and not outdir:
+            die(f"Cannot perform transform without specifying outdir")
+        if diffcheck and not transform_outdir:
+            die(f"Cannot perform diffcheck without specifying transform_outdir")
+    if diffcheck and not diffcheck_source_bundle:
+            die(f"Cannot perform diffcheck without specifying diffcheck_source_bundle")
+
+    if isinstance(bundles, str):
+        bundles = bundles.split()
+
+    _merge_bundles(bundles, outdir, config)
+
+    if transform:
+        announce(f"Performing transform on merged bundle from {transform_srcdir} to {transform_outdir}")
+        _transform(transform_configs, transform_srcdir, transform_outdir)
+    if diffcheck:
+        announce("Performing diffcheck on transformed bundle")
+        diff_dirs(diffcheck_source_bundle, transform_outdir)
+
+def announce(string):
+    logging.info(f"Announcing...\n{'*' * 80}\n{string}\n{'*' * 80}")
+
+@bundleutils.command()
 @server_options
 @click.option('-s', '--source-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The bundle to be validated.')
 @click.option('-w', '--ignore-warnings', default=False, is_flag=True, help=f'Do not fail if warnings are found.')
@@ -570,7 +798,7 @@ def ci_validate(ctx, ci_version, ci_type, ci_server_home, source_dir, ignore_war
     logging.debug(f"Server URL: {server_url}, Username: {username}, Password: {password}")
     _validate(server_url, username, password, source_dir, ignore_warnings, external_rbac)
 
-@cli.command()
+@bundleutils.command()
 @server_options
 @click.option('-s', '--source-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The bundle of the plugins to be sanitized.')
 @click.option('-p', '--pin-plugins', default=False, is_flag=True, help=f'Add versions to 3rd party plugins (only available for apiVersion 2).')
@@ -648,7 +876,7 @@ def ci_sanitize_plugins(ctx, ci_version, ci_type, ci_server_home, source_dir, pi
         yaml.dump(plugins_data, f)  # Write the updated data back to the file
     _update_bundle(source_dir)
 
-@cli.command()
+@bundleutils.command()
 @server_options
 @click.option('-M', '--ci-max-start-time', default=120, envvar=BUNDLEUTILS_CI_MAX_START_TIME, show_envvar=True, required=False, type=click.INT, help=f'Max minutes to start.')
 @click.pass_context
@@ -659,7 +887,7 @@ def ci_start(ctx, ci_version, ci_type, ci_server_home, ci_max_start_time):
     jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
     jenkins_manager.start_server(ci_max_start_time)
 
-@cli.command()
+@bundleutils.command()
 @server_options
 @click.pass_context
 def ci_stop(ctx, ci_version, ci_type, ci_server_home):
@@ -669,32 +897,22 @@ def ci_stop(ctx, ci_version, ci_type, ci_server_home):
     jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
     jenkins_manager.stop_server()
 
-# add a diff command to diff two directories by calling the diff command on each file
-@cli.command()
-@click.argument('src1', type=click.Path(exists=True))
-@click.argument('src2', type=click.Path(exists=True))
+@bundleutils.command()
+@click.option('-s', '--sources', multiple=True, type=click.Path(file_okay=False, dir_okay=True, exists=True), help=f'The directories or files to be diffed.')
 @click.pass_context
-def diff(ctx, src1, src2):
+def diff(ctx, sources):
     """Diff two YAML directories or files."""
-    set_logging(ctx)
+    set_logging(ctx, False)
     diff_detected = False
     # if src1 is a directory, ensure src2 is also directory
+    if sources and len(sources) == 2:
+        src1 = sources[0]
+        src2 = sources[1]
+    else:
+        die("Please provide two directories or files.")
+    # if src1 is a directory, ensure src2 is also directory
     if os.path.isdir(src1) and os.path.isdir(src2):
-        files1 = os.listdir(src1)
-        files2 = os.listdir(src2)
-        for file1 in files1:
-            if file1 in files2:
-                file1_path = os.path.join(src1, file1)
-                file2_path = os.path.join(src2, file1)
-                if diff2(file1_path, file2_path):
-                    diff_detected = True
-            else:
-                logging.warning(f"File {file1} does not exist in {src2}")
-                diff_detected = True
-        for file2 in files2:
-            if file2 not in files1:
-                logging.warning(f"File {file2} does not exist in {src1}")
-                diff_detected = True
+        diff_detected = diff_dirs(src1, src2)
     elif os.path.isfile(src1) and os.path.isfile(src2):
         if diff2(src1, src2):
             diff_detected = True
@@ -702,6 +920,54 @@ def diff(ctx, src1, src2):
         die("src1 and src2 must both be either directories or files")
     if diff_detected:
         die("Differences detected")
+
+@bundleutils.command()
+@click.option('-m', '--config', type=click.Path(file_okay=True, dir_okay=False), help=f'An optional custom merge config file if needed.')
+@click.option('-s', '--sources', multiple=True, type=click.Path(file_okay=False, dir_okay=True, exists=True), help=f'The bundles to be diffed.')
+@click.pass_context
+def diff_merged(ctx, config, sources):
+    """Diff two bundle directories by temporarily merging both before the diff."""
+    set_logging(ctx, False)
+    diff_detected = False
+    # if src1 is a directory, ensure src2 is also directory
+    if sources and len(sources) == 2:
+        src1 = sources[0]
+        src2 = sources[1]
+    else:
+        die("Please provide two bundle directories")
+
+    if os.path.isdir(src1) and os.path.isdir(src2):
+        # create a temporary directory to store the merged bundle
+        with tempfile.TemporaryDirectory() as temp_dir:
+            merged1 = os.path.join(temp_dir, 'merged1', 'dummy')
+            merged2 = os.path.join(temp_dir, 'merged2', 'dummy')
+            _merge_bundles([src1], merged1, config)
+            _merge_bundles([src2], merged2, config)
+            diff_detected = diff_dirs(merged1, merged2)
+    else:
+        die("src1 and src2 must both be directories")
+
+    if diff_detected:
+        die("Differences detected")
+
+def diff_dirs(src1, src2):
+    files1 = os.listdir(src1)
+    files2 = os.listdir(src2)
+    diff_detected = False
+    for file1 in files1:
+        if file1 in files2:
+            file1_path = os.path.join(src1, file1)
+            file2_path = os.path.join(src2, file1)
+            if diff2(file1_path, file2_path):
+                diff_detected = True
+        else:
+            logging.warning(f"File {file1} does not exist in {src2}")
+            diff_detected = True
+    for file2 in files2:
+        if file2 not in files1:
+            logging.warning(f"File {file2} does not exist in {src1}")
+            diff_detected = True
+    return diff_detected
 
 def diff2(file1, file2):
     dict1 = yaml2dict(file1)
@@ -715,7 +981,7 @@ def diff2(file1, file2):
         logging.info(f"No diff between {file1} and {file2}")
         return False
 
-@cli.command()
+@bundleutils.command()
 @click.pass_context
 def config(ctx):
     """List evaluated config based on cwd and env file."""
@@ -732,17 +998,21 @@ def config(ctx):
             lines.append(f'{key}={value}')
     click.echo('\n'.join(lines))
 
-@cli.command()
+@bundleutils.command()
 def version():
     """Show the app version."""
     try:
         package_name = 'bundleutilspkg'
         pkg_metadata = metadata(package_name)
-        click.echo(f"{pkg_metadata['Summary']}")
+        click.echo(f"{pkg_metadata['Version']}")
     except PackageNotFoundError:
+        try:
+            click.echo(__version__)
+        except AttributeError:
+            click.echo("Cannot determine version.")
         click.echo("Package is not installed. Please ensure it's built and installed correctly.")
 
-@cli.command()
+@bundleutils.command()
 @click.option('-u', '--url', help=f'The URL to extract the controller name from.')
 def extract_name_from_url(url):
     """
@@ -773,7 +1043,7 @@ def _extract_name_from_url(url):
         subdomain = parsed.netloc.split('.')[0]
         return subdomain
 
-@cli.command()
+@bundleutils.command()
 @click.option('-U', '--url', help=f'The controller URL to test for (JENKINS_URL).')
 @click.option('-v', '--ci-version', type=click.STRING, help=f'Optional version (taken from the remote instance otherwise).')
 @click.option('-b', '--bundles-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The directory containing the bundles.')
@@ -815,7 +1085,7 @@ def find_bundle_by_url(ctx, url, ci_version, bundles_dir):
 
 # add completion command which takes the shell as an argument
 # shell can only be bash, fish, or zsh
-@cli.command()
+@bundleutils.command()
 @click.option('-s', '--shell', required=True, type=click.Choice(['bash', 'fish', 'zsh']), help=f'The shell to generate completion script for.')
 @click.pass_context
 def completion(ctx, shell):
@@ -858,7 +1128,7 @@ def null_check(ctx, obj, obj_name, obj_env_var=None, mandatory=True, default='')
     ctx.obj[obj_name] = obj
     return obj
 
-@cli.command()
+@bundleutils.command()
 @click.option('-U', '--url', help=f'The controller URL to validate agianst ({BUNDLEUTILS_JENKINS_URL}).')
 @click.option('-u', '--username', help=f'Username for basic authentication ({BUNDLEUTILS_USERNAME}).')
 @click.option('-p', '--password', help=f'Password for basic authentication ({BUNDLEUTILS_PASSWORD}).')
@@ -981,7 +1251,7 @@ def fetch_options_null_check(ctx, url, path, username, password, target_dir, plu
         elif len(plugin_json_files) > 1:
             die('Multiple plugins*.json files found in the current directory')
 
-@cli.command()
+@bundleutils.command()
 @fetch_options
 @click.pass_context
 def fetch(ctx, url, path, username, password, target_dir, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, offline, cap):
@@ -1284,7 +1554,7 @@ def find_plugin_by_id(plugins, plugin_id):
             return plugin
     return None
 
-@cli.command()
+@bundleutils.command()
 @fetch_options
 @click.pass_context
 def update_plugins(ctx, url, path, username, password, target_dir, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, offline, cap):
@@ -1558,7 +1828,7 @@ def replace_carriage_returns(ctx, response_text):
                 logging.warning(f'Found catalog warnings: {line}')
             if catalog_warnings_strategy == CatalogWarningsStrategy.COMMENT:
                 logging.warning(f'Found catalog warnings in the response. Converting to comments according to strategy {catalog_warnings_strategy.name}')
-                response_text = re.sub(r'^--- .*$','# \g<0>', response_text, flags=re.MULTILINE)
+                response_text = re.sub(r'^--- .*$',r'# \g<0>', response_text, flags=re.MULTILINE)
             elif catalog_warnings_strategy == CatalogWarningsStrategy.FAIL:
                 die(f'''
                     Found catalog warnings in the response. Exiting according to strategy {catalog_warnings_strategy.name}
@@ -1719,6 +1989,9 @@ def handle_patches(patches, target_dir):
     # for each key in the patches, open the file and apply the patch
     for filename, patch in patches.items():
         filename = os.path.join(target_dir, filename)
+        if not _file_check(filename):
+            logging.info(f'File {filename} does not exist. Skipping patching.')
+            continue
         logging.info(f'Transform: applying JSON patches to {filename}')
         apply_patch(filename, patch)
 
@@ -1832,28 +2105,42 @@ def recursive_merge(obj1, obj2):
         logging.debug(f'Unkown type: {type(obj2)}')
     return obj1
 
+def get_config_file(filename):
+    """Load a YAML config file from bundleutilspkg.data.configs."""
+    if getattr(sys, 'frozen', False):  # PyInstaller build
+        base_path = Path(sys._MEIPASS) / "data/configs"
+    else:
+        base_path = importlib.resources.files("bundleutilspkg.data.configs")
 
-@cli.command()
+    return base_path / filename
+
+def source_target_prep(source_dir, target_dir, configs, suffix, filename):
+    if not source_dir:
+        source_dir = default_target
+    source_dir = os.path.normpath(source_dir)
+    if not target_dir:
+        target_dir = source_dir + suffix
+    target_dir = os.path.normpath(target_dir)
+    if not configs:
+        # if a normalize.yaml file is found in the current directory, use it
+        if os.path.exists(filename):
+            logging.info(f'Using {filename} in the current directory')
+            configs = [filename]
+        else:
+            path = get_config_file(filename)
+            configs = [path]
+    return source_dir, target_dir, configs
+
+@bundleutils.command()
 @transform_options
 @click.pass_context
 def normalize(ctx, strict, configs, source_dir, target_dir):
     """Transform using the normalize.yaml for better comparison."""
     set_logging(ctx)
-    if not source_dir:
-        source_dir = default_target
-    if not target_dir:
-        target_dir = source_dir + '-normalized'
-    if not configs:
-        # if a normalize.yaml file is found in the current directory, use it
-        if os.path.exists('normalize.yaml'):
-            logging.info('Using normalize.yaml in the current directory')
-            configs = ['normalize.yaml']
-        else:
-            path = pkg_resources.files('defaults.configs') / 'normalize.yaml'
-            configs = [path]
+    source_dir, target_dir, configs = source_target_prep(source_dir, target_dir, configs, '-normalized', 'normalize.yaml')
     _transform(configs, source_dir, target_dir)
 
-@cli.command()
+@bundleutils.command()
 @transform_options
 @click.option('-H', '--hash-seed', help=f"""
     Optional prefix for the hashing process (also {BUNDLEUTILS_CREDENTIAL_HASH_SEED}).
@@ -1875,39 +2162,20 @@ def audit(ctx, strict, configs, source_dir, target_dir, hash_seed):
     os.environ[BUNDLEUTILS_CREDENTIAL_HASH] = 'true'
     null_check(hash_seed, 'hash_seed', BUNDLEUTILS_CREDENTIAL_HASH_SEED, False,'')
 
-    if not source_dir:
-        source_dir = default_target
-    if not target_dir:
-        target_dir = source_dir + '-audit'
-    if not configs:
-        # if a normalize.yaml file is found in the current directory, use it
-        if os.path.exists('normalize.yaml'):
-            logging.info('Using normalize.yaml in the current directory')
-            configs = ['normalize.yaml']
-        else:
-            path = pkg_resources.files('defaults.configs') / 'normalize.yaml'
-            configs = [path]
+    source_dir, target_dir, configs = source_target_prep(source_dir, target_dir, configs, '-audit', 'normalize.yaml')
     _transform(configs, source_dir, target_dir)
 
-@cli.command()
+@bundleutils.command()
 @transform_options
 @click.pass_context
 def transform(ctx, strict, configs, source_dir, target_dir):
     """Transform using a custom transformation config."""
     set_logging(ctx)
     source_dir = null_check(source_dir, SOURCE_DIR_ARG, BUNDLEUTILS_TRANSFORM_SOURCE_DIR)
+    source_dir = os.path.normpath(source_dir)
     target_dir = null_check(target_dir, TARGET_DIR_ARG, BUNDLEUTILS_TRANSFORM_TARGET_DIR)
+    target_dir = os.path.normpath(target_dir)
     configs = null_check(configs, 'configs', BUNDLEUTILS_TRANSFORM_CONFIGS, False)
-    # if the configs is a string, split it by space
-    if isinstance(configs, str):
-        configs = configs.split()
-    if not configs:
-        # if a transform.yaml file is found in the current directory, use it
-        if os.path.exists('transform.yaml'):
-            logging.info('Using transform.yaml in the current directory')
-            configs = ['transform.yaml']
-        else:
-            die('No transformation config provided and no transform.yaml found in the current directory')
     _transform(configs, source_dir, target_dir)
 
 @click.pass_context
@@ -1927,6 +2195,16 @@ def _file_check(ctx, file, strict=False):
 def _transform(configs, source_dir, target_dir):
     """Transform using a custom transformation config."""
     # add the transformation configs recursively into the merged config
+    # if the configs is a string, split it by space
+    if isinstance(configs, str):
+        configs = configs.split()
+    if not configs:
+        # if a transform.yaml file is found in the current directory, use it
+        if os.path.exists('transform.yaml'):
+            logging.info('Using transform.yaml in the current directory')
+            configs = ['transform.yaml']
+        else:
+            die('No transformation config provided and no transform.yaml found in the current directory')
     merged_config = {}
     for config in configs:
         _file_check(config, True)
@@ -1936,9 +2214,11 @@ def _transform(configs, source_dir, target_dir):
             merged_config = recursive_merge(merged_config, obj)
 
     logging.debug(f'Merged config:\n' + printYaml(merged_config))
+    source_dir = os.path.normpath(source_dir)
     # if the target directory is not set, use the source directory suffixed with -transformed
     if not target_dir:
         target_dir = source_dir + '-transformed'
+    target_dir = os.path.normpath(target_dir)
     logging.info(f'Transform: source {source_dir} to target {target_dir}')
     # create the target directory if it does not exist, delete all files in it
     os.makedirs(target_dir, exist_ok=True)
@@ -1995,22 +2275,34 @@ def remove_empty_keys(data):
     # For scalar values, just return as-is
     return data
 
-@cli.command()
-@click.option('-t', '--target-dir', 'target_dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The target directory to update the bundle.yaml file (defaults to CWD).')
-@click.option('-d', '--description', 'description', help=f'Optional description for the bundle (also {BUNDLEUTILS_BUNDLE_DESCRIPTION}).')
+@bundleutils.command()
+@click.option('-t', '--target-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The target directory to update the bundle.yaml file (defaults to CWD).')
+@click.option('-d', '--description', help=f'Optional description for the bundle (also {BUNDLEUTILS_BUNDLE_DESCRIPTION}).')
+@click.option('-o', '--output-sorted', help=f'Optional place to put the sorted yaml string used to created the version.')
 @click.pass_context
-def update_bundle(ctx, target_dir, description):
-    """Update the bundle.yaml file in the target directory."""
+def update_bundle(ctx, target_dir, description, output_sorted):
+    """
+    \b
+    Update the bundle.yaml file in the target directory:
+    - Updating keys according to the files found
+    - Removing keys that have no files
+    - Generating a new UUID for the id key
+
+    \b
+    Bundle version generation:
+    - Sorts files alphabetically to ensure consistent order.
+    - Sorts YAML keys recursively inside each file.
+    - Generates a SHA-256 hash and converts it into a UUID.
+    """
     set_logging(ctx)
-    _update_bundle(target_dir, description)
+    _update_bundle(target_dir, description, output_sorted)
 
 def _basename(dir):
     return os.path.basename(os.path.normpath(dir))
 
 @click.pass_context
-def _update_bundle(ctx, target_dir, description=None):
+def _update_bundle(ctx, target_dir, description=None, output_sorted=None):
     description = null_check(description, 'description', BUNDLEUTILS_BUNDLE_DESCRIPTION, False)
-    keys = ['jcasc', 'items', 'plugins', 'rbac', 'catalog', 'variables']
 
     if not target_dir:
         target_dir = ctx.obj.get(ORIGINAL_CWD)
@@ -2020,8 +2312,8 @@ def _update_bundle(ctx, target_dir, description=None):
         data = yaml.load(file)
 
     all_files = []
-    # Iterate over the keys
-    for key in keys:
+    # Iterate over the bundle_yaml_keys
+    for key in bundle_yaml_keys.keys():
         files = []
         # Special case for 'jcasc'
         if key == 'jcasc':
@@ -2106,6 +2398,7 @@ def _update_bundle(ctx, target_dir, description=None):
             continue
 
         # Update the key in the data
+        logging.debug(f'Updated {key} to {files}')
         data[key] = files
 
         # Add the files to the all_files list
@@ -2116,7 +2409,7 @@ def _update_bundle(ctx, target_dir, description=None):
     data['description'] = f"Bundle for {data['id']}" if not description else description
 
     # update the version key with the md5sum of the content of all files
-    data['version'] = os.popen(f'cat {" ".join([os.path.join(target_dir, file) for file in all_files])} | md5sum').read().split()[0]
+    data['version'] = generate_collection_uuid(target_dir, all_files, output_sorted)
     logging.info(f'Updated version to {data["version"]}')
 
     # Save the YAML file
@@ -2270,3 +2563,6 @@ def split_items(target_dir, filename, configs):
         logging.info(f'Writing {new_file_path}')
         with open(new_file_path, 'w') as f:
             yaml.dump({'removeStrategy': data['removeStrategy'], 'items': items}, f)
+
+if getattr(sys, 'frozen', False):
+    bundleutils(sys.argv[1:])

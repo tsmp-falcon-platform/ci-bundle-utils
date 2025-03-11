@@ -1,0 +1,10 @@
+apiVersion: '2'
+id: base-child1-grandchild1-expected
+description: Bundle for base-child1-grandchild1-expected
+version: 58e87b57-023f-7486-fdba-86b04078b86c
+jcasc:
+- jenkins.yaml
+items:
+- items.yaml
+plugins:
+- plugins.yaml

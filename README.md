@@ -4,19 +4,18 @@
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 
-- [Show me the money](#show-me-the-money)
 - [What is it?](#what-is-it)
 - [Why create it?](#why-create-it)
-- [Where can I run it?](#where-can-i-run-it)
+- [How can I run it?](#how-can-i-run-it)
+- [Walkthrough](#walkthrough)
 - [Commands](#commands)
 - [Help Pages](#help-pages)
 - [Local Development](#local-development)
+  - [Setup](#setup)
+  - [Code Completion](#code-completion)
+  - [Makefile](#makefile)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
-
-## Show me the money
-
-If you don't like reading documentation and just want to try it out in your current setup, see [this document](./docs/show-me-the-money.md).
 
 ## What is it?
 
@@ -32,8 +31,9 @@ The simple use-cases are:
 
 - [validating your existing CasC bundles](./docs/use-case-validating-exsting-bundles.md)
 - [fetching, transforming, and validating CasC bundles from existing servers](./docs/use-case-validating-exsting-bundles.md)
+- [merge multiple bundles into one](./docs/use-case-merging-bundles.md)
 
-## Where can I run it?
+## How can I run it?
 
 Runtime variants explained here include:
 
@@ -44,11 +44,21 @@ Runtime variants explained here include:
 
 **Since it is a container, it can be run virtually anywhere.**
 
+## Walkthrough
+
+A [walkthrough](https://dictionary.cambridge.org/dictionary/english/walkthrough) setup has been provided at [example-bundles-drift](https://github.com/tsmp-falcon-platform/example-bundles-drift).
+
+The walkthough contains a comprehensive list of steps to setting up bundle management.
+
+TODO: An issue has been created to add a "merge bundles" workflow to the walkthrough - see [Issue #70](https://github.com/tsmp-falcon-platform/ci-bundle-utils/issues/70)
+
 ## Commands
 
 For a summary of commands, see [explaining the main commands](./docs/explaining-commands.md)
 
 ## Help Pages
+
+Below is a list of the current help pages coming from the `bundleutils` tool. Ideally, the tools help pages will contain enough information to be self explanatory.
 
 <!-- START help-pages-doc -->
 ```mono
@@ -73,10 +83,13 @@ Commands:
   completion             Print the shell completion script
   config                 List evaluated config based on cwd and env file.
   diff                   Diff two YAML directories or files.
+  diff-merged            Diff two bundle directories by temporarily...
   extract-name-from-url  Smart extraction of the controller name from the...
   fetch                  Fetch YAML documents from a URL or path.
   find-bundle-by-url     Find a bundle by Jenkins URL and CI Version.
   help-pages             Show all help pages by running 'bundleutils...
+  merge-bundles          Used for merging bundles.
+  merge-yamls            Used for merging YAML files of the same type...
   normalize              Transform using the normalize.yaml for better...
   transform              Transform using a custom transformation config.
   update-bundle          Update the bundle.yaml file in the target...
@@ -96,7 +109,7 @@ Options:
                               Defaults to the source directory suffixed with
                               -transformed.
   -s, --source-dir DIRECTORY  The source directory for the YAML documents.
-  -c, --config TEXT           The transformation config(s).
+  -c, --config FILE           The transformation config(s).
   -S, --strict                Fail when referencing non-existent files - warn
                               otherwise.
   -H, --hash-seed TEXT        Optional prefix for the hashing process (also
@@ -225,12 +238,22 @@ Usage: bundleutils config [OPTIONS]
 Options:
   --help  Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
-Usage: bundleutils diff [OPTIONS] SRC1 SRC2
+Usage: bundleutils diff [OPTIONS]
 
   Diff two YAML directories or files.
 
 Options:
-  --help  Show this message and exit.
+  -s, --sources DIRECTORY  The directories or files to be diffed.
+  --help                   Show this message and exit.
+------------------------------------------------------------------------------------------------------------------------
+Usage: bundleutils diff-merged [OPTIONS]
+
+  Diff two bundle directories by temporarily merging both before the diff.
+
+Options:
+  -m, --config FILE        An optional custom merge config file if needed.
+  -s, --sources DIRECTORY  The bundles to be diffed.
+  --help                   Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils extract-name-from-url [OPTIONS]
 
@@ -308,6 +331,52 @@ Usage: bundleutils help-pages [OPTIONS]
 Options:
   --help  Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
+Usage: bundleutils merge-bundles [OPTIONS]
+
+  Used for merging bundles. Given a list of bundles, merge them into a single
+  bundle.
+
+  The merging strategy is defined in a merge config file similar to the merge command.
+
+  Given at least two bundles, it will:
+  - for each section of the bundle.yaml (plugins, catalog, items, etc)
+  - collect all the referenced files in order of the bundles
+  - merge them together
+  - write the result to the outdir or stdout if not provided
+  - update the outdir/bundle.yaml with the new references
+
+  Optionally, it can:
+  - transform the merged bundle using the transformation configs
+      (BUNDLEUTILS_TRANSFORM_CONFIGS and BUNDLEUTILS_TRANSFORM_SOURCE_DIR needed for this)
+  - perform a diff check against the source bundle and the transformed bundle
+      (BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK_SOURCE_DIR needed for this)
+
+Options:
+  -S, --strict             Fail when referencing non-existent files - warn
+                           otherwise.
+  -m, --config FILE        An optional custom merge config file if needed.
+  -b, --bundles DIRECTORY  The bundles to be rendered.
+  -o, --outdir DIRECTORY   The target for the merged bundle.
+  -t, --transform          Optionally transform using the transformation
+                           configs (BUNDLEUTILS_MERGE_TRANSFORM_PERFORM).
+  -d, --diffcheck          Optionally perform bundleutils diff against the
+                           original source bundle and expected bundle
+                           (BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK).
+  --help                   Show this message and exit.
+------------------------------------------------------------------------------------------------------------------------
+Usage: bundleutils merge-yamls [OPTIONS]
+
+  Used for merging YAML files of the same type (jcasc, plugins, items, rbac,
+  etc).
+
+  The merging strategy is defined in a merge-config file. The default contents are shown on execution.
+
+Options:
+  -m, --config FILE   An optional custom merge config file if needed.
+  -f, --files FILE    The files to be merged.
+  -o, --outfile FILE  The target for the merged file.
+  --help              Show this message and exit.
+------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils normalize [OPTIONS]
 
   Transform using the normalize.yaml for better comparison.
@@ -317,7 +386,7 @@ Options:
                               Defaults to the source directory suffixed with
                               -transformed.
   -s, --source-dir DIRECTORY  The source directory for the YAML documents.
-  -c, --config TEXT           The transformation config(s).
+  -c, --config FILE           The transformation config(s).
   -S, --strict                Fail when referencing non-existent files - warn
                               otherwise.
   --help                      Show this message and exit.
@@ -331,20 +400,30 @@ Options:
                               Defaults to the source directory suffixed with
                               -transformed.
   -s, --source-dir DIRECTORY  The source directory for the YAML documents.
-  -c, --config TEXT           The transformation config(s).
+  -c, --config FILE           The transformation config(s).
   -S, --strict                Fail when referencing non-existent files - warn
                               otherwise.
   --help                      Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils update-bundle [OPTIONS]
 
-  Update the bundle.yaml file in the target directory.
+  Update the bundle.yaml file in the target directory:
+  - Updating keys according to the files found
+  - Removing keys that have no files
+  - Generating a new UUID for the id key
+
+  Bundle version generation:
+  - Sorts files alphabetically to ensure consistent order.
+  - Sorts YAML keys recursively inside each file.
+  - Generates a SHA-256 hash and converts it into a UUID.
 
 Options:
   -t, --target-dir DIRECTORY  The target directory to update the bundle.yaml
                               file (defaults to CWD).
   -d, --description TEXT      Optional description for the bundle (also
                               BUNDLEUTILS_BUNDLE_DESCRIPTION).
+  -o, --output-sorted TEXT    Optional place to put the sorted yaml string
+                              used to created the version.
   --help                      Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils update-plugins [OPTIONS]
@@ -411,21 +490,28 @@ Options:
 ```
 <!-- END help-pages-doc -->
 
-
 ## Local Development
 
-To run locally:
+> [!TIP]
+> Checkout the commands in the [Makefile](./Makefile) for more information on what is run.
+
+### Setup
+
+Python virtualenv setup:
 
 ```sh
-# create a virtual environment
-python -m venv .venv
+# setup local python environment
+make setup
 
-# install dependencies in edit mode
-pip install -e bundleutilspkg
+# run the tests
+make test
+```
 
-# activate environment
-source .venv/bin/activate
+### Code Completion
 
+Activate code completion:
+
+```sh
 # show shell completion options on ZSH
 bundleutils completion -s zsh
 
@@ -433,7 +519,9 @@ bundleutils completion -s zsh
 bundleutils completion -s bash
 ```
 
-Alternatively, the provided [Makefile](./Makefile) contains some targets for running local docker environments.
+### Makefile
+
+The provided [Makefile](./Makefile) contains some targets for running local docker environments.
 
 <!-- START makefile-doc -->
 ```bash
@@ -444,6 +532,11 @@ Usage:
   make <target>
 
 Targets:
+  setup                  Setup the development environment
+  install                Setup the development environment
+  install-dev            Setup the development environment
+  test                   Run the pytest suite
+  pyinstaller            Build the bundleutils package
   compose/start-dev      Start the bundleutils container
   compose/start          Start the bundleutils container
   compose/stop           Stop the bundleutils container

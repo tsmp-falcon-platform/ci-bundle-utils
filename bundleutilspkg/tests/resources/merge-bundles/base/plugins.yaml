@@ -1,0 +1,19 @@
+plugins:
+  - id: cloudbees-casc-client
+    version: 1.0.0
+  - id: cloudbees-casc-items-controller
+  - id: cloudbees-github-reporting
+  - id: cloudbees-groovy-view
+  - id: cloudbees-jenkins-advisor
+  - id: cloudbees-monitoring
+  - id: cloudbees-nodes-plus
+  - id: cloudbees-pipeline-explorer
+  - id: cloudbees-ssh-slaves
+  - id: cloudbees-view-creation-filter
+  - id: cloudbees-workflow-template
+  - id: github-branch-source
+  - id: managed-master-hibernation
+  - id: matrix-project
+  - id: operations-center-cloud
+  - id: workflow-aggregator
+  - id: workflow-cps-checkpoint
