@@ -15,13 +15,13 @@ setup: ## Setup virtualenv (optional PYTHON_CMD=python3.xx)
 .PHONY: install
 install: ## Install the bundleutils package
 	cd bundleutilspkg && \
-	pip install --upgrade pip
+	pip install --upgrade pip && \
 	pip install "."
 
 .PHONY: install-dev
 install-dev: ## Install the bundleutils package with dev dependencies
 	cd bundleutilspkg && \
-	pip install --upgrade pip
+	pip install --upgrade pip && \
 	pip install -e ".[dev]"
 
 .PHONY: test
