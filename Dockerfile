@@ -57,8 +57,11 @@ ADD README.md /opt/bundleutils/work/README.md
 
 # Install any needed packages specified in setup.py
 RUN cd /opt/bundleutils/.app/bundleutilspkg \
-    && pip install . \
-    && pyinstaller bundleutils.spec.file
+    && pip install ".[dev]" \
+    && pyinstaller --noconfirm --clean --onedir \
+	--add-data "src/bundleutilspkg/data/configs:data/configs" \
+	--copy-metadata bundleutilspkg \
+	src/bundleutilspkg/bundleutils.py
 
 # Install any needed packages specified in setup.py
 RUN useradd -m -u 1000 bundle-user
