@@ -45,6 +45,10 @@ jobs:
           python -m pip install --upgrade pip
           make install-dev install
 
+      - name: Run tests
+        run: |
+          make test
+
       - name: Build Executable with PyInstaller (Linux/macOS)
         run: |
           make pyinstaller
