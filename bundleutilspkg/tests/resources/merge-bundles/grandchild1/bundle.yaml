@@ -1,0 +1,6 @@
+apiVersion: '2'
+id: grandchild1
+description: Bundle for grandchild1
+version: 7cc600e6e85aba3217bea301236e22a4
+jcasc:
+- jenkins.yaml

@@ -1,0 +1,65 @@
+# This workflow uses actions that are not certified by GitHub.
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+
+# GitHub recommends pinning actions to a commit SHA.
+# To get a newer version, you will need to update the SHA.
+# You can also reference a tag or branch, but the action may change without warning.
+
+name: Create and add artifact to the workflow run
+
+on:
+  workflow_dispatch:
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-publish-artifact:
+    name: Build Executables
+    runs-on: ${{ matrix.os }}
+
+    # this job needs write permissions to the repository
+    permissions:
+      contents: write
+    strategy:
+      matrix:
+        os: [ubuntu-20.04, macos-13]
+        python-version: ["3.12"]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Get full commit history and tags
+
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          make install-dev install
+
+      - name: Run tests
+        run: |
+          make test
+
+      - name: Build Executable with PyInstaller (Linux/macOS)
+        run: |
+          make pyinstaller
+          cd bundleutilspkg
+          ls -al dist
+          mv dist/bundleutils dist/bundleutils-${{ runner.os }}-py${{ matrix.python-version }}
+          ls -al dist
+          cp -r dist/bundleutils-${{ runner.os }}-py${{ matrix.python-version }} /tmp/bundleutils-${{ runner.os }}-py${{ matrix.python-version }}
+          /tmp/bundleutils-${{ runner.os }}-py${{ matrix.python-version }}/bundleutils version
+      - name: Archive artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundleutils-${{ runner.os }}-py${{ matrix.python-version }}
+          path: |
+            bundleutilspkg/dist/bundleutils-${{ runner.os }}-py${{ matrix.python-version }}
