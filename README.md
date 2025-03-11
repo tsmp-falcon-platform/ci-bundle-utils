@@ -532,9 +532,9 @@ Usage:
   make <target>
 
 Targets:
-  setup                  Setup the development environment
-  install                Setup the development environment
-  install-dev            Setup the development environment
+  setup                  Setup virtualenv (optional PYTHON_CMD=python3.xx)
+  install                Install the bundleutils package
+  install-dev            Install the bundleutils package with dev dependencies
   test                   Run the pytest suite
   pyinstaller            Build the bundleutils package
   compose/start-dev      Start the bundleutils container
