@@ -66,7 +66,7 @@ jobs:
         run: |
           cd bundleutilspkg/dist
           zip -r bundleutils-${{ runner.os }}-py${{ matrix.python-version }}.zip bundleutils-${{ runner.os }}-py${{ matrix.python-version }}
-          gh release upload ${{ github.event.inputs.tag_name }} bundleutils-${{ runner.os }}-py${{ matrix.python-version }}.zip
+          gh release upload ${{ env.BUNDLEUTILS_RELEASE_VERSION }} bundleutils-${{ runner.os }}-py${{ matrix.python-version }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
