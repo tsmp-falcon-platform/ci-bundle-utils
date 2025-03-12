@@ -253,6 +253,8 @@ Usage: bundleutils diff-merged [OPTIONS]
 Options:
   -m, --config FILE        An optional custom merge config file if needed.
   -s, --sources DIRECTORY  The bundles to be diffed.
+  -a, --api-version TEXT   Optional apiVersion in case bundle does not contain
+                           a bundle.yaml. Defaults to 2
   --help                   Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils extract-name-from-url [OPTIONS]
@@ -337,6 +339,10 @@ Usage: bundleutils merge-bundles [OPTIONS]
   bundle.
 
   The merging strategy is defined in a merge config file similar to the merge command.
+  The api_version is taken from either (in order):
+  - the api_version parameter
+  - the last bundle.yaml file in the list of bundles if available
+  - the default api_version
 
   Given at least two bundles, it will:
   - for each section of the bundle.yaml (plugins, catalog, items, etc)
@@ -357,6 +363,7 @@ Options:
   -m, --config FILE        An optional custom merge config file if needed.
   -b, --bundles DIRECTORY  The bundles to be rendered.
   -o, --outdir DIRECTORY   The target for the merged bundle.
+  -a, --api-version TEXT   Optional apiVersion. Defaults to 2
   -t, --transform          Optionally transform using the transformation
                            configs (BUNDLEUTILS_MERGE_TRANSFORM_PERFORM).
   -d, --diffcheck          Optionally perform bundleutils diff against the

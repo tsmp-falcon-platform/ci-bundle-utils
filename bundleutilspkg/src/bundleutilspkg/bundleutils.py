@@ -3,9 +3,11 @@ import hashlib
 import importlib
 import json
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 import uuid
+from bundleutilspkg.utils import get_config_file
 import jsonpatch
 import jsonpointer
 import zipfile
@@ -44,6 +46,7 @@ validate_url_path = '/casc-bundle-mgnt/casc-bundle-validate'
 
 default_target = 'target/docs'
 default_auto_env_file = 'bundle-profiles.yaml'
+default_bundle_api_version = '2'
 
 bundle_yaml_keys = {'jcasc': 'jenkins.yaml', 'items': 'items.yaml', 'plugins': 'plugins.yaml', 'rbac': 'rbac.yaml', 'catalog': 'plugin-catalog.yaml', 'variables': 'variables.yaml'}
 
@@ -194,9 +197,33 @@ def generate_collection_uuid(target_dir, yaml_files, output_sorted=None):
     ordered_yaml_str = ordered_yaml_dump(combined_yaml_data)
     yaml_hash = hashlib.sha256(ordered_yaml_str.encode()).hexdigest()
     if output_sorted:
-        with open(output_sorted, 'w') as f:
-            logging.info(f"Writing {yaml_hash} ({uuid.UUID(yaml_hash[:32])}) sorted YAML to {output_sorted}")
-            f.write(ordered_yaml_str)
+        if not os.path.exists(output_sorted):
+            if output_sorted.endswith('.yaml'):
+                with open(output_sorted, 'w') as f:
+                    f.write('')
+            else:
+                os.makedirs(output_sorted)
+        # if output_sorted is a directory, print each file to a separate file
+        if os.path.isdir(output_sorted):
+            for file in os.listdir(output_sorted):
+                os.remove(os.path.join(output_sorted, file))
+            # copy the target_dir bundle.yaml file to the output directory
+            target_bundle_yaml = Path(target_dir) / 'bundle.yaml'
+            if target_bundle_yaml.exists():
+                shutil.copy(target_bundle_yaml, output_sorted)
+            # copy other files
+            for file_name, data in combined_yaml_data.items():
+                with open(os.path.join(output_sorted, file_name), 'w') as f:
+                    logging.info(f"Writing {file_name} sorted YAML to {output_sorted}")
+                    f.write(ordered_yaml_dump(data))
+            # run _update_bundle without the --output-sorted flag
+            # to update the bundle.yaml file with the new UUID
+            announce(f"Updating the sorted bundle.yaml with UUID: {yaml_hash}")
+            _update_bundle(output_sorted)
+        else:
+            with open(output_sorted, 'w') as f:
+                logging.info(f"Writing {yaml_hash} ({uuid.UUID(yaml_hash[:32])}) sorted YAML to {output_sorted}")
+                f.write(ordered_yaml_str)
     return str(uuid.UUID(yaml_hash[:32]))  # Convert first 32 chars to UUID format
 
 def get_value_from_enum(value, my_enum):
@@ -649,7 +676,7 @@ def merge_yamls(ctx, config, files, outfile = None):
         with open(outfile, "w") as f:
             yaml.dump(output, f)
 
-def _merge_bundles(bundles, outdir, config):
+def _merge_bundles(bundles, outdir, config, api_version = None):
     merge_configs = None
     if config:
         if not os.path.exists(config):
@@ -669,33 +696,37 @@ def _merge_bundles(bundles, outdir, config):
             os.makedirs(outdir)
         out_bundle_yaml = os.path.join(outdir, 'bundle.yaml')
         last_bundle_yaml = os.path.join(bundles[-1], 'bundle.yaml')
-        if os.path.exists(last_bundle_yaml):
-            # copy the last bundle.yaml to the outdir
-            with open(last_bundle_yaml, 'r') as file:
-                with open(out_bundle_yaml, 'w') as out_file:
-                    out_file.write(file.read())
-        else:
-            die(f"The last bundle specified must include a bundle.yaml. Bundle file '{last_bundle_yaml}' does not exist.")
+        if not api_version:
+            if os.path.exists(last_bundle_yaml):
+                # get the apiVersion and kind from the last bundle.yaml
+                last_bundle_yaml_dict = yaml2dict(last_bundle_yaml)
+                if 'apiVersion' in last_bundle_yaml_dict:
+                    api_version = last_bundle_yaml_dict['apiVersion']
+                else:
+                    logging.warning(f"Bundle file '{last_bundle_yaml}' does not contain an apiVersion. Using default apiVersion: {default_bundle_api_version}")
+                    api_version = default_bundle_api_version
+            else:
+                logging.debug(f"Bundle file '{last_bundle_yaml}' does not exist. Using default apiVersion: {api_version}")
+                api_version = default_bundle_api_version
 
-    # load the bundle.yaml files
-    bundle_yamls = {}
-    for bundle in bundles:
-        bundle_yaml = os.path.join(bundle, 'bundle.yaml')
-        if not os.path.exists(bundle_yaml):
-            die(f"Bundle file '{bundle_yaml}' does not exist")
-        bundle_yamls[bundle] = yaml2dict(bundle_yaml)
+        with open(out_bundle_yaml, "w") as f:
+            logging.info(f"Writing bundle.yaml to {out_bundle_yaml}")
+            f.write(f"apiVersion: {api_version}\n")
+            f.write(f"id: ''\n")
+            f.write(f"description: ''\n")
+            f.write(f"version: ''\n")
 
     # merge the sections
     for section, section_file in bundle_yaml_keys.items():
         output = {}
         section_files = []
-        for bundle, bundle_yaml in bundle_yamls.items():
-            if section in bundle_yaml:
-                for file in bundle_yaml[section]:
-                    section_files.append(os.path.join(bundle, file))
+        for bundle in bundles:
+            section_files.extend(_get_files_for_key(bundle, section))
         if not section_files:
-            logging.debug(f"No files found for section: {section}")
+            logging.info(f"No files found for section: {section}")
             continue
+        else:
+            logging.info(f"Found files for section: {section}")
         # merge the files sequentially using the last result as the base
         output = merger.merge_yaml_files(section_files)
 
@@ -714,15 +745,20 @@ def _merge_bundles(bundles, outdir, config):
 @click.option('-m', '--config', type=click.Path(file_okay=True, dir_okay=False), help=f'An optional custom merge config file if needed.')
 @click.option('-b', '--bundles', multiple=True, type=click.Path(file_okay=False, dir_okay=True, exists=True), help=f'The bundles to be rendered.')
 @click.option('-o', '--outdir', type=click.Path(file_okay=False, dir_okay=True), help=f'The target for the merged bundle.')
+@click.option('-a', '--api-version', help=f'Optional apiVersion. Defaults to {default_bundle_api_version}')
 @click.option('-t', '--transform', default=False, is_flag=True, help=f'Optionally transform using the transformation configs ({BUNDLEUTILS_MERGE_TRANSFORM_PERFORM}).')
 @click.option('-d', '--diffcheck', default=False, is_flag=True, help=f'Optionally perform bundleutils diff against the original source bundle and expected bundle ({BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK}).')
 @click.pass_context
-def merge_bundles(ctx, strict, config, bundles, outdir, transform, diffcheck):
+def merge_bundles(ctx, strict, config, bundles, outdir, transform, diffcheck, api_version):
     """
     Used for merging bundles. Given a list of bundles, merge them into a single bundle.
 
     \b
     The merging strategy is defined in a merge config file similar to the merge command.
+    The api_version is taken from either (in order):
+    - the api_version parameter
+    - the last bundle.yaml file in the list of bundles if available
+    - the default api_version
 
     \b
     Given at least two bundles, it will:
@@ -768,7 +804,7 @@ def merge_bundles(ctx, strict, config, bundles, outdir, transform, diffcheck):
     if isinstance(bundles, str):
         bundles = bundles.split()
 
-    _merge_bundles(bundles, outdir, config)
+    _merge_bundles(bundles, outdir, config, api_version)
 
     if transform:
         announce(f"Performing transform on merged bundle from {transform_srcdir} to {transform_outdir}")
@@ -924,8 +960,9 @@ def diff(ctx, sources):
 @bundleutils.command()
 @click.option('-m', '--config', type=click.Path(file_okay=True, dir_okay=False), help=f'An optional custom merge config file if needed.')
 @click.option('-s', '--sources', multiple=True, type=click.Path(file_okay=False, dir_okay=True, exists=True), help=f'The bundles to be diffed.')
+@click.option('-a', '--api-version', help=f'Optional apiVersion in case bundle does not contain a bundle.yaml. Defaults to {default_bundle_api_version}')
 @click.pass_context
-def diff_merged(ctx, config, sources):
+def diff_merged(ctx, config, sources, api_version):
     """Diff two bundle directories by temporarily merging both before the diff."""
     set_logging(ctx, False)
     diff_detected = False
@@ -941,8 +978,8 @@ def diff_merged(ctx, config, sources):
         with tempfile.TemporaryDirectory() as temp_dir:
             merged1 = os.path.join(temp_dir, 'merged1', 'dummy')
             merged2 = os.path.join(temp_dir, 'merged2', 'dummy')
-            _merge_bundles([src1], merged1, config)
-            _merge_bundles([src2], merged2, config)
+            _merge_bundles([src1], merged1, config, api_version)
+            _merge_bundles([src2], merged2, config, api_version)
             diff_detected = diff_dirs(merged1, merged2)
     else:
         die("src1 and src2 must both be directories")
@@ -2065,9 +2102,19 @@ def handle_splits(splits, target_dir):
                 logging.debug(f'Using configs: {configs}')
                 split_jcasc(target_dir, filename, configs)
 
+def _convert_to_dict(obj):
+    """ Recursively convert CommentedMap and CommentedSeq to dict and list."""
+    if isinstance(obj, dict):
+        return {k: _convert_to_dict(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_convert_to_dict(v) for v in obj]
+    return obj
+
 def printYaml(obj):
+    # needed to remove comments and '!!omap' identifiers
+    obj2 = _convert_to_dict(obj)
     stream = io.StringIO()
-    yaml.dump(obj, stream)
+    yaml.dump(obj2, stream)
     return stream.getvalue()
 
 def uncomment(obj2):
@@ -2104,15 +2151,6 @@ def recursive_merge(obj1, obj2):
     else:
         logging.debug(f'Unkown type: {type(obj2)}')
     return obj1
-
-def get_config_file(filename):
-    """Load a YAML config file from bundleutilspkg.data.configs."""
-    if getattr(sys, 'frozen', False):  # PyInstaller build
-        base_path = Path(sys._MEIPASS) / "data/configs"
-    else:
-        base_path = importlib.resources.files("bundleutilspkg.data.configs")
-
-    return base_path / filename
 
 def source_target_prep(source_dir, target_dir, configs, suffix, filename):
     if not source_dir:
@@ -2300,20 +2338,7 @@ def update_bundle(ctx, target_dir, description, output_sorted):
 def _basename(dir):
     return os.path.basename(os.path.normpath(dir))
 
-@click.pass_context
-def _update_bundle(ctx, target_dir, description=None, output_sorted=None):
-    description = null_check(description, 'description', BUNDLEUTILS_BUNDLE_DESCRIPTION, False)
-
-    if not target_dir:
-        target_dir = ctx.obj.get(ORIGINAL_CWD)
-    logging.info(f'Updating bundle in {target_dir}')
-    # Load the YAML file
-    with open(os.path.join(target_dir, 'bundle.yaml'), 'r') as file:
-        data = yaml.load(file)
-
-    all_files = []
-    # Iterate over the bundle_yaml_keys
-    for key in bundle_yaml_keys.keys():
+def _get_files_for_key(target_dir, key):
         files = []
         # Special case for 'jcasc'
         if key == 'jcasc':
@@ -2386,6 +2411,24 @@ def _update_bundle(ctx, target_dir, description=None, output_sorted=None):
                         logging.info(f'Removing {file} from the list due to missing or empty roles and groups')
                         files.remove(file)
                         os.remove(file)
+        logging.info(f'Files for {key}: {files}')
+        return files
+
+@click.pass_context
+def _update_bundle(ctx, target_dir, description=None, output_sorted=None):
+    description = null_check(description, 'description', BUNDLEUTILS_BUNDLE_DESCRIPTION, False)
+
+    if not target_dir:
+        target_dir = ctx.obj.get(ORIGINAL_CWD)
+    logging.info(f'Updating bundle in {target_dir}')
+    # Load the YAML file
+    with open(os.path.join(target_dir, 'bundle.yaml'), 'r') as file:
+        data = yaml.load(file)
+
+    all_files = []
+    # Iterate over the bundle_yaml_keys
+    for key in bundle_yaml_keys.keys():
+        files = _get_files_for_key(target_dir, key)
 
         # Remove the target_dir path and sort the files, ensuring exact match come first
         files = [_basename(file) for file in files]
@@ -2457,9 +2500,38 @@ def split_jcasc(target_dir, filename, configs):
         target = config['target']
         paths = config['paths']
 
-        # For each path to move...
+        # NOTE on paths:
+        # - the path may have an asterisk at the end and after the last slash
+        # - this will to affect all keys under that path
+        # - this can only happen in conjunction with the 'auto' target
+        # - if either of these conditions are not met, it will error out
+        new_paths = []
         for path in paths:
+            if path.endswith('/*'):
+                if target != 'auto':
+                    die(f'Path {path} must use target "auto"')
+                logging.debug(f'Moving all keys under {path} to {target}')
+                if path == '/*':
+                    path = ''
+                    data = source_data
+                else:
+                    path = path[:-2]
+                    data = get_nested(source_data, path)
+                if data is None:
+                    logging.info(f'No data found at {path}')
+                    continue
+                for key in data.keys():
+                    if path:
+                        logging.debug(f' - > {path}/{key}')
+                        new_paths.append(f'{path}/{key}')
+                    else:
+                        logging.debug(f' - > {key}')
+                        new_paths.append(f'{key}')
+            else:
+                new_paths.append(path)
 
+        # For each path to move...
+        for path in new_paths:
             # Check if the path exists in the source file
             if get_nested(source_data, path) is not None:
                 # Determine the target file name
@@ -2468,15 +2540,15 @@ def split_jcasc(target_dir, filename, configs):
                 else:
                     target_file = target
                 target_file = os.path.join(target_dir, 'jenkins.' + target_file)
-                logging.info(f'Moving {path} to {target_file}')
+                logging.debug(f'Moving {path} to {target_file}')
 
                 # Load the target file if it exists, or create a new one if it doesn't
                 if os.path.exists(target_file):
-                    logging.info(f'Loading existing target file {target_file}')
+                    logging.debug(f'Loading existing target file {target_file}')
                     with open(target_file, 'r') as file:
                         target_data = yaml.load(file)
                 else:
-                    logging.info(f'Creating new target file {target_file}')
+                    logging.debug(f'Creating new target file {target_file}')
                     target_data = {}
 
                 # Move the path from the source file to the target file
@@ -2484,18 +2556,28 @@ def split_jcasc(target_dir, filename, configs):
                 del_nested(source_data, path)
 
                 # Save the target file
-                logging.info(f'Saving target file {target_file}')
-                with open(target_file, 'w') as file:
-                    yaml.dump(target_data, file)
+                if target_data:
+                    logging.info(f'Saving target file {target_file}')
+                    with open(target_file, 'w') as file:
+                        yaml.dump(target_data, file)
+                else:
+                    logging.info(f'No data found at {path}. Skipping saving target file {target_file}')
+            else:
+                logging.debug(f'Path {path} not found in source file')
 
-    # Save the modified source file
-    with open(full_filename, 'w') as file:
-        yaml.dump(source_data, file)
-    # rename the source files base name to "'jenkins.' + filename" if not already done
-    if not filename.startswith('jenkins.'):
-        new_filename = os.path.join(target_dir, 'jenkins.' + filename)
-        logging.info(f'Renaming {full_filename} to {new_filename}')
-        os.rename(full_filename, new_filename)
+    # Save the modified source file if it has any data left
+    if source_data:
+        logging.info(f'Saving source file {full_filename}')
+        with open(full_filename, 'w') as file:
+            yaml.dump(source_data, file)
+        # rename the source files base name to "'jenkins.' + filename" if not already done
+        if not filename.startswith('jenkins.'):
+            new_filename = os.path.join(target_dir, 'jenkins.' + filename)
+            logging.info(f'Renaming {full_filename} to {new_filename}')
+            os.rename(full_filename, new_filename)
+    else:
+        logging.info(f'No data left in source file. Removing {full_filename}')
+        os.remove(full_filename)
 
 def split_items(target_dir, filename, configs):
     logging.debug(f'Loading YAML object from {filename}')
