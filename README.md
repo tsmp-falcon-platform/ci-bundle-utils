@@ -253,7 +253,7 @@ Usage: bundleutils diff-merged [OPTIONS]
 Options:
   -m, --config FILE        An optional custom merge config file if needed.
   -s, --sources DIRECTORY  The bundles to be diffed.
-  -a, --apiVersion TEXT    Optional apiVersion in case bundle does not contain
+  -a, --api-version TEXT   Optional apiVersion in case bundle does not contain
                            a bundle.yaml. Defaults to 2
   --help                   Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
