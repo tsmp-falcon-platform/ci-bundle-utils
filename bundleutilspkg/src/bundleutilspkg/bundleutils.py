@@ -79,6 +79,8 @@ BUNDLEUTILS_JENKINS_URL = 'BUNDLEUTILS_JENKINS_URL'
 BUNDLEUTILS_USERNAME = 'BUNDLEUTILS_USERNAME'
 BUNDLEUTILS_PASSWORD = 'BUNDLEUTILS_PASSWORD'
 BUNDLEUTILS_PATH = 'BUNDLEUTILS_PATH'
+BUNDLEUTILS_BUNDLE_NAME_FROM_DIR = 'BUNDLEUTILS_BUNDLE_NAME_FROM_DIR'
+BUNDLEUTILS_BUNDLE_NAME_FROM_PROFILES = 'BUNDLEUTILS_BUNDLE_NAME_FROM_PROFILES'
 BUNDLEUTILS_FETCH_TARGET_DIR = 'BUNDLEUTILS_FETCH_TARGET_DIR'
 BUNDLEUTILS_MERGE_CONFIG = 'BUNDLEUTILS_MERGE_CONFIG'
 BUNDLEUTILS_MERGE_BUNDLES = 'BUNDLEUTILS_MERGE_BUNDLES'
@@ -179,7 +181,7 @@ def ordered_yaml_dump(data):
         return obj
 
     ordered_data = recursive_sort(data)
-    return printYaml(ordered_data)
+    return printYaml(ordered_data, True)
 
 def generate_collection_uuid(target_dir, yaml_files, output_sorted=None):
     """Generate a stable UUID for a collection of YAML files."""
@@ -416,6 +418,7 @@ def _check_cwd_for_bundle_auto_vars(ctx, switch_dirs = True):
                 logging.info(f'Ignoring passed env, setting: {key}={value}')
                 os.environ[key] = str(value)
         # set the BUNDLEUTILS_FETCH_TARGET_DIR and BUNDLEUTILS_TRANSFORM_SOURCE_DIR to the default target/docs
+        _set_env_if_not_set('AUTOSET', BUNDLEUTILS_BUNDLE_NAME_FROM_DIR, bundle_name)
         _set_env_if_not_set('AUTOSET', BUNDLEUTILS_FETCH_TARGET_DIR, f'target/fetched/{bundle_name}')
         _set_env_if_not_set('AUTOSET', BUNDLEUTILS_TRANSFORM_SOURCE_DIR, os.environ.get(BUNDLEUTILS_FETCH_TARGET_DIR))
         _set_env_if_not_set('AUTOSET', BUNDLEUTILS_TRANSFORM_TARGET_DIR, bundle_target_dir)
@@ -2110,9 +2113,9 @@ def _convert_to_dict(obj):
         return [_convert_to_dict(v) for v in obj]
     return obj
 
-def printYaml(obj):
+def printYaml(obj, convert=False):
     # needed to remove comments and '!!omap' identifiers
-    obj2 = _convert_to_dict(obj)
+    obj2 = _convert_to_dict(obj) if convert else obj
     stream = io.StringIO()
     yaml.dump(obj2, stream)
     return stream.getvalue()
