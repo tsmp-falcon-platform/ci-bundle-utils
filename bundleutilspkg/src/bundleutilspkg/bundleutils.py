@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import tempfile
 import uuid
+from bundleutilspkg.utils import get_config_file
 import jsonpatch
 import jsonpointer
 import zipfile
@@ -2150,15 +2151,6 @@ def recursive_merge(obj1, obj2):
     else:
         logging.debug(f'Unkown type: {type(obj2)}')
     return obj1
-
-def get_config_file(filename):
-    """Load a YAML config file from bundleutilspkg.data.configs."""
-    if getattr(sys, 'frozen', False):  # PyInstaller build
-        base_path = Path(sys._MEIPASS) / "data/configs"
-    else:
-        base_path = importlib.resources.files("bundleutilspkg.data.configs")
-
-    return base_path / filename
 
 def source_target_prep(source_dir, target_dir, configs, suffix, filename):
     if not source_dir:

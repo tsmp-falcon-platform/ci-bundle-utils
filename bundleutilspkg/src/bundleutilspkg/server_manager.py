@@ -1,6 +1,7 @@
 import base64
 from pathlib import Path
 import shutil
+from bundleutilspkg.utils import get_config_file
 import requests
 import subprocess
 import time
@@ -256,7 +257,7 @@ class JenkinsServerManager:
             else:
                 # check if the validation-template directory exists in the defaults.configs package
                 logging.info('Using validation-template from the defaults.configs package')
-                validation_template = pkg_resources.files('defaults.configs') / 'validation-template'
+                validation_template = get_config_file('validation-template')
         logging.info(f"Using validation template '{validation_template}'")
         # recreate the  target_jenkins_home_casc_startup_bundle directory
         if os.path.exists(self.target_jenkins_home_casc_startup_bundle):
