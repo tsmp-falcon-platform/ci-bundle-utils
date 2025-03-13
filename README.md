@@ -352,7 +352,10 @@ Usage: bundleutils merge-bundles [OPTIONS]
   - write the result to the outdir or stdout if not provided
   - update the outdir/bundle.yaml with the new references
 
-  Optionally, it can:
+  Prefer versioned directories (env: BUNDLEUTILS_MERGE_PREFER_VERSION):
+  - listing "-b snippets/bootstrap" will look for "snippets/bootstrap-2.492.1.3" if the current version is 2.492.1.3
+
+  Optional features:
   - transform the merged bundle using the transformation configs
       (BUNDLEUTILS_TRANSFORM_CONFIGS and BUNDLEUTILS_TRANSFORM_SOURCE_DIR needed for this)
   - perform a diff check against the source bundle and the transformed bundle
