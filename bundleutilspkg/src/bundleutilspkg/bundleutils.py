@@ -699,7 +699,7 @@ def _merge_bundles(bundles, outdir, config, api_version = None):
             merge_configs = yaml2dict(config)
 
     # handle the BUNDLEUTILS_MERGE_PREFER_VERSION env var
-    prefer_version = is_truthy(os.environ.get(BUNDLEUTILS_MERGE_PREFER_VERSION))
+    prefer_version = is_truthy(os.environ.get(BUNDLEUTILS_MERGE_PREFER_VERSION, 'false'))
     if prefer_version:
         current_version = os.environ.get(BUNDLEUTILS_CI_VERSION, '')
         if not current_version:
