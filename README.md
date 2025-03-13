@@ -243,8 +243,8 @@ Usage: bundleutils diff [OPTIONS]
   Diff two YAML directories or files.
 
 Options:
-  -s, --sources DIRECTORY  The directories or files to be diffed.
-  --help                   Show this message and exit.
+  -s, --sources PATH  The directories or files to be diffed.
+  --help              Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils diff-merged [OPTIONS]
 
@@ -342,6 +342,7 @@ Usage: bundleutils merge-bundles [OPTIONS]
   The api_version is taken from either (in order):
   - the api_version parameter
   - the last bundle.yaml file in the list of bundles if available
+  - the api version of the bundle in BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK_SOURCE_DIR
   - the default api_version
 
   Given at least two bundles, it will:

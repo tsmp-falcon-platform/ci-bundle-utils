@@ -79,11 +79,12 @@ BUNDLEUTILS_JENKINS_URL = 'BUNDLEUTILS_JENKINS_URL'
 BUNDLEUTILS_USERNAME = 'BUNDLEUTILS_USERNAME'
 BUNDLEUTILS_PASSWORD = 'BUNDLEUTILS_PASSWORD'
 BUNDLEUTILS_PATH = 'BUNDLEUTILS_PATH'
-BUNDLEUTILS_BUNDLE_NAME_FROM_DIR = 'BUNDLEUTILS_BUNDLE_NAME_FROM_DIR'
+BUNDLEUTILS_BUNDLE_NAME = 'BUNDLEUTILS_BUNDLE_NAME'
 BUNDLEUTILS_BUNDLE_NAME_FROM_PROFILES = 'BUNDLEUTILS_BUNDLE_NAME_FROM_PROFILES'
 BUNDLEUTILS_FETCH_TARGET_DIR = 'BUNDLEUTILS_FETCH_TARGET_DIR'
 BUNDLEUTILS_MERGE_CONFIG = 'BUNDLEUTILS_MERGE_CONFIG'
 BUNDLEUTILS_MERGE_BUNDLES = 'BUNDLEUTILS_MERGE_BUNDLES'
+BUNDLEUTILS_MERGE_PREFER_VERSION = 'BUNDLEUTILS_MERGE_PREFER_VERSION'
 BUNDLEUTILS_MERGE_OUTDIR = 'BUNDLEUTILS_MERGE_OUTDIR'
 BUNDLEUTILS_MERGE_TRANSFORM_PERFORM = 'BUNDLEUTILS_MERGE_TRANSFORM_PERFORM'
 BUNDLEUTILS_MERGE_TRANSFORM_SOURCE_DIR = 'BUNDLEUTILS_MERGE_TRANSFORM_SOURCE_DIR'
@@ -418,7 +419,7 @@ def _check_cwd_for_bundle_auto_vars(ctx, switch_dirs = True):
                 logging.info(f'Ignoring passed env, setting: {key}={value}')
                 os.environ[key] = str(value)
         # set the BUNDLEUTILS_FETCH_TARGET_DIR and BUNDLEUTILS_TRANSFORM_SOURCE_DIR to the default target/docs
-        _set_env_if_not_set('AUTOSET', BUNDLEUTILS_BUNDLE_NAME_FROM_DIR, bundle_name)
+        _set_env_if_not_set('AUTOSET', BUNDLEUTILS_BUNDLE_NAME, bundle_name)
         _set_env_if_not_set('AUTOSET', BUNDLEUTILS_FETCH_TARGET_DIR, f'target/fetched/{bundle_name}')
         _set_env_if_not_set('AUTOSET', BUNDLEUTILS_TRANSFORM_SOURCE_DIR, os.environ.get(BUNDLEUTILS_FETCH_TARGET_DIR))
         _set_env_if_not_set('AUTOSET', BUNDLEUTILS_TRANSFORM_TARGET_DIR, bundle_target_dir)
@@ -432,6 +433,15 @@ def _check_cwd_for_bundle_auto_vars(ctx, switch_dirs = True):
         if bundle_audit_target_dir is not None:
             _set_env_if_not_set('AUTOSET', BUNDLEUTILS_AUDIT_SOURCE_DIR, os.environ.get(BUNDLEUTILS_FETCH_TARGET_DIR))
             _set_env_if_not_set('AUTOSET', BUNDLEUTILS_AUDIT_TARGET_DIR, bundle_audit_target_dir)
+        # loop through the env vars and replace any placeholders
+        placeholder_re = re.compile(r'\$\{([^\}]+)\}')
+        for key, value in os.environ.items():
+            if key.startswith('BUNDLEUTILS_'):
+                new_value = placeholder_re.sub(lambda m: os.environ.get(m.group(1), ''), value)
+                if new_value != value:
+                    logging.info(f'Replacing {key}={value} with {new_value}')
+                    os.environ[key] = new_value
+
 
 def is_truthy(value):
     return value.lower() in ['true', '1', 't', 'y', 'yes']
@@ -688,6 +698,26 @@ def _merge_bundles(bundles, outdir, config, api_version = None):
             logging.debug(f"Using config file: {config}")
             merge_configs = yaml2dict(config)
 
+    # handle the BUNDLEUTILS_MERGE_PREFER_VERSION env var
+    prefer_version = is_truthy(os.environ.get(BUNDLEUTILS_MERGE_PREFER_VERSION))
+    if prefer_version:
+        current_version = os.environ.get(BUNDLEUTILS_CI_VERSION, '')
+        if not current_version:
+            die(f"Cannot prefer version without a current version. Please set {BUNDLEUTILS_CI_VERSION}")
+        new_bundles = []
+        for bundle_dir in bundles:
+            # say the bundle_dir is snippets/mybundle and current_version is 1.1.2, check if snippets/mybundle-1.1.2 exists and use it if it does
+            versioned_bundle_dir = f"{bundle_dir}-{current_version}"
+            logging.info(f"Checking for versioned bundle directory: {versioned_bundle_dir}")
+            if os.path.exists(versioned_bundle_dir):
+                logging.info(f"Using versioned bundle directory: {versioned_bundle_dir}")
+                new_bundles.append(versioned_bundle_dir)
+            else:
+                if not os.path.exists(bundle_dir):
+                    die(f"Bundle directory '{bundle_dir}' does not exist")
+                new_bundles.append(bundle_dir)
+        bundles = new_bundles
+
     merger = YAMLMerger(merge_configs)  # Merge lists of dicts by 'name' field
     # ensure at least two files are provided
     if len(bundles) < 1:
@@ -707,6 +737,20 @@ def _merge_bundles(bundles, outdir, config, api_version = None):
                     api_version = last_bundle_yaml_dict['apiVersion']
                 else:
                     logging.warning(f"Bundle file '{last_bundle_yaml}' does not contain an apiVersion. Using default apiVersion: {default_bundle_api_version}")
+                    api_version = default_bundle_api_version
+            elif os.environ.get(BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK_SOURCE_DIR):
+                # get the apiVersion from the source directory
+                source_dir = os.environ.get(BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK_SOURCE_DIR)
+                source_bundle_yaml = os.path.join(source_dir, 'bundle.yaml')
+                if os.path.exists(source_bundle_yaml):
+                    source_bundle_yaml_dict = yaml2dict(source_bundle_yaml)
+                    if 'apiVersion' in source_bundle_yaml_dict:
+                        api_version = source_bundle_yaml_dict['apiVersion']
+                    else:
+                        logging.warning(f"Bundle file '{source_bundle_yaml}' does not contain an apiVersion. Using default apiVersion: {default_bundle_api_version}")
+                        api_version = default_bundle_api_version
+                else:
+                    logging.warning(f"Bundle file '{source_bundle_yaml}' does not exist. Using default apiVersion: {default_bundle_api_version}")
                     api_version = default_bundle_api_version
             else:
                 logging.debug(f"Bundle file '{last_bundle_yaml}' does not exist. Using default apiVersion: {api_version}")
@@ -732,7 +776,9 @@ def _merge_bundles(bundles, outdir, config, api_version = None):
             logging.info(f"Found files for section: {section}")
         # merge the files sequentially using the last result as the base
         output = merger.merge_yaml_files(section_files)
-
+        # special case for plugins, sort the plugins.yaml plugins key by id
+        if section == 'plugins':
+            output['plugins'] = sorted(output['plugins'], key=lambda x: x['id'])
         if not outdir:
             print(f"# {section}.yaml")
             yaml.dump(output, sys.stdout)
@@ -761,6 +807,7 @@ def merge_bundles(ctx, strict, config, bundles, outdir, transform, diffcheck, ap
     The api_version is taken from either (in order):
     - the api_version parameter
     - the last bundle.yaml file in the list of bundles if available
+    - the api version of the bundle in BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK_SOURCE_DIR
     - the default api_version
 
     \b
@@ -937,7 +984,7 @@ def ci_stop(ctx, ci_version, ci_type, ci_server_home):
     jenkins_manager.stop_server()
 
 @bundleutils.command()
-@click.option('-s', '--sources', multiple=True, type=click.Path(file_okay=False, dir_okay=True, exists=True), help=f'The directories or files to be diffed.')
+@click.option('-s', '--sources', multiple=True, type=click.Path(file_okay=True, dir_okay=True, exists=True), help=f'The directories or files to be diffed.')
 @click.pass_context
 def diff(ctx, sources):
     """Diff two YAML directories or files."""
@@ -1409,16 +1456,16 @@ def hline(text):
     logging.info(text)
     logging.info("-" * 80)
 
+# graph types
+graph_type_all = 'all'
+graph_type_minus_bootstrap = 'minus-bootstrap'
+graph_type_minus_deleted_disabled = 'minus-deleted-disabled'
+
 @click.pass_context
-def _analyze_server_plugins(ctx, plugins_from_json):
-    plugins_json_list_strategy = ctx.obj.get('plugins_json_list_strategy')
-    cap = ctx.obj.get('cap')
-    logging.debug("Plugin Analysis - Analyzing server plugins...")
+def _analyze_server_plugins(ctx, plugins_from_json, plugins_json_list_strategy, cap):
+    logging.info("Plugin Analysis - Analyzing server plugins...")
     # Setup the dependency graphs
     graphs = {}
-    graph_type_all = 'all'
-    graph_type_minus_bootstrap = 'minus-bootstrap'
-    graph_type_minus_deleted_disabled = 'minus-deleted-disabled'
     graph_types = [graph_type_all, graph_type_minus_bootstrap, graph_type_minus_deleted_disabled]
     for graph_type in graph_types:
         graphs[graph_type] = {}
@@ -1490,23 +1537,6 @@ def _analyze_server_plugins(ctx, plugins_from_json):
     # Function to render the dependency list with a given separator
     def render_dependency_list(dependency_list, separator=" -> "):
         return [separator.join(path) for path in dependency_list]
-
-    # Function to find all plugins with `pluginX` in their dependency tree
-    def plugins_with_plugin_in_tree(graph_type, target_plugin):
-        reverse_dependency_graph = graphs[graph_type]["reverse_dependencies"]
-        result = set()
-        to_visit = {target_plugin}
-
-        # Traverse the reverse dependency graph
-        while to_visit:
-            current = to_visit.pop()
-            if current in result:
-                continue
-            result.add(current)
-            to_visit.update(reverse_dependency_graph[current])  # Add plugins that depend on `current`
-
-        result.discard(target_plugin)  # Exclude the target plugin itself from the result
-        return result
 
     dgall = graphs[graph_type_all]["dependency_graph"]
     for graph_type in graph_types:
@@ -1585,7 +1615,24 @@ def _analyze_server_plugins(ctx, plugins_from_json):
         logging.debug("Plugin Analysis - Sanity check passed.")
 
     expected_plugins = sorted(expected_plugins)
-    return expected_plugins, all_bootstrap_plugins, all_deleted_or_inactive_plugins
+    return expected_plugins, all_bootstrap_plugins, all_deleted_or_inactive_plugins, graphs
+
+# Function to find all plugins with `pluginX` in their dependency tree
+def plugins_with_plugin_in_tree(graphs, graph_type, target_plugin):
+    reverse_dependency_graph = graphs[graph_type]["reverse_dependencies"]
+    result = set()
+    to_visit = {target_plugin}
+
+    # Traverse the reverse dependency graph
+    while to_visit:
+        current = to_visit.pop()
+        if current in result:
+            continue
+        result.add(current)
+        to_visit.update(reverse_dependency_graph[current])  # Add plugins that depend on `current`
+
+    result.discard(target_plugin)  # Exclude the target plugin itself from the result
+    return result
 
 def find_plugin_by_id(plugins, plugin_id):
     logging.debug(f"Finding plugin by id: {plugin_id}")
@@ -1597,10 +1644,10 @@ def find_plugin_by_id(plugins, plugin_id):
 @bundleutils.command()
 @fetch_options
 @click.pass_context
-def update_plugins(ctx, url, path, username, password, target_dir, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, offline, cap):
+def update_plugins(ctx, url, path, username, password, target_dir, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, offline, cap):
     """Update plugins in the target directory."""
     set_logging(ctx)
-    fetch_options_null_check(url, path, username, password, target_dir, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, offline, cap)
+    fetch_options_null_check(url, path, username, password, target_dir, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, offline, cap)
     _update_plugins()
 
 @click.pass_context
@@ -1652,26 +1699,25 @@ def _update_plugins(ctx):
     logging.info(f'Plugins JSON merge strategy: {plugins_json_merge_strategy.name} from {get_name_from_enum(PluginJsonMergeStrategy)}')
 
     # load the plugin JSON from the URL or path
-    data = None
+    plugin_json_str = None
     if plugin_json_path:
         logging.debug(f'Loading plugin JSON from path: {plugin_json_path}')
         with open(plugin_json_path, 'r') as f:
-            data = json.load(f)
+            plugin_json_str = f.read()
     elif url:
         plugin_json_url = url + plugin_json_url_path
         logging.debug(f'Loading plugin JSON from URL: {plugin_json_url}')
-        response_text = call_jenkins_api(plugin_json_url, username, password)
+        plugin_json_str = call_jenkins_api(plugin_json_url, username, password)
         if offline:
             with open(export_json, 'w') as f:
                 logging.info(f'[offline] Writing plugins.json to {export_json}')
-                f.write(response_text)
-        # parse text as JSON
-        data = json.loads(response_text)
+                f.write(plugin_json_str)
     else:
         logging.info('No plugin JSON URL or path provided. Cannot determine if disabled/deleted plugins present in list.')
         return
+    data = json.loads(plugin_json_str)
     plugins_from_json = data.get("plugins", [])
-    expected_plugins, all_bootstrap_plugins, all_deleted_or_inactive_plugins = _analyze_server_plugins(plugins_from_json)
+    expected_plugins, all_bootstrap_plugins, all_deleted_or_inactive_plugins, graphs = _analyze_server_plugins(plugins_from_json, plugins_json_list_strategy, cap)
 
     # checking the plugin-catalog.yaml file
     plugin_catalog_plugin_ids_previous = []
@@ -1726,7 +1772,7 @@ def _update_plugins(ctx):
                     logging.info(f" -> keeping bootstrap plugin {plugin['id']} according to merge strategy: {plugins_json_merge_strategy.name}")
                     updated_plugins.append(plugin)
                 else:
-                    logging.info(f" -> removing unexpected bootstrap plugin {plugin['id']}")
+                    logging.info(f" -> removing bootstrap plugin {plugin['id']}")
                 continue
             if not plugin['id'] in expected_plugins:
                 if plugins_json_merge_strategy.skip_pinned:
@@ -1738,11 +1784,17 @@ def _update_plugins(ctx):
                         logging.info(f" -> skipping plugin {plugin['id']} with pinned version according to merge strategy: {plugins_json_merge_strategy.name}")
                         updated_plugins.append(plugin)
                     else:
-                        logging.info(f" -> removing unexpected non-pinned plugin {plugin['id']} according to merge strategy: {plugins_json_merge_strategy.name}")
+                        # find the plugins in the reverse_dependencies that are also in the expected_plugins
+                        associated_parents = plugins_with_plugin_in_tree(graphs, graph_type_minus_bootstrap, plugin['id'])
+                        expected_parents = ', '.join(associated_parents.intersection(expected_plugins))
+                        logging.info(f" -> removing non-pinned plugin {plugin['id']} (parents: {expected_parents}) according to merge strategy: {plugins_json_merge_strategy.name}")
                 elif plugins_json_merge_strategy.should_delete:
-                    logging.info(f" -> removing unexpected plugin {plugin['id']} according to merge strategy: {plugins_json_merge_strategy.name}")
+                    # find the plugins in the reverse_dependencies that are also in the expected_plugins
+                    associated_parents = plugins_with_plugin_in_tree(graphs, graph_type_minus_bootstrap, plugin['id'])
+                    expected_parents = ', '.join(associated_parents.intersection(expected_plugins))
+                    logging.info(f" -> removing plugin {plugin['id']} (parents: {expected_parents}) according to merge strategy: {plugins_json_merge_strategy.name}")
                 else:
-                    logging.warning(f" -> unexpected plugin {plugin['id']} found but not removed according to merge strategy: {plugins_json_merge_strategy.name}")
+                    logging.warning(f" -> plugin {plugin['id']} found but not removed according to merge strategy: {plugins_json_merge_strategy.name}")
                     updated_plugins.append(plugin)
             else:
                 updated_plugins.append(plugin)
