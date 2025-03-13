@@ -1,4 +1,5 @@
 plugins:
+- id: child1
 - id: cloudbees-casc-client
   version: 1.0.0-child1
 - id: cloudbees-casc-items-controller
@@ -15,10 +16,9 @@ plugins:
 - id: managed-master-hibernation
 - id: matrix-project
 - id: operations-center-cloud
-- id: workflow-aggregator
-- id: workflow-cps-checkpoint
 - id: operations-center-notification
 - id: pipeline-event-step
 - id: pipeline-utility-steps
 - id: rebuild
-- id: child1
+- id: workflow-aggregator
+- id: workflow-cps-checkpoint

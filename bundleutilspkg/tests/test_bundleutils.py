@@ -1,3 +1,4 @@
+import traceback
 import pytest
 import os
 import ruamel.yaml
@@ -11,13 +12,19 @@ yaml = ruamel.yaml.YAML(typ="rt")
 def runner():
     return CliRunner()
 
+def _traceback(result):
+    if result.exception:
+        traceback.print_exception(*result.exc_info)
+
 def test_usage(runner):
     result = runner.invoke(bundleutils, [])
     assert result.exit_code == 0
+    _traceback(result)
     assert "Usage: bundleutils [OPTIONS]" in result.output
 
 def test_completion_missing_argument(runner):
     result = runner.invoke(bundleutils, ["completion"])
+    _traceback(result)
     assert result.exit_code != 0  # Click should return an error
     assert "Missing option '-s'" in result.output
 
@@ -28,6 +35,7 @@ def _test_merge_bundles(testdir, test_name, runner, command_args, expected_dir):
     shutil.rmtree(outdir, ignore_errors=True)
     os.makedirs(outdir, exist_ok=True)
     result = runner.invoke(bundleutils, command_args)
+    _traceback(result)
     assert result.exit_code == 0
     assert os.path.exists(os.path.join(outdir, 'bundle.yaml'))
     # compare the yaml files in the output directory with the equivalent yaml files in the expected directory
