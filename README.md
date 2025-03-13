@@ -243,8 +243,8 @@ Usage: bundleutils diff [OPTIONS]
   Diff two YAML directories or files.
 
 Options:
-  -s, --sources DIRECTORY  The directories or files to be diffed.
-  --help                   Show this message and exit.
+  -s, --sources PATH  The directories or files to be diffed.
+  --help              Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils diff-merged [OPTIONS]
 
@@ -342,6 +342,7 @@ Usage: bundleutils merge-bundles [OPTIONS]
   The api_version is taken from either (in order):
   - the api_version parameter
   - the last bundle.yaml file in the list of bundles if available
+  - the api version of the bundle in BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK_SOURCE_DIR
   - the default api_version
 
   Given at least two bundles, it will:
@@ -351,7 +352,10 @@ Usage: bundleutils merge-bundles [OPTIONS]
   - write the result to the outdir or stdout if not provided
   - update the outdir/bundle.yaml with the new references
 
-  Optionally, it can:
+  Prefer versioned directories (env: BUNDLEUTILS_MERGE_PREFER_VERSION):
+  - listing "-b snippets/bootstrap" will look for "snippets/bootstrap-2.492.1.3" if the current version is 2.492.1.3
+
+  Optional features:
   - transform the merged bundle using the transformation configs
       (BUNDLEUTILS_TRANSFORM_CONFIGS and BUNDLEUTILS_TRANSFORM_SOURCE_DIR needed for this)
   - perform a diff check against the source bundle and the transformed bundle
