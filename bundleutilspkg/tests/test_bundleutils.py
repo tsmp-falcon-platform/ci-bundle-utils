@@ -31,6 +31,8 @@ def test_completion_missing_argument(runner):
 def _test_merge_bundles(testdir, test_name, runner, command_args, expected_dir):
     outdir = os.path.join(testdir, 'resources', 'target', test_name)
     assert outdir.endswith(f'tests/resources/target/{test_name}')
+    # print out command and args for debugging
+    print(f"Running command: bundleutils {' '.join(command_args)}")
     # delete the output directory recursively if it exists
     shutil.rmtree(outdir, ignore_errors=True)
     os.makedirs(outdir, exist_ok=True)
@@ -41,14 +43,15 @@ def _test_merge_bundles(testdir, test_name, runner, command_args, expected_dir):
     # compare the yaml files in the output directory with the equivalent yaml files in the expected directory
     expected_dir = os.path.join(os.path.dirname(__file__), expected_dir)
     for file in os.listdir(outdir):
-        # ignore the bundle.yaml file
-        if file == 'bundle.yaml':
-            continue
         with open(os.path.join(outdir, file), 'r') as f:
             outdata = yaml.load(f)
         with open(os.path.join(expected_dir, file), 'r') as f:
             expected_data = yaml.load(f)
-        assert outdata == expected_data
+        if file == 'bundle.yaml':
+            assert 'parent' not in outdata.keys()
+            assert outdata['version'] == expected_data['version']
+        else:
+            assert outdata == expected_data
 
 
 def test_merge_bundles_base_only(request, runner):
@@ -61,7 +64,7 @@ def test_merge_bundles_base_only(request, runner):
                     "-o", outdir]
     _test_merge_bundles(testdir, test_name, runner, command_args, expected_dir)
 
-def test_merge_bundles_base_child(request, runner):
+def test_merge_bundles_base_child1(request, runner):
     testdir = os.path.dirname(__file__)
     test_name = request.node.name
     outdir = os.path.join(testdir, 'resources', 'target', test_name)
@@ -72,7 +75,7 @@ def test_merge_bundles_base_child(request, runner):
                     "-o", outdir]
     _test_merge_bundles(testdir, test_name, runner, command_args, expected_dir)
 
-def test_merge_bundles_base_child_grandchild(request, runner):
+def test_merge_bundles_base_child1_grandchild1(request, runner):
     testdir = os.path.dirname(__file__)
     test_name = request.node.name
     outdir = os.path.join(testdir, 'resources', 'target', test_name)
@@ -84,3 +87,35 @@ def test_merge_bundles_base_child_grandchild(request, runner):
                     "-o", outdir]
     _test_merge_bundles(testdir, test_name, runner, command_args, expected_dir)
 
+def test_merge_bundles_use_parent_base_only(request, runner):
+    testdir = os.path.dirname(__file__)
+    test_name = request.node.name
+    outdir = os.path.join(testdir, 'resources', 'target', test_name)
+    expected_dir = 'resources/merge-bundles-use-parent/base-expected'
+    command_args = ["merge-bundles",
+                    "-b", f"{testdir}/resources/merge-bundles-use-parent/base",
+                    "-p",
+                    "-o", outdir]
+    _test_merge_bundles(testdir, test_name, runner, command_args, expected_dir)
+
+def test_merge_bundles_use_parent_base_child1(request, runner):
+    testdir = os.path.dirname(__file__)
+    test_name = request.node.name
+    outdir = os.path.join(testdir, 'resources', 'target', test_name)
+    expected_dir = 'resources/merge-bundles-use-parent/base-child1-expected'
+    command_args = ["merge-bundles",
+                    "-b", f"{testdir}/resources/merge-bundles-use-parent/child1",
+                    "-p",
+                    "-o", outdir]
+    _test_merge_bundles(testdir, test_name, runner, command_args, expected_dir)
+
+def test_merge_bundles_use_parent_base_child1_grandchild1(request, runner):
+    testdir = os.path.dirname(__file__)
+    test_name = request.node.name
+    outdir = os.path.join(testdir, 'resources', 'target', test_name)
+    expected_dir = 'resources/merge-bundles-use-parent/base-child1-grandchild1-expected'
+    command_args = ["merge-bundles",
+                    "-b", f"{testdir}/resources/merge-bundles-use-parent/grandchild1",
+                    "-p",
+                    "-o", outdir]
+    _test_merge_bundles(testdir, test_name, runner, command_args, expected_dir)

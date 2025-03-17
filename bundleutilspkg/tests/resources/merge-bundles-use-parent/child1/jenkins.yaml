@@ -1,0 +1,122 @@
+jenkins:
+  crumbIssuer:
+    standard:
+      excludeClientIPFromCrumb: false
+  disableRememberMe: false
+  disabledAdministrativeMonitors:
+  - hudson.util.DoubleLaunchChecker
+  markupFormatter: plainText
+  mode: NORMAL
+  myViewsTabBar: standard
+  noUsageStatistics: true
+  nodeMonitors:
+  - architecture
+  - clock
+  - diskSpace:
+      freeSpaceThreshold: 1GiB
+      freeSpaceWarningThreshold: 2GiB
+  - swapSpace
+  - tmpSpace:
+      freeSpaceThreshold: 1GiB
+      freeSpaceWarningThreshold: 2GiB
+  - responseTime
+  numExecutors: 0
+  projectNamingStrategy: standard
+  quietPeriod: 5
+  scmCheckoutRetryCount: 0
+  viewsTabBar: standard
+beekeeper:
+  enabled: true
+  securityWarnings:
+    enabledForCore: true
+    enabledForPlugins: true
+  upgrades:
+    autoDowngradePlugins: false
+    autoUpgradePlugins: true
+notificationConfiguration:
+  enabled: true
+  router: operationsCenter
+kube:
+  podTemplatesConfiguration:
+    templates:
+    - containers:
+      - alwaysPullImage: true
+        args: '9999999'
+        command: sleep
+        image: catthehacker/ubuntu:act-latest
+        livenessProbe:
+          failureThreshold: 0
+          initialDelaySeconds: 0
+          periodSeconds: 0
+          successThreshold: 0
+          timeoutSeconds: 0
+        name: ubuntu
+        workingDir: /home/jenkins/agent
+      id: 7fd5f534-28d7-406e-a765-397a525c5eb9
+      label: my-agent
+      name: my-agent
+      showRawYaml: false
+      yamlMergeStrategy: override
+appearance:
+  prism:
+    theme: PRISM
+unclassified:
+  buildDiscarders:
+    configuredBuildDiscarders:
+    - jobBuildDiscarder
+  cloudBeesSCMReporting:
+    enabled: true
+  cloudbeesPipelineExplorer:
+    autoPollingEnabled: true
+    autoPollingIntervalSeconds: 10
+    enabled: true
+    searchMaxIndexSize: 1000
+  experimentalPlugins:
+    enabled: false
+  fingerprints:
+    fingerprintCleanupDisabled: false
+    storage: file
+  gitHubConfiguration:
+    apiRateLimitChecker: ThrottleForNormalize
+  gitHubPluginConfig:
+    hookUrl: https://child1.eks.sboardwell.aws.ps.beescloud.com/github-webhook/
+  hibernationConfiguration:
+    activities:
+    - build
+    - web
+    enabled: true
+    gracePeriod: 7200
+  junitTestResultStorage:
+    storage: file
+  location:
+    adminAddress: child1@acme-org.org
+    url: https://child1.eks.sboardwell.aws.ps.beescloud.com/
+  mailer:
+    charset: UTF-8
+    useSsl: false
+    useTls: false
+  pollSCM:
+    pollingThreadCount: 10
+  scmGit:
+    addGitTagAction: false
+    allowSecondFetch: false
+    createAccountBasedOnEmail: false
+    disableGitToolChooser: false
+    hideCredentials: false
+    showEntireCommitSummaryInChanges: false
+    useExistingAccountWithSameEmail: false
+  usageStatisticsCloudBees:
+    disabledJenkinsUsageStatistics: true
+    usageStatisticsCollected: true
+  validationVisualization:
+    quiet: false
+tool:
+  cloudbeesPluginUsageAnalyzer:
+    enabled: true
+  git:
+    installations:
+    - home: git
+      name: Default
+  mavenGlobalConfig:
+    globalSettingsProvider: standard
+    settingsProvider: standard
