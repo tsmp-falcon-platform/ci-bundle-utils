@@ -73,29 +73,31 @@ Options:
   --help                Show this message and exit.
 
 Commands:
-  audit                  Transform using the normalize.yaml but...
-  bootstrap              Bootstrap a bundle.
-  ci-sanitize-plugins    Sanitizes plugins (needs ci-start).
-  ci-setup               Download CloudBees WAR file, and setup the...
-  ci-start               Start CloudBees Server
-  ci-stop                Stop CloudBees Server
-  ci-validate            Validate bundle against controller started with...
-  completion             Print the shell completion script
-  config                 List evaluated config based on cwd and env file.
-  diff                   Diff two YAML directories or files.
-  diff-merged            Diff two bundle directories by temporarily...
-  extract-name-from-url  Smart extraction of the controller name from the...
-  fetch                  Fetch YAML documents from a URL or path.
-  find-bundle-by-url     Find a bundle by Jenkins URL and CI Version.
-  help-pages             Show all help pages by running 'bundleutils...
-  merge-bundles          Used for merging bundles.
-  merge-yamls            Used for merging YAML files of the same type...
-  normalize              Transform using the normalize.yaml for better...
-  transform              Transform using a custom transformation config.
-  update-bundle          Update the bundle.yaml file in the target...
-  update-plugins         Update plugins in the target directory.
-  validate               Validate bundle in source dir against URL.
-  version                Show the app version.
+  audit                           Transform using the normalize.yaml but...
+  bootstrap                       Bootstrap a bundle.
+  ci-sanitize-plugins             Sanitizes plugins (needs ci-start).
+  ci-setup                        Download CloudBees WAR file, and setup...
+  ci-start                        Start CloudBees Server
+  ci-stop                         Stop CloudBees Server
+  ci-validate                     Validate bundle against controller...
+  completion                      Print the shell completion script
+  config                          List evaluated config based on cwd and...
+  diff                            Diff two YAML directories or files.
+  diff-merged                     Diff two bundle directories by...
+  extract-name-from-url           Smart extraction of the controller...
+  fetch                           Fetch YAML documents from a URL or path.
+  find-bundle-by-url              Find a bundle by Jenkins URL and CI...
+  help-pages                      Show all help pages by running...
+  merge-bundles                   Used for merging bundles.
+  merge-yamls                     Used for merging YAML files of the...
+  normalize                       Transform using the normalize.yaml for...
+  transform                       Transform using a custom...
+  update-bundle                   Update the bundle.yaml file in the...
+  update-plugins                  Update plugins in the target directory.
+  update-plugins-from-test-server
+                                  Update plugins in the target directory...
+  validate                        Validate bundle in source dir against...
+  version                         Show the app version.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils audit [OPTIONS]
 
@@ -280,14 +282,6 @@ Usage: bundleutils fetch [OPTIONS]
   Fetch YAML documents from a URL or path.
 
 Options:
-  -t, --target-dir DIRECTORY      The target directory for the YAML documents
-                                  (BUNDLEUTILS_FETCH_TARGET_DIR).
-  -p, --password TEXT             Password for basic authentication
-                                  (BUNDLEUTILS_PASSWORD).
-  -u, --username TEXT             Username for basic authentication
-                                  (BUNDLEUTILS_USERNAME).
-  -U, --url TEXT                  The URL to fetch YAML from
-                                  (BUNDLEUTILS_JENKINS_URL).
   -C, --catalog-warnings-strategy TEXT
                                   Strategy for handling beekeeper warnings in
                                   the plugin catalog
@@ -300,11 +294,19 @@ Options:
                                   Strategy for creating list from the plugins
                                   json
                                   (BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY).
-  -O, --offline                   Save the export and plugin data to <target-
-                                  dir>-offline (BUNDLEUTILS_FETCH_OFFLINE).
   -c, --cap                       Use the envelope.json from the war file to
                                   remove CAP plugin dependencies
                                   (BUNDLEUTILS_FETCH_USE_CAP_ENVELOPE).
+  -t, --target-dir DIRECTORY      The target directory for the YAML documents
+                                  (BUNDLEUTILS_FETCH_TARGET_DIR).
+  -p, --password TEXT             Password for basic authentication
+                                  (BUNDLEUTILS_PASSWORD).
+  -u, --username TEXT             Username for basic authentication
+                                  (BUNDLEUTILS_USERNAME).
+  -U, --url TEXT                  The URL to fetch YAML from
+                                  (BUNDLEUTILS_JENKINS_URL).
+  -O, --offline                   Save the export and plugin data to <target-
+                                  dir>-offline (BUNDLEUTILS_FETCH_OFFLINE).
   -P, --path FILE                 The path to fetch YAML from
                                   (BUNDLEUTILS_PATH).
   -M, --plugin-json-path TEXT     The path to fetch JSON file from (found at /
@@ -366,6 +368,8 @@ Options:
                            otherwise.
   -m, --config FILE        An optional custom merge config file if needed.
   -b, --bundles DIRECTORY  The bundles to be rendered.
+  -p, --use-parent         Optionally use the (legacy) parent key to work out
+                           which bundles to merge.
   -o, --outdir DIRECTORY   The target for the merged bundle.
   -a, --api-version TEXT   Optional apiVersion. Defaults to 2
   -t, --transform          Optionally transform using the transformation
@@ -442,14 +446,6 @@ Usage: bundleutils update-plugins [OPTIONS]
   Update plugins in the target directory.
 
 Options:
-  -t, --target-dir DIRECTORY      The target directory for the YAML documents
-                                  (BUNDLEUTILS_FETCH_TARGET_DIR).
-  -p, --password TEXT             Password for basic authentication
-                                  (BUNDLEUTILS_PASSWORD).
-  -u, --username TEXT             Username for basic authentication
-                                  (BUNDLEUTILS_USERNAME).
-  -U, --url TEXT                  The URL to fetch YAML from
-                                  (BUNDLEUTILS_JENKINS_URL).
   -C, --catalog-warnings-strategy TEXT
                                   Strategy for handling beekeeper warnings in
                                   the plugin catalog
@@ -462,16 +458,53 @@ Options:
                                   Strategy for creating list from the plugins
                                   json
                                   (BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY).
-  -O, --offline                   Save the export and plugin data to <target-
-                                  dir>-offline (BUNDLEUTILS_FETCH_OFFLINE).
   -c, --cap                       Use the envelope.json from the war file to
                                   remove CAP plugin dependencies
                                   (BUNDLEUTILS_FETCH_USE_CAP_ENVELOPE).
+  -t, --target-dir DIRECTORY      The target directory for the YAML documents
+                                  (BUNDLEUTILS_FETCH_TARGET_DIR).
+  -p, --password TEXT             Password for basic authentication
+                                  (BUNDLEUTILS_PASSWORD).
+  -u, --username TEXT             Username for basic authentication
+                                  (BUNDLEUTILS_USERNAME).
+  -U, --url TEXT                  The URL to fetch YAML from
+                                  (BUNDLEUTILS_JENKINS_URL).
+  -O, --offline                   Save the export and plugin data to <target-
+                                  dir>-offline (BUNDLEUTILS_FETCH_OFFLINE).
   -P, --path FILE                 The path to fetch YAML from
                                   (BUNDLEUTILS_PATH).
   -M, --plugin-json-path TEXT     The path to fetch JSON file from (found at /
                                   manage/pluginManager/api/json?pretty&depth=1
                                   &tree=plugins[*[*]]).
+  --help                          Show this message and exit.
+------------------------------------------------------------------------------------------------------------------------
+Usage: bundleutils update-plugins-from-test-server [OPTIONS]
+
+  Update plugins in the target directory using the plugins from the test
+  server started for validation.
+
+Options:
+  -C, --catalog-warnings-strategy TEXT
+                                  Strategy for handling beekeeper warnings in
+                                  the plugin catalog
+                                  (BUNDLEUTILS_CATALOG_WARNINGS_STRATEGY).
+  -J, --plugins-json-merge-strategy TEXT
+                                  Strategy for merging plugins from list into
+                                  the bundle
+                                  (BUNDLEUTILS_PLUGINS_JSON_MERGE_STRATEGY).
+  -j, --plugins-json-list-strategy TEXT
+                                  Strategy for creating list from the plugins
+                                  json
+                                  (BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY).
+  -c, --cap                       Use the envelope.json from the war file to
+                                  remove CAP plugin dependencies
+                                  (BUNDLEUTILS_FETCH_USE_CAP_ENVELOPE).
+  -H, --ci-server-home TEXT       Defaults to
+                                  /tmp/ci_server_home/<ci_type>/<ci_version>.
+  -t, --ci-type TEXT              The type of the CloudBees server.
+  -v, --ci-version TEXT           The version of the CloudBees WAR file.
+  -t, --target-dir DIRECTORY      The target directory in which to update the
+                                  plugins.yaml.
   --help                          Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils validate [OPTIONS]
@@ -547,6 +580,8 @@ Targets:
   install                Install the bundleutils package
   install-dev            Install the bundleutils package with dev dependencies
   test                   Run the pytest suite
+  test                   Run the full pytest suite
+  test/%                 Run the pytest suite tests containing 'test/<string>'
   pyinstaller            Build the bundleutils package
   compose/start-dev      Start the bundleutils container
   compose/start          Start the bundleutils container

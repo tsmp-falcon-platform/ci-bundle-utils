@@ -84,6 +84,7 @@ BUNDLEUTILS_BUNDLE_NAME_FROM_PROFILES = 'BUNDLEUTILS_BUNDLE_NAME_FROM_PROFILES'
 BUNDLEUTILS_FETCH_TARGET_DIR = 'BUNDLEUTILS_FETCH_TARGET_DIR'
 BUNDLEUTILS_MERGE_CONFIG = 'BUNDLEUTILS_MERGE_CONFIG'
 BUNDLEUTILS_MERGE_BUNDLES = 'BUNDLEUTILS_MERGE_BUNDLES'
+BUNDLEUTILS_MERGE_USE_PARENT = 'BUNDLEUTILS_MERGE_USE_PARENT'
 BUNDLEUTILS_MERGE_PREFER_VERSION = 'BUNDLEUTILS_MERGE_PREFER_VERSION'
 BUNDLEUTILS_MERGE_OUTDIR = 'BUNDLEUTILS_MERGE_OUTDIR'
 BUNDLEUTILS_MERGE_TRANSFORM_PERFORM = 'BUNDLEUTILS_MERGE_TRANSFORM_PERFORM'
@@ -254,15 +255,19 @@ def server_options(func):
 def fetch_options(func):
     func = click.option('-M', '--plugin-json-path', help=f'The path to fetch JSON file from (found at {plugin_json_url_path}).')(func)
     func = click.option('-P', '--path', 'path', type=click.Path(file_okay=True, dir_okay=False), help=f'The path to fetch YAML from ({BUNDLEUTILS_PATH}).')(func)
-    func = click.option('-c', '--cap', default=False, is_flag=True, help=f'Use the envelope.json from the war file to remove CAP plugin dependencies ({BUNDLEUTILS_FETCH_USE_CAP_ENVELOPE}).')(func)
     func = click.option('-O', '--offline', default=False, is_flag=True, help=f'Save the export and plugin data to <target-dir>-offline ({BUNDLEUTILS_FETCH_OFFLINE}).')(func)
-    func = click.option('-j', '--plugins-json-list-strategy', help=f'Strategy for creating list from the plugins json ({BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY}).')(func)
-    func = click.option('-J', '--plugins-json-merge-strategy', help=f'Strategy for merging plugins from list into the bundle ({BUNDLEUTILS_PLUGINS_JSON_MERGE_STRATEGY}).')(func)
-    func = click.option('-C', '--catalog-warnings-strategy', help=f'Strategy for handling beekeeper warnings in the plugin catalog ({BUNDLEUTILS_CATALOG_WARNINGS_STRATEGY}).')(func)
     func = click.option('-U', '--url', 'url', help=f'The URL to fetch YAML from ({BUNDLEUTILS_JENKINS_URL}).')(func)
     func = click.option('-u', '--username', help=f'Username for basic authentication ({BUNDLEUTILS_USERNAME}).')(func)
     func = click.option('-p', '--password', help=f'Password for basic authentication ({BUNDLEUTILS_PASSWORD}).')(func)
     func = click.option('-t', '--target-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The target directory for the YAML documents ({BUNDLEUTILS_FETCH_TARGET_DIR}).')(func)
+    return func
+
+
+def update_plugins_options(func):
+    func = click.option('-c', '--cap', default=False, is_flag=True, help=f'Use the envelope.json from the war file to remove CAP plugin dependencies ({BUNDLEUTILS_FETCH_USE_CAP_ENVELOPE}).')(func)
+    func = click.option('-j', '--plugins-json-list-strategy', help=f'Strategy for creating list from the plugins json ({BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY}).')(func)
+    func = click.option('-J', '--plugins-json-merge-strategy', help=f'Strategy for merging plugins from list into the bundle ({BUNDLEUTILS_PLUGINS_JSON_MERGE_STRATEGY}).')(func)
+    func = click.option('-C', '--catalog-warnings-strategy', help=f'Strategy for handling beekeeper warnings in the plugin catalog ({BUNDLEUTILS_CATALOG_WARNINGS_STRATEGY}).')(func)
     return func
 
 
@@ -689,7 +694,25 @@ def merge_yamls(ctx, config, files, outfile = None):
         with open(outfile, "w") as f:
             yaml.dump(output, f)
 
-def _merge_bundles(bundles, outdir, config, api_version = None):
+def _collect_parents(current_bundle, bundles):
+    # get the optional parent key from the bundle.yaml
+    bundle_yaml = os.path.join(current_bundle, 'bundle.yaml')
+    if not os.path.exists(bundle_yaml):
+        die(f"Bundle file '{bundle_yaml}' does not exist")
+    with open(bundle_yaml, 'r') as file:
+        bundle_yaml = yaml.load(file)
+        if 'parent' in bundle_yaml:
+            parent = bundle_yaml['parent']
+            if parent in bundles:
+                die(f"Bundle '{parent}' cannot be a parent of itself")
+            parent_dir = os.path.join(os.path.dirname(current_bundle), parent)
+            if not os.path.exists(parent_dir):
+                die(f"Parent bundle '{parent}' does not exist")
+            bundles.insert(0, parent_dir)
+            return _collect_parents(parent_dir, bundles)
+    return bundles
+
+def _merge_bundles(bundles, use_parent, outdir, config, api_version = None):
     merge_configs = None
     if config:
         if not os.path.exists(config):
@@ -697,6 +720,15 @@ def _merge_bundles(bundles, outdir, config, api_version = None):
         else:
             logging.debug(f"Using config file: {config}")
             merge_configs = yaml2dict(config)
+
+    # handle parents if necessary
+    if use_parent:
+        if len(bundles) != 1:
+            die(f"Please provide only one bundle when using the --use-parent option")
+        new_bundles = _collect_parents(bundles[0], [])
+        new_bundles.append(bundles[0])
+        logging.info(f"Using parent bundles: {new_bundles}")
+        bundles = new_bundles
 
     # handle the BUNDLEUTILS_MERGE_PREFER_VERSION env var
     prefer_version = is_truthy(os.environ.get(BUNDLEUTILS_MERGE_PREFER_VERSION, 'false'))
@@ -793,12 +825,13 @@ def _merge_bundles(bundles, outdir, config, api_version = None):
 @click.option('-S', '--strict', default=False, is_flag=True, help=f'Fail when referencing non-existent files - warn otherwise.')
 @click.option('-m', '--config', type=click.Path(file_okay=True, dir_okay=False), help=f'An optional custom merge config file if needed.')
 @click.option('-b', '--bundles', multiple=True, type=click.Path(file_okay=False, dir_okay=True, exists=True), help=f'The bundles to be rendered.')
+@click.option('-p', '--use-parent', default=False, is_flag=True, help=f'Optionally use the (legacy) parent key to work out which bundles to merge.')
 @click.option('-o', '--outdir', type=click.Path(file_okay=False, dir_okay=True), help=f'The target for the merged bundle.')
 @click.option('-a', '--api-version', help=f'Optional apiVersion. Defaults to {default_bundle_api_version}')
 @click.option('-t', '--transform', default=False, is_flag=True, help=f'Optionally transform using the transformation configs ({BUNDLEUTILS_MERGE_TRANSFORM_PERFORM}).')
 @click.option('-d', '--diffcheck', default=False, is_flag=True, help=f'Optionally perform bundleutils diff against the original source bundle and expected bundle ({BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK}).')
 @click.pass_context
-def merge_bundles(ctx, strict, config, bundles, outdir, transform, diffcheck, api_version):
+def merge_bundles(ctx, strict, config, bundles, use_parent, outdir, transform, diffcheck, api_version):
     """
     Used for merging bundles. Given a list of bundles, merge them into a single bundle.
 
@@ -833,6 +866,7 @@ def merge_bundles(ctx, strict, config, bundles, outdir, transform, diffcheck, ap
 
     config = null_check(config, MERGE_CONFIG_ARG, BUNDLEUTILS_MERGE_CONFIG, False, '')
     bundles = null_check(bundles, BUNDLES_ARG, BUNDLEUTILS_MERGE_BUNDLES, False, '')
+    use_parent = null_check(use_parent, 'use_parent', BUNDLEUTILS_MERGE_USE_PARENT, False, '')
     outdir = null_check(outdir, OUTDIR_ARG, BUNDLEUTILS_MERGE_OUTDIR, False, '')
 
     transform = null_check(transform, 'transform', BUNDLEUTILS_MERGE_TRANSFORM_PERFORM, False, '')
@@ -858,7 +892,7 @@ def merge_bundles(ctx, strict, config, bundles, outdir, transform, diffcheck, ap
     if isinstance(bundles, str):
         bundles = bundles.split()
 
-    _merge_bundles(bundles, outdir, config, api_version)
+    _merge_bundles(bundles, use_parent, outdir, config, api_version)
 
     if transform:
         announce(f"Performing transform on merged bundle from {transform_srcdir} to {transform_outdir}")
@@ -1032,8 +1066,8 @@ def diff_merged(ctx, config, sources, api_version):
         with tempfile.TemporaryDirectory() as temp_dir:
             merged1 = os.path.join(temp_dir, 'merged1', 'dummy')
             merged2 = os.path.join(temp_dir, 'merged2', 'dummy')
-            _merge_bundles([src1], merged1, config, api_version)
-            _merge_bundles([src2], merged2, config, api_version)
+            _merge_bundles([src1], False, merged1, config, api_version)
+            _merge_bundles([src2], False, merged2, config, api_version)
             diff_detected = diff_dirs(merged1, merged2)
     else:
         die("src1 and src2 must both be directories")
@@ -1259,9 +1293,9 @@ def _validate(url, username, password, source_dir, ignore_warnings, external_rba
         for filename in os.listdir(source_dir):
             subprocess.run(['cp', os.path.join(source_dir, filename), temp_dir], check=True)
         if external_rbac:
-            logging.debug(f"Copying external RBAC file to {temp_dir}")
+            logging.info(f"Copying external RBAC file {external_rbac} to {temp_dir}. Will need to update the bundle.yaml.")
             subprocess.run(['cp', external_rbac, temp_dir], check=True)
-        _update_bundle(temp_dir)
+            _update_bundle(temp_dir)
         # zip and post the YAML to the URL
         with zipfile.ZipFile('bundle.zip', 'w') as zip_ref:
             for filename in os.listdir(temp_dir):
@@ -1297,12 +1331,8 @@ def _validate(url, username, password, source_dir, ignore_warnings, external_rba
                 die('Validation failed with errors or critical messages')
 
 @click.pass_context
-def fetch_options_null_check(ctx, url, path, username, password, target_dir, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, offline, cap):
-    # creds boolean True if URL set and not empty
-    creds_needed = url is not None and url != ''
+def update_plugins_options_null_check(ctx, plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, cap):
     cap = null_check(cap, 'cap', BUNDLEUTILS_FETCH_USE_CAP_ENVELOPE, False, '')
-    offline = null_check(offline, 'offline', BUNDLEUTILS_FETCH_OFFLINE, False, '')
-    url = lookup_url(url, '', False)
     # fail fast if any strategy is passed explicitly
     default_plugins_json_list_strategy = PluginJsonListStrategy.AUTO.name
     default_plugins_json_merge_strategy = PluginJsonMergeStrategy.ADD_DELETE_SKIP_PINNED.name
@@ -1321,6 +1351,13 @@ def fetch_options_null_check(ctx, url, path, username, password, target_dir, plu
             or {plugins_json_merge_strategy} (out of {get_name_from_enum(PluginJsonMergeStrategy)})
             or {catalog_warnings_strategy} (out of {get_name_from_enum(CatalogWarningsStrategy)})
             ''')
+
+@click.pass_context
+def fetch_options_null_check(ctx, url, path, username, password, target_dir, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, offline, cap):
+    # creds boolean True if URL set and not empty
+    creds_needed = url is not None and url != ''
+    offline = null_check(offline, 'offline', BUNDLEUTILS_FETCH_OFFLINE, False, '')
+    url = lookup_url(url, '', False)
     username = null_check(username, USERNAME_ARG, BUNDLEUTILS_USERNAME, creds_needed)
     password = null_check(password, PASSWORD_ARG, BUNDLEUTILS_PASSWORD, creds_needed)
     path = null_check(path, PATH_ARG, BUNDLEUTILS_PATH, False)
@@ -1343,11 +1380,13 @@ def fetch_options_null_check(ctx, url, path, username, password, target_dir, plu
             die('Multiple plugins*.json files found in the current directory')
 
 @bundleutils.command()
+@update_plugins_options
 @fetch_options
 @click.pass_context
 def fetch(ctx, url, path, username, password, target_dir, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, offline, cap):
     """Fetch YAML documents from a URL or path."""
     set_logging(ctx)
+    update_plugins_options_null_check(ctx, plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, cap)
     fetch_options_null_check(url, path, username, password, target_dir, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, offline, cap)
     try:
         fetch_yaml_docs()
@@ -1466,7 +1505,7 @@ graph_type_minus_bootstrap = 'minus-bootstrap'
 graph_type_minus_deleted_disabled = 'minus-deleted-disabled'
 
 @click.pass_context
-def _analyze_server_plugins(ctx, plugins_from_json, plugins_json_list_strategy, cap):
+def _analyze_server_plugins(ctx, plugins_from_json, plugins_json_list_strategy, cap, url):
     logging.info("Plugin Analysis - Analyzing server plugins...")
     # Setup the dependency graphs
     graphs = {}
@@ -1571,7 +1610,7 @@ def _analyze_server_plugins(ctx, plugins_from_json, plugins_json_list_strategy, 
     elif plugins_json_list_strategy == PluginJsonListStrategy.ALL:
         expected_plugins = list(dgall.keys())
     else:
-        die(f"Invalid plugins json list strategy: {plugins_json_list_strategy.name}. Expected one of: {PluginJsonListStrategy}")
+        die(f"Invalid plugins json list strategy: {plugins_json_list_strategy.name}. Expected one of: {PluginJsonListStrategy.ALL.name}, {PluginJsonListStrategy.ROOTS.name}, {PluginJsonListStrategy.ROOTS_AND_DEPS.name}")
 
     # handle the removal of CAP plugin dependencies removal
     if cap:
@@ -1580,7 +1619,7 @@ def _analyze_server_plugins(ctx, plugins_from_json, plugins_json_list_strategy, 
         else:
             logging.info(f"{BUNDLEUTILS_FETCH_USE_CAP_ENVELOPE} option detected. Removing CAP plugin dependencies...")
             expected_plugins_copy = expected_plugins.copy()
-            url, ci_version = lookup_url_and_version('', '')
+            url, ci_version = lookup_url_and_version(url, '')
             if not url:
                 die("No URL provided for CAP plugin removal")
             ci_version, ci_type, ci_server_home = server_options_null_check(ci_version, '', '')
@@ -1646,12 +1685,35 @@ def find_plugin_by_id(plugins, plugin_id):
     return None
 
 @bundleutils.command()
+@update_plugins_options
 @fetch_options
 @click.pass_context
 def update_plugins(ctx, url, path, username, password, target_dir, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, offline, cap):
     """Update plugins in the target directory."""
     set_logging(ctx)
+    update_plugins_options_null_check(ctx, plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, cap)
     fetch_options_null_check(url, path, username, password, target_dir, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, offline, cap)
+    _update_plugins()
+
+
+@bundleutils.command()
+@update_plugins_options
+@server_options
+@click.option('-t', '--target-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The target directory in which to update the plugins.yaml.')
+@click.pass_context
+def update_plugins_from_test_server(ctx, ci_type, ci_version, ci_server_home, target_dir, plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, cap):
+    """
+    Update plugins in the target directory using the plugins from the test server started for validation.
+    """
+    set_logging(ctx)
+    update_plugins_options_null_check(plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, cap)
+    ci_version, ci_type, ci_server_home = server_options_null_check(ci_type, ci_version, ci_server_home)
+    target_dir = null_check(target_dir, TARGET_DIR_ARG, BUNDLEUTILS_MERGE_TRANSFORM_TARGET_DIR)
+    jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
+    server_url, username, password = jenkins_manager.get_server_details()
+    ctx.obj['url'] = server_url
+    ctx.obj['username'] = username
+    ctx.obj['password'] = password
     _update_plugins()
 
 @click.pass_context
@@ -1690,7 +1752,10 @@ def _update_plugins(ctx):
                 api_version = bundle_yaml.get('apiVersion', '')
                 if not api_version:
                     die('No apiVersion found in bundle.yaml file')
-                elif api_version == '1':
+                # if either integer or string, convert to string
+                if isinstance(api_version, int):
+                    api_version = str(api_version)
+                if api_version == '1':
                     plugins_json_list_strategy = PluginJsonListStrategy.ROOTS_AND_DEPS
                     ctx.obj['plugins_json_list_strategy'] = plugins_json_list_strategy
                 elif api_version == '2':
@@ -1721,7 +1786,7 @@ def _update_plugins(ctx):
         return
     data = json.loads(plugin_json_str)
     plugins_from_json = data.get("plugins", [])
-    expected_plugins, all_bootstrap_plugins, all_deleted_or_inactive_plugins, graphs = _analyze_server_plugins(plugins_from_json, plugins_json_list_strategy, cap)
+    expected_plugins, all_bootstrap_plugins, all_deleted_or_inactive_plugins, graphs = _analyze_server_plugins(plugins_from_json, plugins_json_list_strategy, cap, url)
 
     # checking the plugin-catalog.yaml file
     plugin_catalog_plugin_ids_previous = []
@@ -1758,6 +1823,7 @@ def _update_plugins(ctx):
         with open(plugins_file, 'r') as f:
             plugins_data = yaml.load(f)  # Load the existing data
 
+        original_plugin_data = plugins_data.copy()
         current_plugins = []
         updated_plugins = []
         # Check if 'plugins' key exists and it's a list
@@ -1827,8 +1893,12 @@ def _update_plugins(ctx):
         if plugins_json_merge_strategy == PluginJsonMergeStrategy.DO_NOTHING:
             logging.info(f"Skipping writing to plugins.yaml according to merge strategy: {plugins_json_merge_strategy.name}")
         else:
-            with open(plugins_file, 'w') as f:
-                yaml.dump(plugins_data, f)  # Write the updated data back to the file
+            if original_plugin_data != plugins_data:
+                with open(plugins_file, 'w') as f:
+                    logging.info(f"Writing updated plugins to {plugins_file}")
+                    yaml.dump(plugins_data, f)  # Write the updated data back to the file
+            else:
+                logging.info(f"No changes detected in {plugins_file}. Skipping write.")
 
 def remove_files_from_dir(dir):
     if os.path.exists(dir):
@@ -2418,14 +2488,24 @@ def _get_files_for_key(target_dir, key):
             # if exact match exists, add to front
             exact_match = os.path.join(target_dir, f'{prefix}.yaml')
             if os.path.exists(exact_match):
-                logging.info(f'Found exact match for {key}: {exact_match}')
+                logging.debug(f'Found exact match for {key}: {exact_match}')
                 files.insert(0, exact_match)
                 break
 
         # remove any empty files
         files = [file for file in files if _file_check(file)]
         for file in files:
-            logging.info(f'File for {key}: {file}')
+            logging.debug(f'File for {key}: {file}')
+
+        # special case for 'plugins'. If any of the files does not contain the yaml key 'plugins', remove the key from the data
+        if key == 'jcasc':
+            for file in files:
+                with open(file, 'r') as f:
+                    jcasc_file = yaml.load(f)
+                    # if jenkins the only key and jenkins is empty, remove the file from the list
+                    if jcasc_file.keys() == ['jenkins'] and not jcasc_file['jenkins']:
+                        logging.info(f'Removing {file} from the list due to missing or empty jenkins')
+                        files.remove(file)
 
         # special case for 'plugins'. If any of the files does not contain the yaml key 'plugins', remove the key from the data
         if key == 'plugins':

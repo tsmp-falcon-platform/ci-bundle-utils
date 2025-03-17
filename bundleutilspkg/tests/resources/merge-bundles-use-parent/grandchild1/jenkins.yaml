@@ -1,0 +1,4 @@
+jenkins: {}
+unclassified:
+  hibernationConfiguration:
+    gracePeriod: 1800
