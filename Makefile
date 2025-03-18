@@ -29,11 +29,6 @@ test: ## Run the pytest suite
 	cd bundleutilspkg && \
 	pytest -v
 
-.PHONY: test
-test: ## Run the full pytest suite
-	cd bundleutilspkg && \
-	pytest -v
-
 .PHONY: test/%
 test/%: ## Run the pytest suite tests containing 'test/<string>'
 	cd bundleutilspkg && \

@@ -580,7 +580,6 @@ Targets:
   install                Install the bundleutils package
   install-dev            Install the bundleutils package with dev dependencies
   test                   Run the pytest suite
-  test                   Run the full pytest suite
   test/%                 Run the pytest suite tests containing 'test/<string>'
   pyinstaller            Build the bundleutils package
   compose/start-dev      Start the bundleutils container

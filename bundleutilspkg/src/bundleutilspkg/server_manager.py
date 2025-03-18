@@ -293,7 +293,7 @@ class JenkinsServerManager:
                 os.environ['JAVA_HOME'] = self.jvm_cache_dir
                 os.environ['PATH'] = f"{os.environ['JAVA_HOME']}/bin:{os.environ['PATH']}"
             else:
-                logging.info("Java 11 required but JAVA_HOME_11 not set. Defaulting to JAVA_HOME...") 
+                logging.info("Java 11 required but JAVA_HOME_11 not set. Defaulting to JAVA_HOME...")
 
         # check for JAVA_HOME and use it if set
         if 'JAVA_HOME' in os.environ:
@@ -301,6 +301,8 @@ class JenkinsServerManager:
             java = os.path.join(os.environ['JAVA_HOME'], 'bin', 'java')
             if not os.path.exists(java):
                 self.die(f"JAVA_HOME is set to {os.environ['JAVA_HOME']} but {java} does not exist.")
+        else:
+            java = shutil.which('java')
 
         self.test_java_specification_version(required_java_version)
         # print the java -version output
