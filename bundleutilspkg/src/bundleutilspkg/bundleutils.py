@@ -33,7 +33,10 @@ from bundleutilspkg.server_manager import JenkinsServerManager
 from urllib.parse import urlparse
 from bundleutilspkg._version import __version__
 
+# Set the locale to C to ensure consistent sorting
 locale.setlocale(locale.LC_ALL, "C")
+# Set the default encoding to UTF-8
+os.environ["PYTHONUTF8"] = "1"
 
 yaml = YAML(typ='rt')
 
@@ -1386,7 +1389,7 @@ def fetch_options_null_check(ctx, url, path, username, password, target_dir, plu
 def fetch(ctx, url, path, username, password, target_dir, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, offline, cap):
     """Fetch YAML documents from a URL or path."""
     set_logging(ctx)
-    update_plugins_options_null_check(ctx, plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, cap)
+    update_plugins_options_null_check(plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, cap)
     fetch_options_null_check(url, path, username, password, target_dir, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, offline, cap)
     try:
         fetch_yaml_docs()
@@ -2003,7 +2006,8 @@ def replace_carriage_returns(ctx, response_text):
                 die(f'Invalid catalog warnings strategy: {catalog_warnings_strategy.name}. Expected one of: {get_name_from_enum(CatalogWarningsStrategy)}')
         # remove any '\r' characters from the response
         logging.info('Removing carriage returns from the response')
-        response_text = response_text.replace('\\r', '')
+        response_text = response_text.replace('\\r\\n', '\\n')
+        response_text = response_text.replace('\\r$', '$')
         # print any lines with carriage returns in them
         for line in response_text.split('\n'):
             if '\\r' in line:
