@@ -266,7 +266,7 @@ def fetch_options(func):
     func = click.option('-u', '--username', help=f'Username for basic authentication ({BUNDLEUTILS_USERNAME}).')(func)
     func = click.option('-p', '--password', help=f'Password for basic authentication ({BUNDLEUTILS_PASSWORD}).')(func)
     func = click.option('-t', '--target-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The target directory for the YAML documents ({BUNDLEUTILS_FETCH_TARGET_DIR}).')(func)
-    func = click.option('-k', '--keys-to-scalars', help=f'Comma-separated list of yaml dict keys to convert to "|" type strings instead of quoted strings, defaults to "{','.join(default_keys_to_scalars)}" ({BUNDLEUTILS_KEYS_TO_CONVERT_TO_SCALARS}).')(func)
+    func = click.option('-k', '--keys-to-scalars', help=f'Comma-separated list of yaml dict keys to convert to "|" type strings instead of quoted strings, defaults to \'{",".join(default_keys_to_scalars)}\' ({BUNDLEUTILS_KEYS_TO_CONVERT_TO_SCALARS}).')(func)
     return func
 
 

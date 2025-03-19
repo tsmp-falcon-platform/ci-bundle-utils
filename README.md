@@ -300,7 +300,7 @@ Options:
   -k, --keys-to-scalars TEXT      Comma-separated list of yaml dict keys to
                                   convert to "|" type strings instead of
                                   quoted strings, defaults to
-                                  "systemMessage,script,description"
+                                  'systemMessage,script,description'
                                   (BUNDLEUTILS_KEYS_TO_CONVERT_TO_SCALARS).
   -t, --target-dir DIRECTORY      The target directory for the YAML documents
                                   (BUNDLEUTILS_FETCH_TARGET_DIR).
@@ -469,7 +469,7 @@ Options:
   -k, --keys-to-scalars TEXT      Comma-separated list of yaml dict keys to
                                   convert to "|" type strings instead of
                                   quoted strings, defaults to
-                                  "systemMessage,script,description"
+                                  'systemMessage,script,description'
                                   (BUNDLEUTILS_KEYS_TO_CONVERT_TO_SCALARS).
   -t, --target-dir DIRECTORY      The target directory for the YAML documents
                                   (BUNDLEUTILS_FETCH_TARGET_DIR).
