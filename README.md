@@ -297,6 +297,11 @@ Options:
   -c, --cap                       Use the envelope.json from the war file to
                                   remove CAP plugin dependencies
                                   (BUNDLEUTILS_FETCH_USE_CAP_ENVELOPE).
+  -k, --keys-to-scalars TEXT      Comma-separated list of yaml dict keys to
+                                  convert to "|" type strings instead of
+                                  quoted strings, defaults to
+                                  'systemMessage,script,description'
+                                  (BUNDLEUTILS_KEYS_TO_CONVERT_TO_SCALARS).
   -t, --target-dir DIRECTORY      The target directory for the YAML documents
                                   (BUNDLEUTILS_FETCH_TARGET_DIR).
   -p, --password TEXT             Password for basic authentication
@@ -461,6 +466,11 @@ Options:
   -c, --cap                       Use the envelope.json from the war file to
                                   remove CAP plugin dependencies
                                   (BUNDLEUTILS_FETCH_USE_CAP_ENVELOPE).
+  -k, --keys-to-scalars TEXT      Comma-separated list of yaml dict keys to
+                                  convert to "|" type strings instead of
+                                  quoted strings, defaults to
+                                  'systemMessage,script,description'
+                                  (BUNDLEUTILS_KEYS_TO_CONVERT_TO_SCALARS).
   -t, --target-dir DIRECTORY      The target directory for the YAML documents
                                   (BUNDLEUTILS_FETCH_TARGET_DIR).
   -p, --password TEXT             Password for basic authentication
@@ -580,7 +590,6 @@ Targets:
   install                Install the bundleutils package
   install-dev            Install the bundleutils package with dev dependencies
   test                   Run the pytest suite
-  test                   Run the full pytest suite
   test/%                 Run the pytest suite tests containing 'test/<string>'
   pyinstaller            Build the bundleutils package
   compose/start-dev      Start the bundleutils container

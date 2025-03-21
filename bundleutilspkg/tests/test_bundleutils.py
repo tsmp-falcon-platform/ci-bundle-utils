@@ -119,3 +119,59 @@ def test_merge_bundles_use_parent_base_child1_grandchild1(request, runner):
                     "-p",
                     "-o", outdir]
     _test_merge_bundles(testdir, test_name, runner, command_args, expected_dir)
+
+def _test_fetch(testdir, test_name, runner, command_args, expected_strings):
+    outdir = os.path.join(testdir, 'resources', 'target', test_name)
+    assert outdir.endswith(f'tests/resources/target/{test_name}')
+    # print out command and args for debugging
+    print(f"Running command: bundleutils {' '.join(command_args)}")
+    # delete the output directory recursively if it exists
+    shutil.rmtree(outdir, ignore_errors=True)
+    os.makedirs(outdir, exist_ok=True)
+    result = runner.invoke(bundleutils, command_args)
+    _traceback(result)
+    assert result.exit_code == 0
+    assert os.path.exists(os.path.join(outdir, 'bundle.yaml'))
+    assert os.path.exists(os.path.join(outdir, 'jenkins.yaml'))
+    # asssert expected_string is in the jenkins.yaml file
+    with open(os.path.join(outdir, 'jenkins.yaml'), 'r') as f:
+        lines = f.readlines()
+    for expected_string in expected_strings:
+        found = False
+        for line in lines:
+            if expected_string in str(line):
+                found = True
+                break
+            else:
+                print(f"expected_string: {expected_string} not found in line: {line}")
+        assert found
+def test_fetch_default_keys_to_scalars(request, runner):
+    testdir = os.path.dirname(__file__)
+    test_name = request.node.name
+    outdir = os.path.join(testdir, 'resources', 'target', test_name)
+    expected_strings = ['  systemMessage: |', '  someCustomKey: "\\nCustom bla! \\n']
+    command_args = ["fetch",
+                    "-P", f"{testdir}/resources/fetch/multiline-systemMessage.yaml",
+                    "-t", outdir]
+    _test_fetch(testdir, test_name, runner, command_args, expected_strings)
+
+def test_fetch_custom_keys_to_scalars(request, runner):
+    testdir = os.path.dirname(__file__)
+    test_name = request.node.name
+    outdir = os.path.join(testdir, 'resources', 'target', test_name)
+    expected_strings = ['systemMessage: "\\nHello People', 'someCustomKey: |', ]
+    command_args = ["fetch",
+                    "-P", f"{testdir}/resources/fetch/multiline-systemMessage.yaml",
+                    "-k", f"script,description,someCustomKey",
+                    "-t", outdir]
+    _test_fetch(testdir, test_name, runner, command_args, expected_strings)
+
+def test_fetch_add_missing_value(request, runner):
+    testdir = os.path.dirname(__file__)
+    test_name = request.node.name
+    outdir = os.path.join(testdir, 'resources', 'target', test_name)
+    expected_dir = 'resources/fetch/missing-env-values-expected'
+    command_args = ["fetch",
+                    "-P", f"{testdir}/resources/fetch/missing-env-values.yaml",
+                    "-t", outdir]
+    _test_merge_bundles(testdir, test_name, runner, command_args, expected_dir)

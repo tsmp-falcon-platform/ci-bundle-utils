@@ -25,7 +25,7 @@ from importlib.metadata import metadata, PackageNotFoundError
 from collections import OrderedDict, defaultdict
 from deepdiff import DeepDiff
 from deepdiff.helper import CannotCompare
-from ruamel.yaml import YAML
+from ruamel.yaml import YAML, scalarstring
 from ruamel.yaml.comments import CommentedMap
 from ruamel.yaml.comments import CommentedSeq
 from bundleutilspkg.yaml_merger import YAMLMerger
@@ -33,7 +33,10 @@ from bundleutilspkg.server_manager import JenkinsServerManager
 from urllib.parse import urlparse
 from bundleutilspkg._version import __version__
 
+# Set the locale to C to ensure consistent sorting
 locale.setlocale(locale.LC_ALL, "C")
+# Set the default encoding to UTF-8
+os.environ["PYTHONUTF8"] = "1"
 
 yaml = YAML(typ='rt')
 
@@ -47,6 +50,7 @@ validate_url_path = '/casc-bundle-mgnt/casc-bundle-validate'
 default_target = 'target/docs'
 default_auto_env_file = 'bundle-profiles.yaml'
 default_bundle_api_version = '2'
+default_keys_to_scalars = ['systemMessage','script','description']
 
 bundle_yaml_keys = {'jcasc': 'jenkins.yaml', 'items': 'items.yaml', 'plugins': 'plugins.yaml', 'rbac': 'rbac.yaml', 'catalog': 'plugin-catalog.yaml', 'variables': 'variables.yaml'}
 
@@ -60,6 +64,7 @@ BUNDLEUTILS_AUTO_ENV_FILE = 'BUNDLEUTILS_AUTO_ENV_FILE'
 BUNDLEUTILS_ENV = 'BUNDLEUTILS_ENV'
 BUNDLEUTILS_ENV_OVERRIDE = 'BUNDLEUTILS_ENV_OVERRIDE'
 BUNDLEUTILS_USE_PROFILE = 'BUNDLEUTILS_USE_PROFILE'
+BUNDLEUTILS_KEYS_TO_CONVERT_TO_SCALARS = 'BUNDLEUTILS_KEYS_TO_CONVERT_TO_SCALARS'
 BUNDLEUTILS_BOOTSTRAP_SOURCE_DIR = 'BUNDLEUTILS_BOOTSTRAP_SOURCE_DIR'
 BUNDLEUTILS_BOOTSTRAP_SOURCE_BASE = 'BUNDLEUTILS_BOOTSTRAP_SOURCE_BASE'
 BUNDLEUTILS_BOOTSTRAP_PROFILE = 'BUNDLEUTILS_BOOTSTRAP_PROFILE'
@@ -119,6 +124,7 @@ ORIGINAL_CWD = 'ORIGINAL_CWD'
 
 # click ctx object keys
 ENV_FILE_ARG = 'env_file'
+KEYS_TO_CONVERT_TO_SCALARS_ARG = 'keys_to_convert_to_scalars'
 INTERACTIVE_ARG = 'interactive'
 BUNDLES_DIR_ARG = 'bundles_dir'
 CI_VERSION_ARG = 'ci_version'
@@ -260,6 +266,7 @@ def fetch_options(func):
     func = click.option('-u', '--username', help=f'Username for basic authentication ({BUNDLEUTILS_USERNAME}).')(func)
     func = click.option('-p', '--password', help=f'Password for basic authentication ({BUNDLEUTILS_PASSWORD}).')(func)
     func = click.option('-t', '--target-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The target directory for the YAML documents ({BUNDLEUTILS_FETCH_TARGET_DIR}).')(func)
+    func = click.option('-k', '--keys-to-scalars', help=f'Comma-separated list of yaml dict keys to convert to "|" type strings instead of quoted strings, defaults to \'{",".join(default_keys_to_scalars)}\' ({BUNDLEUTILS_KEYS_TO_CONVERT_TO_SCALARS}).')(func)
     return func
 
 
@@ -1353,7 +1360,7 @@ def update_plugins_options_null_check(ctx, plugins_json_list_strategy, plugins_j
             ''')
 
 @click.pass_context
-def fetch_options_null_check(ctx, url, path, username, password, target_dir, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, offline, cap):
+def fetch_options_null_check(ctx, url, path, username, password, target_dir, keys_to_scalars, plugin_json_path, offline):
     # creds boolean True if URL set and not empty
     creds_needed = url is not None and url != ''
     offline = null_check(offline, 'offline', BUNDLEUTILS_FETCH_OFFLINE, False, '')
@@ -1363,6 +1370,9 @@ def fetch_options_null_check(ctx, url, path, username, password, target_dir, plu
     path = null_check(path, PATH_ARG, BUNDLEUTILS_PATH, False)
     plugin_json_path = null_check(plugin_json_path, PLUGIN_JSON_PATH_ARG, BUNDLEUTILS_PLUGINS_JSON_PATH, False)
     target_dir = null_check(target_dir, TARGET_DIR_ARG, BUNDLEUTILS_FETCH_TARGET_DIR, False, default_target)
+    keys_to_scalars = keys_to_scalars.split(',') if keys_to_scalars else []
+    logging.debug(f'Using keys_to_scalars={keys_to_scalars}')
+    keys_to_scalars = null_check(keys_to_scalars, KEYS_TO_CONVERT_TO_SCALARS_ARG, BUNDLEUTILS_KEYS_TO_CONVERT_TO_SCALARS, True, default_keys_to_scalars)
     # if path or url is not provided, look for a zip file in the current directory matching the pattern core-casc-export-*.zip
     if not path and not url:
         zip_files = glob.glob('core-casc-export-*.zip')
@@ -1383,11 +1393,11 @@ def fetch_options_null_check(ctx, url, path, username, password, target_dir, plu
 @update_plugins_options
 @fetch_options
 @click.pass_context
-def fetch(ctx, url, path, username, password, target_dir, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, offline, cap):
+def fetch(ctx, url, path, username, password, target_dir, keys_to_scalars, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, offline, cap):
     """Fetch YAML documents from a URL or path."""
     set_logging(ctx)
-    update_plugins_options_null_check(ctx, plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, cap)
-    fetch_options_null_check(url, path, username, password, target_dir, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, offline, cap)
+    update_plugins_options_null_check(plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, cap)
+    fetch_options_null_check(url, path, username, password, target_dir, keys_to_scalars, plugin_json_path, offline)
     try:
         fetch_yaml_docs()
     except Exception as e:
@@ -1404,14 +1414,13 @@ def fetch(ctx, url, path, username, password, target_dir, plugin_json_path, plug
 def handle_unwanted_escape_characters(ctx):
     target_dir = ctx.obj.get('target_dir')
     prefix = 'ESCAPE CHAR CHECK - SECO-3944: '
-    logging.info(f"{prefix}Start...")
     # check in the jenkins.yaml file for the key 'cascItemsConfiguration.variableInterpolationEnabledForAdmin'
     jenkins_yaml = os.path.join(target_dir, 'jenkins.yaml')
     if not os.path.exists(jenkins_yaml):
         die(f"Jenkins YAML file '{jenkins_yaml}' does not exist (something seriously wrong here)")
     with open(jenkins_yaml, 'r') as f:
         jenkins_data = yaml.load(f)
-    if 'cascItemsConfiguration' in jenkins_data['unclassified'] and 'variableInterpolationEnabledForAdmin' in jenkins_data['unclassified']['cascItemsConfiguration']:
+    if 'unclassified' in jenkins_data and 'cascItemsConfiguration' in jenkins_data['unclassified'] and 'variableInterpolationEnabledForAdmin' in jenkins_data['unclassified']['cascItemsConfiguration']:
         pattern = r"\^{1,}\$\{"
         search_replace = '${'
         interpolation_enabled = jenkins_data['unclassified']['cascItemsConfiguration']['variableInterpolationEnabledForAdmin']
@@ -1424,11 +1433,9 @@ def handle_unwanted_escape_characters(ctx):
             with open(items_yaml, 'r') as f:
                 items_data = yaml.load(f)
             logging.info(f"{prefix}Variable interpolation enabled for admin = {interpolation_enabled}. Replacing '{pattern}' with '{search_replace}' in items.yaml")
-            items_data = replace_string_in_dict(items_data, pattern, search_replace)
-            prefix = 'EQUAL DISPLAY_NAME CHECK: '
-            logging.info(f"{prefix}Start...")
+            items_data = replace_string_in_dict(items_data, pattern, search_replace, prefix)
+            logging.info(f"EQUAL DISPLAY_NAME CHECK: Setting 'displayName' to empty string if necessary...")
             items_data = replace_display_name_if_necessary(items_data)
-            logging.info(f"{prefix}Finished...")
         with open(items_yaml, 'w') as f:
                 yaml.dump(items_data, f)
 
@@ -1436,7 +1443,7 @@ def replace_display_name_if_necessary(data):
     if isinstance(data, dict):
         # if dict has key 'displayName' and 'name' and they are the same, remove the 'displayName' key
         if 'displayName' in data and 'name' in data and data['displayName'] == data['name']:
-            logging.info(f"Setting 'displayName' to empty string since equal to name: {data['name']}")
+            logging.debug(f"EQUAL DISPLAY_NAME CHECK: Setting 'displayName' to empty string since equal to name: {data['name']}")
             data['displayName'] = ''
         for key, value in data.items():
             if isinstance(value, dict):
@@ -1452,30 +1459,34 @@ def replace_display_name_if_necessary(data):
                 data[i] = replace_display_name_if_necessary(value)
     return data
 
-def replace_string_in_dict(data, pattern, replacement):
+def replace_string_in_dict(data, pattern, replacement, prefix=''):
     if isinstance(data, dict):
         for key, value in data.items():
             if isinstance(value, dict):
-                data[key] = replace_string_in_dict(value, pattern, replacement)
+                data[key] = replace_string_in_dict(value, pattern, replacement, prefix)
             elif isinstance(value, list):
-                data[key] = replace_string_in_list(value, pattern, replacement)
+                data[key] = replace_string_in_list(value, pattern, replacement, prefix)
             elif isinstance(value, str):
                 match = re.search(pattern, value)
                 if match:
-                    logging.debug(f"Replacing '{pattern}' with '{replacement}' in dict '{value}'")
+                    # if env var BUNDLEUTILS_TRACE is set, print the replacement
+                    if is_truthy(os.environ.get('BUNDLEUTILS_TRACE', '')):
+                        logging.debug(f"{prefix}Replacing '{pattern}' with '{replacement}' in dict '{value}'")
+                    else:
+                        logging.debug(f"{prefix}Replacing '{pattern}' with '{replacement}' in dict (export BUNDLEUTILS_TRACE=1 for details)")
                     data[key] = re.sub(pattern, replacement, value)
     return data
 
-def replace_string_in_list(data, pattern, replacement):
+def replace_string_in_list(data, pattern, replacement, prefix=''):
     for i, value in enumerate(data):
         if isinstance(value, dict):
-            data[i] = replace_string_in_dict(value, pattern, replacement)
+            data[i] = replace_string_in_dict(value, pattern, replacement, prefix)
         elif isinstance(value, list):
-            data[i] = replace_string_in_list(value, pattern, replacement)
+            data[i] = replace_string_in_list(value, pattern, replacement, prefix)
         elif isinstance(value, str):
             match = re.search(pattern, value)
             if match:
-                logging.debug(f"Replacing '{pattern}' with '{replacement}' in list '{value}'")
+                logging.debug(f"{prefix}Replacing '{pattern}' with '{replacement}' in list '{value}'")
                 data[i] = re.sub(pattern, replacement, value)
     return data
 
@@ -1688,11 +1699,11 @@ def find_plugin_by_id(plugins, plugin_id):
 @update_plugins_options
 @fetch_options
 @click.pass_context
-def update_plugins(ctx, url, path, username, password, target_dir, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, offline, cap):
+def update_plugins(ctx, url, path, username, password, target_dir, keys_to_convert, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, offline, cap):
     """Update plugins in the target directory."""
     set_logging(ctx)
     update_plugins_options_null_check(ctx, plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, cap)
-    fetch_options_null_check(url, path, username, password, target_dir, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, offline, cap)
+    fetch_options_null_check(url, path, username, password, target_dir, keys_to_convert, plugin_json_path, offline)
     _update_plugins()
 
 
@@ -1949,7 +1960,7 @@ def fetch_yaml_docs(ctx):
                         if f.read(1):
                             f.seek(0)
                             response_text = f.read()
-                            response_text = replace_carriage_returns(response_text)
+                            response_text = preprocess_yaml_text(response_text)
                             logging.debug(f'Read YAML from file: {filename}')
                             doc = yaml.load(response_text)
                             write_yaml_doc(doc, target_dir, filename)
@@ -1959,7 +1970,7 @@ def fetch_yaml_docs(ctx):
             logging.info(f'Read YAML from path: {path}')
             with open(path, 'r') as f:
                 response_text = f.read()
-                response_text = replace_carriage_returns(response_text)
+                response_text = preprocess_yaml_text(response_text)
                 yaml_docs = list(yaml.load_all(response_text))
                 write_all_yaml_docs_from_comments(yaml_docs, target_dir)
     elif url:
@@ -1970,7 +1981,7 @@ def fetch_yaml_docs(ctx):
         if offline:
             with open(export_yaml, 'w') as f:
                 f.write(response_text)
-        response_text = replace_carriage_returns(response_text)
+        response_text = preprocess_yaml_text(response_text)
         # logging.debug(f'Fetched YAML from url {url}:\n{response_text}')
         yaml_docs = list(yaml.load_all(response_text))
         write_all_yaml_docs_from_comments(yaml_docs, target_dir)
@@ -1978,14 +1989,10 @@ def fetch_yaml_docs(ctx):
         die('No path or URL provided')
 
 @click.pass_context
-def replace_carriage_returns(ctx, response_text):
+def preprocess_yaml_text(ctx, response_text):
         catalog_warnings_strategy = ctx.obj.get('catalog_warnings_strategy')
         if isinstance(response_text, bytes):
             response_text = response_text.decode('utf-8')
-        # print any lines with carriage returns in them
-        for line in response_text.split('\n'):
-            if '\\r' in line:
-                logging.debug(f'Carriage return found in line: {line}')
         # find any occurrences of "^--- .*$"
         matching_lines = re.findall(r'^--- .*$', response_text, re.MULTILINE)
         if matching_lines:
@@ -2001,13 +2008,6 @@ def replace_carriage_returns(ctx, response_text):
                     Either fix the warnings or change the strategy to {CatalogWarningsStrategy.COMMENT.name} to convert warnings to comments.''')
             else:
                 die(f'Invalid catalog warnings strategy: {catalog_warnings_strategy.name}. Expected one of: {get_name_from_enum(CatalogWarningsStrategy)}')
-        # remove any '\r' characters from the response
-        logging.info('Removing carriage returns from the response')
-        response_text = response_text.replace('\\r', '')
-        # print any lines with carriage returns in them
-        for line in response_text.split('\n'):
-            if '\\r' in line:
-                logging.warning(f'Carriage return found in line still: {line}')
         return response_text
 
 def call_jenkins_api(url, username, password):
@@ -2033,10 +2033,9 @@ def write_all_yaml_docs_from_comments(yaml_docs, target_dir):
 
 def write_yaml_doc(doc, target_dir, filename):
     filename = os.path.join(target_dir, filename)
-    doc = remove_empty_keys(doc)
+    doc = preprocess_yaml_object(doc)
 
     # create a new file for each YAML document
-    logging.debug(f'Creating {filename}')
     with open(filename, 'w') as f:
         # dump without quotes for strings and without line break at the end
         yaml.dump(doc, f)
@@ -2407,38 +2406,37 @@ def _transform(configs, source_dir, target_dir):
     handle_splits(merged_config.get('splits', {}), target_dir)
     _update_bundle(target_dir)
 
-def remove_empty_keys(data):
-    if isinstance(data, CommentedMap):  # Handle dictionaries with comments
+@click.pass_context
+def preprocess_yaml_object(ctx, data, parent_key = None):
+    if isinstance(data, CommentedMap):
+        # Remove empty keys
         keys_to_remove = [k for k in data if k == ""]
-        for key in keys_to_remove:
-            del data[key]  # Remove the empty key directly from the object
+        if keys_to_remove:
+            logging.debug(f"Removed empty keys from {type(data)}: {data}")
+            for key in keys_to_remove:
+                del data[key]
+        # Convert values to block scalars if needed
+        convert_to_scalars = [k for k in data if k in ctx.obj.get(KEYS_TO_CONVERT_TO_SCALARS_ARG)]
+        for key in convert_to_scalars:
+            data[key] = scalarstring.LiteralScalarString(data[key])
         for key, value in data.items():
-            remove_empty_keys(value)  # Recursively process nested items
-        logging.debug(logging.NOTSET, f'Removed empty keys from DICT: {data}')
-    elif isinstance(data, CommentedSeq):  # Handle lists with comments
+            preprocess_yaml_object(value, key)  # Recursively process nested items
+    elif isinstance(data, (CommentedSeq, list)):
         items_to_keep = []
+        items_to_ignore = []
         for item in data:
-            processed_item = remove_empty_keys(item)
-            if processed_item or processed_item == 0:  # Keep non-empty items
-                items_to_keep.append(processed_item)
-        # Modify the list in place
-        data[:] = items_to_keep
-        logging.debug(logging.NOTSET, f'Removed empty keys from LIST: {data}')
-    elif isinstance(data, list):  # Handle regular Python lists
-        newdata = []
-        for item in data:
-            processed_item = remove_empty_keys(item)
+            # Special case: `env` list with dicts that have only 'key'
+            if parent_key == "env" and isinstance(item, dict):
+                if list(item.keys()) == ["key"]:  # only 'key' present
+                    item['value'] = ""
+            processed_item = preprocess_yaml_object(item, parent_key)
             if processed_item or processed_item == 0:
-                newdata.append(processed_item)
-        data[:] = newdata
-        logging.debug(logging.NOTSET, f'Result: {data}')
-    elif isinstance(data, dict):  # Handle regular Python dictionaries
-        keys_to_remove = [k for k in data if k == ""]
-        for key in keys_to_remove:
-            del data[key]
-        for key, value in list(data.items()):
-            data[key] = remove_empty_keys(value)
-        logging.debug(logging.NOTSET, f'Removed empty keys from regular DICT: {data}')
+                items_to_keep.append(processed_item)
+            else:
+                items_to_ignore.append(item)
+        if items_to_ignore:
+            logging.debug(f"Removed empty items from {parent_key}: {items_to_ignore}")
+        data[:] = items_to_keep
     # For scalar values, just return as-is
     return data
 
