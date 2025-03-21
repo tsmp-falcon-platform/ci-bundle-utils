@@ -2428,6 +2428,7 @@ def preprocess_yaml_object(ctx, data, parent_key = None):
             # Special case: `env` list with dicts that have only 'key'
             if parent_key == "env" and isinstance(item, dict):
                 if list(item.keys()) == ["key"]:  # only 'key' present
+                    logging.warning(f"MISSING VALUE STRING - BEE-29822: Adding value = '' to entry for key: {item['key']}")
                     item['value'] = ""
             processed_item = preprocess_yaml_object(item, parent_key)
             if processed_item or processed_item == 0:
