@@ -165,3 +165,13 @@ def test_fetch_custom_keys_to_scalars(request, runner):
                     "-k", f"script,description,someCustomKey",
                     "-t", outdir]
     _test_fetch(testdir, test_name, runner, command_args, expected_strings)
+
+def test_fetch_add_missing_value(request, runner):
+    testdir = os.path.dirname(__file__)
+    test_name = request.node.name
+    outdir = os.path.join(testdir, 'resources', 'target', test_name)
+    expected_dir = 'resources/fetch/missing-env-values-expected'
+    command_args = ["fetch",
+                    "-P", f"{testdir}/resources/fetch/missing-env-values.yaml",
+                    "-t", outdir]
+    _test_merge_bundles(testdir, test_name, runner, command_args, expected_dir)

@@ -124,7 +124,7 @@ ORIGINAL_CWD = 'ORIGINAL_CWD'
 
 # click ctx object keys
 ENV_FILE_ARG = 'env_file'
-KEYS_TO_CONVERT_TO_SCALERS_ARG = 'keys_to_convert_to_scalars'
+KEYS_TO_CONVERT_TO_SCALARS_ARG = 'keys_to_convert_to_scalars'
 INTERACTIVE_ARG = 'interactive'
 BUNDLES_DIR_ARG = 'bundles_dir'
 CI_VERSION_ARG = 'ci_version'
@@ -1372,7 +1372,7 @@ def fetch_options_null_check(ctx, url, path, username, password, target_dir, key
     target_dir = null_check(target_dir, TARGET_DIR_ARG, BUNDLEUTILS_FETCH_TARGET_DIR, False, default_target)
     keys_to_scalars = keys_to_scalars.split(',') if keys_to_scalars else []
     logging.debug(f'Using keys_to_scalars={keys_to_scalars}')
-    keys_to_scalars = null_check(keys_to_scalars, KEYS_TO_CONVERT_TO_SCALERS_ARG, BUNDLEUTILS_KEYS_TO_CONVERT_TO_SCALARS, True, default_keys_to_scalars)
+    keys_to_scalars = null_check(keys_to_scalars, KEYS_TO_CONVERT_TO_SCALARS_ARG, BUNDLEUTILS_KEYS_TO_CONVERT_TO_SCALARS, True, default_keys_to_scalars)
     # if path or url is not provided, look for a zip file in the current directory matching the pattern core-casc-export-*.zip
     if not path and not url:
         zip_files = glob.glob('core-casc-export-*.zip')
@@ -2407,32 +2407,35 @@ def _transform(configs, source_dir, target_dir):
     _update_bundle(target_dir)
 
 @click.pass_context
-def preprocess_yaml_object(ctx, data):
-    if isinstance(data, CommentedMap):  # Handle dictionaries with comments
-        # remove empty keys
+def preprocess_yaml_object(ctx, data, parent_key = None):
+    if isinstance(data, CommentedMap):
+        # Remove empty keys
         keys_to_remove = [k for k in data if k == ""]
         if keys_to_remove:
-            logging.debug(f'Removed empty keys from {type(data)}: {data}')
-        for key in keys_to_remove:
-            del data[key]  # Remove the empty key directly from the object
-        # Convert keys to scalars
-        convert_to_scalers = [k for k in data if k in ctx.obj.get(KEYS_TO_CONVERT_TO_SCALERS_ARG)]
-        for key in convert_to_scalers:
+            logging.debug(f"Removed empty keys from {type(data)}: {data}")
+            for key in keys_to_remove:
+                del data[key]
+        # Convert values to block scalars if needed
+        convert_to_scalars = [k for k in data if k in ctx.obj.get(KEYS_TO_CONVERT_TO_SCALARS_ARG)]
+        for key in convert_to_scalars:
             data[key] = scalarstring.LiteralScalarString(data[key])
         for key, value in data.items():
-            preprocess_yaml_object(value)  # Recursively process nested items
-    elif isinstance(data, (CommentedSeq, list)):  # Handle lists with comments
+            preprocess_yaml_object(value, key)  # Recursively process nested items
+    elif isinstance(data, (CommentedSeq, list)):
         items_to_keep = []
         items_to_ignore = []
         for item in data:
-            processed_item = preprocess_yaml_object(item)
-            if processed_item or processed_item == 0:  # Keep non-empty items
+            # Special case: `env` list with dicts that have only 'key'
+            if parent_key == "env" and isinstance(item, dict):
+                if list(item.keys()) == ["key"]:  # only 'key' present
+                    item['value'] = ""
+            processed_item = preprocess_yaml_object(item, parent_key)
+            if processed_item or processed_item == 0:
                 items_to_keep.append(processed_item)
             else:
                 items_to_ignore.append(item)
-        # Modify the list in place
         if items_to_ignore:
-            logging.debug(f'Removed empty keys from {type(data)}: {data}')
+            logging.debug(f"Removed empty items from {parent_key}: {items_to_ignore}")
         data[:] = items_to_keep
     # For scalar values, just return as-is
     return data
