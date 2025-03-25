@@ -1,0 +1,38 @@
+patches: {}
+
+splits:
+  jcasc:
+    jenkins.yaml:
+      # Split views config into separate file
+    - target: views-only.yaml
+      paths:
+      - jenkins/views
+      - jenkins/primaryView
+      # Delete all other sections
+    - target: delete
+      paths:
+      - /*
+
+    items.yaml:
+      # Delete all sections
+    - target: delete
+      paths:
+      - /*
+
+    plugins.yaml:
+      # Delete all sections
+    - target: delete
+      paths:
+      - /*
+
+    rbac.yaml:
+      # Delete all sections
+    - target: delete
+      paths:
+      - /*
+
+    variables.yaml:
+      # Delete all sections
+    - target: delete
+      paths:
+      - /*

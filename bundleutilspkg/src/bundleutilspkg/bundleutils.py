@@ -53,6 +53,7 @@ default_bundle_api_version = '2'
 default_keys_to_scalars = ['systemMessage','script','description']
 
 bundle_yaml_keys = {'jcasc': 'jenkins.yaml', 'items': 'items.yaml', 'plugins': 'plugins.yaml', 'rbac': 'rbac.yaml', 'catalog': 'plugin-catalog.yaml', 'variables': 'variables.yaml'}
+selector_pattern = re.compile(r"\{\{select\s+\"([^\"]+)\"\s*\}\}")
 
 # environment variables
 BUNDLEUTILS_CI_VERSION = 'BUNDLEUTILS_CI_VERSION'
@@ -285,6 +286,7 @@ def server_options_null_check(ci_version, ci_type, ci_server_home):
     return ci_version, ci_type, ci_server_home
 
 def transform_options(func):
+    func = click.option('-d', '--dry-run', default=False, is_flag=True, help=f'Print the merged transform config and exit.')(func)
     func = click.option('-S', '--strict', default=False, is_flag=True, help=f'Fail when referencing non-existent files - warn otherwise.')(func)
     func = click.option('-c', '--config', 'configs', type=click.Path(file_okay=True, dir_okay=False), multiple=True, help=f'The transformation config(s).')(func)
     func = click.option('-s', '--source-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The source directory for the YAML documents.')(func)
@@ -2111,6 +2113,63 @@ def traverse_credentials(hash_only, hash_seed, filename, obj, custom_replacement
             patch = {"op": "replace", "path": f'{path}', "value": f'{replacement}'}
             apply_patch(filename, [patch])
 
+def parse_selector(selector_str):
+    return dict(kv.split("=", 1) for kv in selector_str.split(","))
+
+def resolve_paths_with_selectors(data, path):
+    """Return a list of all matching resolved paths."""
+    parts = path.strip("/").split("/")
+    results = []
+
+    def recurse(current, parts_remaining, path_so_far):
+        if not parts_remaining:
+            results.append(path_so_far)
+            return
+
+        part = parts_remaining[0]
+
+        # SELECTOR
+        selector_match = selector_pattern.fullmatch(part)
+        if selector_match:
+            if not isinstance(current, list):
+                return
+            conditions = parse_selector(selector_match.group(1))
+            for i, item in enumerate(current):
+                if all(str(item.get(k)) == v for k, v in conditions.items()):
+                    recurse(item, parts_remaining[1:], path_so_far + [i])
+
+        # WILDCARD
+        elif part == "*":
+            if not isinstance(current, list):
+                return
+            for i, item in enumerate(current):
+                recurse(item, parts_remaining[1:], path_so_far + [i])
+
+        # REGULAR
+        else:
+            key = int(part) if isinstance(current, list) and part.isdigit() else part
+            if isinstance(current, list) and isinstance(key, int) and key < len(current):
+                recurse(current[key], parts_remaining[1:], path_so_far + [key])
+            elif isinstance(current, dict) and key in current:
+                recurse(current[key], parts_remaining[1:], path_so_far + [key])
+
+    recurse(data, parts, [])
+    return results
+
+def expand_patch_paths(obj, patch_list):
+    expanded = []
+
+    for patch in patch_list:
+        matches = resolve_paths_with_selectors(obj, patch['path'])  # use our earlier function
+        for path_parts in matches:
+            json_ptr = "/" + "/".join(str(p).replace("~", "~0").replace("/", "~1") for p in path_parts)
+            new_patch = patch.copy()
+            new_patch["path"] = json_ptr
+            expanded.append(new_patch)
+
+    return expanded
+
+
 def apply_patch(filename, patch_list):
     with open(filename, 'r') as inp:
         obj = yaml.load(inp)
@@ -2119,8 +2178,12 @@ def apply_patch(filename, patch_list):
         logging.error(f'Failed to load YAML object from file {filename}')
         return
 
+    # Expand wildcard/selector paths before applying
+    expanded_patches = expand_patch_paths(obj, patch_list)
+    logging.debug(f"Expanded patches:\n{printYaml(expanded_patches)}")
+
     # for each patch, apply the patch to the object
-    for patch in patch_list:
+    for patch in expanded_patches:
         # if not an add operation
         if patch['op'] != 'add':
             # Check if the path exists
@@ -2300,11 +2363,11 @@ def source_target_prep(source_dir, target_dir, configs, suffix, filename):
 @bundleutils.command()
 @transform_options
 @click.pass_context
-def normalize(ctx, strict, configs, source_dir, target_dir):
+def normalize(ctx, strict, configs, source_dir, target_dir, dry_run):
     """Transform using the normalize.yaml for better comparison."""
     set_logging(ctx)
     source_dir, target_dir, configs = source_target_prep(source_dir, target_dir, configs, '-normalized', 'normalize.yaml')
-    _transform(configs, source_dir, target_dir)
+    _transform(configs, source_dir, target_dir, dry_run)
 
 @bundleutils.command()
 @transform_options
@@ -2313,7 +2376,7 @@ def normalize(ctx, strict, configs, source_dir, target_dir):
 
     NOTE: Ideally, this should be a secret value that is not shared with anyone. Changing this value will result in different hashes.""")
 @click.pass_context
-def audit(ctx, strict, configs, source_dir, target_dir, hash_seed):
+def audit(ctx, strict, configs, source_dir, target_dir, hash_seed, dry_run):
     """
     Transform using the normalize.yaml but obfuscating any sensitive data.
 
@@ -2329,12 +2392,12 @@ def audit(ctx, strict, configs, source_dir, target_dir, hash_seed):
     null_check(hash_seed, 'hash_seed', BUNDLEUTILS_CREDENTIAL_HASH_SEED, False,'')
 
     source_dir, target_dir, configs = source_target_prep(source_dir, target_dir, configs, '-audit', 'normalize.yaml')
-    _transform(configs, source_dir, target_dir)
+    _transform(configs, source_dir, target_dir, dry_run)
 
 @bundleutils.command()
 @transform_options
 @click.pass_context
-def transform(ctx, strict, configs, source_dir, target_dir):
+def transform(ctx, strict, configs, source_dir, target_dir, dry_run):
     """Transform using a custom transformation config."""
     set_logging(ctx)
     source_dir = null_check(source_dir, SOURCE_DIR_ARG, BUNDLEUTILS_TRANSFORM_SOURCE_DIR)
@@ -2342,7 +2405,7 @@ def transform(ctx, strict, configs, source_dir, target_dir):
     target_dir = null_check(target_dir, TARGET_DIR_ARG, BUNDLEUTILS_TRANSFORM_TARGET_DIR)
     target_dir = os.path.normpath(target_dir)
     configs = null_check(configs, 'configs', BUNDLEUTILS_TRANSFORM_CONFIGS, False)
-    _transform(configs, source_dir, target_dir)
+    _transform(configs, source_dir, target_dir, dry_run)
 
 @click.pass_context
 def _file_check(ctx, file, strict=False):
@@ -2358,7 +2421,7 @@ def _file_check(ctx, file, strict=False):
         return False
     return True
 
-def _transform(configs, source_dir, target_dir):
+def _transform(configs, source_dir, target_dir, dry_run = False):
     """Transform using a custom transformation config."""
     # add the transformation configs recursively into the merged config
     # if the configs is a string, split it by space
@@ -2378,6 +2441,10 @@ def _transform(configs, source_dir, target_dir):
             logging.info(f'Transformation: processing {config}')
             obj = yaml.load(inp)
             merged_config = recursive_merge(merged_config, obj)
+
+    if dry_run:
+        logging.info(f'Merged config:\n' + printYaml(merged_config))
+        return
 
     logging.debug(f'Merged config:\n' + printYaml(merged_config))
     source_dir = os.path.normpath(source_dir)
@@ -2641,13 +2708,13 @@ def split_jcasc(target_dir, filename, configs):
         # NOTE on paths:
         # - the path may have an asterisk at the end and after the last slash
         # - this will to affect all keys under that path
-        # - this can only happen in conjunction with the 'auto' target
+        # - this can only happen in conjunction with the 'auto' or 'delete' target
         # - if either of these conditions are not met, it will error out
         new_paths = []
         for path in paths:
             if path.endswith('/*'):
-                if target != 'auto':
-                    die(f'Path {path} must use target "auto"')
+                if target != 'auto' and target != 'delete':
+                    die(f'Path {path} must use target "auto" or "delete"')
                 logging.debug(f'Moving all keys under {path} to {target}')
                 if path == '/*':
                     path = ''
@@ -2677,29 +2744,34 @@ def split_jcasc(target_dir, filename, configs):
                     target_file = path.replace('/', '.') + '.yaml'
                 else:
                     target_file = target
-                target_file = os.path.join(target_dir, 'jenkins.' + target_file)
-                logging.debug(f'Moving {path} to {target_file}')
 
-                # Load the target file if it exists, or create a new one if it doesn't
-                if os.path.exists(target_file):
-                    logging.debug(f'Loading existing target file {target_file}')
-                    with open(target_file, 'r') as file:
-                        target_data = yaml.load(file)
+                if target_file == 'delete':
+                    logging.info(f'Deleting {path}')
+                    del_nested(source_data, path)
                 else:
-                    logging.debug(f'Creating new target file {target_file}')
-                    target_data = {}
+                    target_file = os.path.join(target_dir, 'jenkins.' + target_file)
+                    logging.debug(f'Moving {path} to {target_file}')
 
-                # Move the path from the source file to the target file
-                set_nested(target_data, path, get_nested(source_data, path))
-                del_nested(source_data, path)
+                    # Load the target file if it exists, or create a new one if it doesn't
+                    if os.path.exists(target_file):
+                        logging.debug(f'Loading existing target file {target_file}')
+                        with open(target_file, 'r') as file:
+                            target_data = yaml.load(file)
+                    else:
+                        logging.debug(f'Creating new target file {target_file}')
+                        target_data = {}
 
-                # Save the target file
-                if target_data:
-                    logging.info(f'Saving target file {target_file}')
-                    with open(target_file, 'w') as file:
-                        yaml.dump(target_data, file)
-                else:
-                    logging.info(f'No data found at {path}. Skipping saving target file {target_file}')
+                    # Move the path from the source file to the target file
+                    set_nested(target_data, path, get_nested(source_data, path))
+                    del_nested(source_data, path)
+
+                    # Save the target file
+                    if target_data:
+                        logging.info(f'Saving target file {target_file}')
+                        with open(target_file, 'w') as file:
+                            yaml.dump(target_data, file)
+                    else:
+                        logging.info(f'No data found at {path}. Skipping saving target file {target_file}')
             else:
                 logging.debug(f'Path {path} not found in source file')
 

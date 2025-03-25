@@ -1,0 +1,356 @@
+removeStrategy:
+  rbac: SYNC
+  items: NONE
+items:
+- kind: pipeline
+  name: base-audit
+  concurrentBuild: true
+  definition:
+    cpsScmFlowDefinition:
+      scriptPath: job-scripts/casc-local-sync.jenkinsfile
+      scm:
+        scmGit:
+          extensions:
+          - wipeWorkspace: {}
+          - localBranch: {}
+          userRemoteConfigs:
+          - userRemoteConfig:
+              credentialsId: github-token-rw
+              url: https://github.com/tsmp-falcon-platform/test2-bundles
+          branches:
+          - branchSpec:
+              name: refs/heads/main
+      lightweight: true
+  description: Use this job to SYNC THE OBFUSCATED BUNDLE to the MAIN BRANCH of the
+    AUDIT REPO.
+  disabled: false
+  displayName: ''
+  properties:
+  - buildDiscarder:
+      strategy:
+        logRotator:
+          removeLastBuild: false
+          artifactDaysToKeep: -1
+          artifactNumToKeep: -1
+          daysToKeep: 30
+          numToKeep: 30
+  - githubProjectProperty:
+      displayName: ''
+      projectUrlStr: https://github.com/tsmp-falcon-platform/test2-bundles/
+  resumeBlocked: false
+- kind: pipeline
+  name: base-bootstrap
+  concurrentBuild: true
+  definition:
+    cpsScmFlowDefinition:
+      scriptPath: job-scripts/casc-local-sync.jenkinsfile
+      scm:
+        scmGit:
+          extensions:
+          - wipeWorkspace: {}
+          - localBranch: {}
+          userRemoteConfigs:
+          - userRemoteConfig:
+              credentialsId: github-token-rw
+              url: https://github.com/tsmp-falcon-platform/test2-bundles
+          branches:
+          - branchSpec:
+              name: refs/heads/main
+      lightweight: true
+  description: Use this job to CREATE THE ENTRY in the bundle-profiles.yaml file for
+    the current controller.
+  disabled: false
+  displayName: ''
+  properties:
+  - buildDiscarder:
+      strategy:
+        logRotator:
+          removeLastBuild: false
+          artifactDaysToKeep: -1
+          artifactNumToKeep: -1
+          daysToKeep: 30
+          numToKeep: 30
+  - githubProjectProperty:
+      displayName: ''
+      projectUrlStr: https://github.com/tsmp-falcon-platform/test2-bundles/
+  - parameters:
+      parameterDefinitions:
+      - string:
+          trim: true
+          defaultValue: controller-common
+          name: BUNDLEUTILS_BOOTSTRAP_PROFILE
+          description: Bootstrap profile to use
+  resumeBlocked: false
+- kind: pipeline
+  name: base-direct
+  concurrentBuild: true
+  definition:
+    cpsScmFlowDefinition:
+      scriptPath: job-scripts/casc-local-sync.jenkinsfile
+      scm:
+        scmGit:
+          extensions:
+          - wipeWorkspace: {}
+          - localBranch: {}
+          userRemoteConfigs:
+          - userRemoteConfig:
+              credentialsId: github-token-rw
+              url: https://github.com/tsmp-falcon-platform/test2-bundles
+          branches:
+          - branchSpec:
+              name: refs/heads/main
+      lightweight: true
+  description: Use this job to sync the server configuration directly to the main
+    branch bypassing the drift branch and PR process.
+  disabled: false
+  displayName: ''
+  properties:
+  - buildDiscarder:
+      strategy:
+        logRotator:
+          removeLastBuild: false
+          artifactDaysToKeep: -1
+          artifactNumToKeep: -1
+          daysToKeep: 30
+          numToKeep: 30
+  - githubProjectProperty:
+      displayName: ''
+      projectUrlStr: https://github.com/tsmp-falcon-platform/test2-bundles/
+  resumeBlocked: false
+- kind: pipeline
+  name: base-drift
+  concurrentBuild: true
+  definition:
+    cpsScmFlowDefinition:
+      scriptPath: job-scripts/casc-local-sync.jenkinsfile
+      scm:
+        scmGit:
+          extensions:
+          - wipeWorkspace: {}
+          - localBranch: {}
+          userRemoteConfigs:
+          - userRemoteConfig:
+              credentialsId: github-token-rw
+              url: https://github.com/tsmp-falcon-platform/test2-bundles
+          branches:
+          - branchSpec:
+              name: refs/heads/main
+      lightweight: true
+  description: Use this job to sync the server configuration to the drift branch for
+    PR and merge.
+  disabled: true
+  displayName: ''
+  properties:
+  - buildDiscarder:
+      strategy:
+        logRotator:
+          removeLastBuild: false
+          artifactDaysToKeep: -1
+          artifactNumToKeep: -1
+          daysToKeep: 30
+          numToKeep: 30
+  - githubProjectProperty:
+      displayName: ''
+      projectUrlStr: https://github.com/tsmp-falcon-platform/test2-bundles/
+  - parameters:
+      parameterDefinitions:
+      - booleanParam:
+          defaultValue: true
+          name: PERFORM_VALIDATION
+          description: Perform validation
+  resumeBlocked: false
+- kind: pipeline
+  name: base-no-risk-no-fun
+  concurrentBuild: true
+  definition:
+    cpsScmFlowDefinition:
+      scriptPath: job-scripts/casc-local-sync.jenkinsfile
+      scm:
+        scmGit:
+          extensions:
+          - wipeWorkspace: {}
+          - localBranch: {}
+          userRemoteConfigs:
+          - userRemoteConfig:
+              credentialsId: github-token-rw
+              url: https://github.com/tsmp-falcon-platform/test2-bundles
+          branches:
+          - branchSpec:
+              name: refs/heads/main
+      lightweight: true
+  description: Use this job to sync the server configuration to the drift branch for
+    PR and merge.
+  disabled: false
+  displayName: ''
+  properties:
+  - buildDiscarder:
+      strategy:
+        logRotator:
+          removeLastBuild: false
+          artifactDaysToKeep: -1
+          artifactNumToKeep: -1
+          daysToKeep: 30
+          numToKeep: 30
+  - githubProjectProperty:
+      displayName: ''
+      projectUrlStr: https://github.com/tsmp-falcon-platform/test2-bundles/
+  - parameters:
+      parameterDefinitions:
+      - booleanParam:
+          defaultValue: true
+          name: PERFORM_VALIDATION
+          description: Perform validation
+      - string:
+          trim: true
+          defaultValue: controller-advanced
+          name: BUNDLEUTILS_BOOTSTRAP_PROFILE
+          description: Bootstrap profile to use
+  resumeBlocked: false
+- kind: pipeline
+  name: base-update
+  concurrentBuild: true
+  definition:
+    cpsScmFlowDefinition:
+      scriptPath: job-scripts/casc-local-sync.jenkinsfile
+      scm:
+        scmGit:
+          extensions:
+          - wipeWorkspace: {}
+          - localBranch: {}
+          userRemoteConfigs:
+          - userRemoteConfig:
+              credentialsId: github-token-rw
+              url: https://github.com/tsmp-falcon-platform/test2-bundles
+          branches:
+          - branchSpec:
+              name: refs/heads/main
+      lightweight: true
+  description: Use this job to UPDATE THE ENTRY in the bundle-profiles.yaml file for
+    the current controller.
+  disabled: false
+  displayName: ''
+  properties:
+  - buildDiscarder:
+      strategy:
+        logRotator:
+          removeLastBuild: false
+          artifactDaysToKeep: -1
+          artifactNumToKeep: -1
+          daysToKeep: 30
+          numToKeep: 30
+  - githubProjectProperty:
+      displayName: ''
+      projectUrlStr: https://github.com/tsmp-falcon-platform/test2-bundles/
+  - parameters:
+      parameterDefinitions:
+      - string:
+          trim: true
+          defaultValue: controller-common
+          name: BUNDLEUTILS_BOOTSTRAP_PROFILE
+          description: Bootstrap profile to use
+  resumeBlocked: false
+- kind: folder
+  name: folder-base
+  description: ''
+  displayName: ''
+  items:
+  - kind: folder
+    name: folder-1
+    description: ''
+    displayName: ''
+    items:
+    - kind: pipeline
+      name: pipeline-1
+      concurrentBuild: true
+      definition:
+        cpsFlowDefinition:
+          sandbox: true
+          script: ''
+      description: ''
+      disabled: hello
+      displayName: ''
+      properties:
+      - jobRestrictionProperty: {}
+      resumeBlocked: false
+    - kind: pipeline
+      name: pipeline-2
+      concurrentBuild: true
+      definition:
+        cpsFlowDefinition:
+          sandbox: true
+          script: ''
+      description: ''
+      disabled: hello
+      displayName: ''
+      properties:
+      - jobRestrictionProperty: {}
+      resumeBlocked: false
+    - kind: pipeline
+      name: pipeline-3
+      concurrentBuild: true
+      definition:
+        cpsFlowDefinition:
+          sandbox: true
+          script: ''
+      description: ''
+      disabled: hello
+      displayName: ''
+      properties:
+      - jobRestrictionProperty: {}
+      resumeBlocked: false
+    properties:
+    - envVars: {}
+    - itemRestrictions:
+        filter: false
+  - kind: folder
+    name: folder-2
+    description: ''
+    displayName: ''
+    items:
+    - kind: pipeline
+      name: pipeline-1
+      concurrentBuild: true
+      definition:
+        cpsFlowDefinition:
+          sandbox: true
+          script: ''
+      description: ''
+      disabled: hello
+      displayName: ''
+      properties:
+      - jobRestrictionProperty: {}
+      resumeBlocked: false
+    - kind: pipeline
+      name: pipeline-2
+      concurrentBuild: true
+      definition:
+        cpsFlowDefinition:
+          sandbox: true
+          script: ''
+      description: ''
+      disabled: hello
+      displayName: ''
+      properties:
+      - jobRestrictionProperty: {}
+      resumeBlocked: false
+    - kind: pipeline
+      name: pipeline-3
+      concurrentBuild: true
+      definition:
+        cpsFlowDefinition:
+          sandbox: true
+          script: ''
+      description: ''
+      disabled: hello
+      displayName: ''
+      properties:
+      - jobRestrictionProperty: {}
+      resumeBlocked: false
+    properties:
+    - envVars: {}
+    - itemRestrictions:
+        filter: false
+  properties:
+  - envVars: {}
+  - itemRestrictions:
+      filter: false

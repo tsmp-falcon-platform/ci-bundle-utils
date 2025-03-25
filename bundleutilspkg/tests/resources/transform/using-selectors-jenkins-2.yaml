@@ -1,0 +1,42 @@
+patches:
+
+  jenkins.yaml:
+  - op: remove
+    path: /unclassified/artifactoryBuilder/jfrogInstances/*/deployerCredentialsConfig/username
+  - op: remove
+    path: /unclassified/artifactoryBuilder/jfrogInstances/*/resolverCredentialsConfig/username
+  - op: remove
+    path: /unclassified/artifactoryBuilder/jfrogInstances/*/deployerCredentialsConfig/password
+  - op: remove
+    path: /unclassified/artifactoryBuilder/jfrogInstances/*/resolverCredentialsConfig/password
+  - op: remove
+    path: /unclassified/artifactoryBuilder/jfrogPipelinesServer/credentialsConfig/username
+  - op: remove
+    path: /unclassified/artifactoryBuilder/jfrogPipelinesServer/credentialsConfig/password
+
+# delete other files for brevity
+splits:
+  jcasc:
+    items.yaml:
+      # Delete all sections
+    - target: delete
+      paths:
+      - /*
+
+    plugins.yaml:
+      # Delete all sections
+    - target: delete
+      paths:
+      - /*
+
+    rbac.yaml:
+      # Delete all sections
+    - target: delete
+      paths:
+      - /*
+
+    variables.yaml:
+      # Delete all sections
+    - target: delete
+      paths:
+      - /*

@@ -114,6 +114,7 @@ Options:
   -c, --config FILE           The transformation config(s).
   -S, --strict                Fail when referencing non-existent files - warn
                               otherwise.
+  -d, --dry-run               Print the merged transform config and exit.
   -H, --hash-seed TEXT        Optional prefix for the hashing process (also
                               BUNDLEUTILS_CREDENTIAL_HASH_SEED).
                               
@@ -409,6 +410,7 @@ Options:
   -c, --config FILE           The transformation config(s).
   -S, --strict                Fail when referencing non-existent files - warn
                               otherwise.
+  -d, --dry-run               Print the merged transform config and exit.
   --help                      Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils transform [OPTIONS]
@@ -423,6 +425,7 @@ Options:
   -c, --config FILE           The transformation config(s).
   -S, --strict                Fail when referencing non-existent files - warn
                               otherwise.
+  -d, --dry-run               Print the merged transform config and exit.
   --help                      Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils update-bundle [OPTIONS]

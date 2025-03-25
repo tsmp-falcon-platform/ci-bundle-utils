@@ -1,0 +1,70 @@
+patches:
+
+  jenkins.yaml:
+    # Replace the password of the deployerCredentialsConfig of all jfrogInstances
+  - op: replace
+    path: /unclassified/artifactoryBuilder/jfrogInstances/*/deployerCredentialsConfig/password
+    value: new-shared-pass # don't do this at home
+
+    # Replace the password of the resolverCredentialsConfig of all jfrogInstances
+  - op: replace
+    path: /unclassified/artifactoryBuilder/jfrogInstances/*/resolverCredentialsConfig/password
+    value: new-shared-pass # don't do this at home
+
+    # Replace the username of the deployerCredentialsConfig of jFrogServer1 and jFrogServer2
+  - op: replace
+    path: /unclassified/artifactoryBuilder/jfrogInstances/{{select "instanceId=jFrogServer1"}}/deployerCredentialsConfig/username
+    value: new-deployer1
+
+    # Replace the username of the deployerCredentialsConfig of jFrogServer1 and jFrogServer2
+  - op: replace
+    path: /unclassified/artifactoryBuilder/jfrogInstances/{{select "instanceId=jFrogServer1"}}/resolverCredentialsConfig/username
+    value: new-resolver1
+
+    # Replace the username of the deployerCredentialsConfig of jFrogServer1 and jFrogServer2
+  - op: replace
+    path: /unclassified/artifactoryBuilder/jfrogInstances/{{select "instanceId=jFrogServer2"}}/deployerCredentialsConfig/username
+    value: new-deployer2
+
+    # Replace the username and password of the jFrogServer
+  - op: replace
+    path: /unclassified/artifactoryBuilder/jfrogInstances/{{select "instanceId=jFrogServer2"}}/resolverCredentialsConfig/username
+    value: new-resolver2
+
+    # Replace the username of the jfrogPipelinesServer
+  - op: replace
+    path: /unclassified/artifactoryBuilder/jfrogPipelinesServer/credentialsConfig/username
+    value: new-server-user
+
+    # Replace the username of the jfrogPipelinesServer
+  - op: replace
+    path: /unclassified/artifactoryBuilder/jfrogPipelinesServer/credentialsConfig/password
+    value: new-server-pass
+
+
+# delete other files for brevity
+splits:
+  jcasc:
+    items.yaml:
+      # Delete all sections
+    - target: delete
+      paths:
+      - /*
+
+    plugins.yaml:
+      # Delete all sections
+    - target: delete
+      paths:
+      - /*
+
+    rbac.yaml:
+      # Delete all sections
+    - target: delete
+      paths:
+      - /*
+
+    variables.yaml:
+      # Delete all sections
+    - target: delete
+      paths:
+      - /*

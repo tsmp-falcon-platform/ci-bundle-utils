@@ -175,3 +175,34 @@ def test_fetch_add_missing_value(request, runner):
                     "-P", f"{testdir}/resources/fetch/missing-env-values.yaml",
                     "-t", outdir]
     _test_merge_bundles(testdir, test_name, runner, command_args, expected_dir)
+
+def _test_transform(testdir, test_name, runner):
+    # remove test_transform prefix from test_name and replace _ with -
+    transform_config = f'transform/{test_name[15:].replace('_', '-')}'
+    outdir = os.path.join(testdir, 'resources', 'target', test_name)
+    expected_dir = f'resources/{transform_config}-expected'
+    command_args = ["transform",
+                    "-s", f"{testdir}/resources/transform/base",
+                    "-c", f"{testdir}/resources/{transform_config}.yaml",
+                    "-t", outdir]
+    _test_merge_bundles(testdir, test_name, runner, command_args, expected_dir)
+
+def test_transform_using_wildcard_delete(request, runner):
+    testdir = os.path.dirname(__file__)
+    test_name = request.node.name
+    _test_transform(testdir, test_name, runner)
+
+def test_transform_using_selectors_jenkins_1(request, runner):
+    testdir = os.path.dirname(__file__)
+    test_name = request.node.name
+    _test_transform(testdir, test_name, runner)
+
+def test_transform_using_selectors_jenkins_2(request, runner):
+    testdir = os.path.dirname(__file__)
+    test_name = request.node.name
+    _test_transform(testdir, test_name, runner)
+
+def test_transform_using_selectors_items(request, runner):
+    testdir = os.path.dirname(__file__)
+    test_name = request.node.name
+    _test_transform(testdir, test_name, runner)
