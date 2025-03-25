@@ -11,14 +11,7 @@ name: Adhoc Run tests
 
 on:
   workflow_dispatch:
-    inputs:
-      tag_name:
-        description: "Tag for release"
-        required: true
-      dry_run:
-        description: "Run in dry-run mode?"
-        required: false
-        default: "false"
+
 jobs:
   run-tests:
     name: Run Tests
