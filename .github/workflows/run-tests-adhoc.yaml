@@ -1,0 +1,50 @@
+# This workflow uses actions that are not certified by GitHub.
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+
+# GitHub recommends pinning actions to a commit SHA.
+# To get a newer version, you will need to update the SHA.
+# You can also reference a tag or branch, but the action may change without warning.
+
+name: Adhoc Run tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Tag for release"
+        required: true
+      dry_run:
+        description: "Run in dry-run mode?"
+        required: false
+        default: "false"
+jobs:
+  run-tests:
+    name: Run Tests
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [ubuntu-22.04]
+        python-version: ["3.12"]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Get full commit history and tags
+          ref: ${{ github.event.inputs.tag_name }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          make install-dev install
+
+      - name: Run tests
+        run: |
+          make test
