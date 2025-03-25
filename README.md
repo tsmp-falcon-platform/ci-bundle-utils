@@ -82,6 +82,7 @@ Commands:
   ci-validate                     Validate bundle against controller...
   completion                      Print the shell completion script
   config                          List evaluated config based on cwd and...
+  delete                          Delete a bundle source dir and the...
   diff                            Diff two YAML directories or files.
   diff-merged                     Diff two bundle directories by...
   extract-name-from-url           Smart extraction of the controller...
@@ -240,6 +241,20 @@ Usage: bundleutils config [OPTIONS]
 
 Options:
   --help  Show this message and exit.
+------------------------------------------------------------------------------------------------------------------------
+Usage: bundleutils delete [OPTIONS]
+
+  Delete a bundle source dir and the corresponding entry in bundle-
+  profiles.yaml
+
+Options:
+  -s, --source-dir DIRECTORY   The bundle to be bootstrapped.
+  -S, --source-base DIRECTORY  Specify parent dir of source-dir, bundle name
+                               taken from URL.
+  -U, --url TEXT               The controller URL to bootstrap (JENKINS_URL).
+  -v, --ci-version TEXT        Optional version (taken from the remote
+                               instance otherwise).
+  --help                       Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils diff [OPTIONS]
 
