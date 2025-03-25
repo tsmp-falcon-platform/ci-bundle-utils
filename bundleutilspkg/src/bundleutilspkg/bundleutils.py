@@ -529,6 +529,55 @@ def lookup_url(url, default_url = '', mandatory = True):
 @click.pass_context
 @click.option('-s', '--source-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The bundle to be bootstrapped.')
 @click.option('-S', '--source-base', type=click.Path(file_okay=False, dir_okay=True), help=f'Specify parent dir of source-dir, bundle name taken from URL.')
+@click.option('-U', '--url', help=f'The controller URL to bootstrap (JENKINS_URL).')
+@click.option('-v', '--ci-version', type=click.STRING, help=f'Optional version (taken from the remote instance otherwise).')
+def delete(ctx, source_dir, source_base, url, ci_version):
+    """
+    Delete a bundle source dir and the corresponding entry in bundle-profiles.yaml
+    """
+    _check_for_env_file(ctx)
+    # no bundle_profiles found, no need to check
+    if not ctx.obj.get(BUNDLE_PROFILES, ''):
+        logging.debug('No bundle profiles found. Nothing to add the bundle to.')
+        return
+    # source_dir and source_base are mutually exclusive but we need one of them
+    source_dir = null_check(source_dir, SOURCE_DIR_ARG, BUNDLEUTILS_BOOTSTRAP_SOURCE_DIR, False, '')
+    source_base = null_check(source_base, SOURCE_BASE_ARG, BUNDLEUTILS_BOOTSTRAP_SOURCE_BASE, False, '')
+    if source_dir and source_base:
+        die('source-dir and source-base are mutually exclusive')
+    elif source_base:
+        url = lookup_url(url)
+        bundle_name = _extract_name_from_url(url)
+        source_dir = os.path.join(source_base, bundle_name)
+        logging.info(f"Using source-dir: {source_dir} (derived from source-base and URL)")
+    elif source_dir:
+        logging.info(f"Using source-dir: {source_dir}")
+    else:
+        die('Either source-dir or source-base must be provided')
+    # bundle_profiles yaml
+    bundle_profiles = ctx.obj.get(BUNDLE_PROFILES)
+    bundle_name = _basename(source_dir)
+    if bundle_name in bundle_profiles['bundles']:
+        logging.info(f'Deleting bundle {bundle_name} entry in the bundle-profiles.yaml')
+        del bundle_profiles['bundles'][bundle_name]
+    else:
+        logging.info(f'No bundle config found for {bundle_name}. Adding it to the bundles')
+
+    logging.info(f'Deleting bundle {bundle_name} source directory')
+    remove_files_from_dir(source_dir)
+
+    # Loop through the profiles and reapply anchors dynamically since they get lost when loading the file
+    for key, value in bundle_profiles['profiles'].items():
+        if isinstance(value, dict):
+            value.yaml_set_anchor(key, always_dump=True)
+    # write the updated file
+    with open(ctx.obj.get(BUNDLEUTILS_ENV), 'w') as ofp:
+        yaml.dump(bundle_profiles, ofp)
+
+@bundleutils.command()
+@click.pass_context
+@click.option('-s', '--source-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The bundle to be bootstrapped.')
+@click.option('-S', '--source-base', type=click.Path(file_okay=False, dir_okay=True), help=f'Specify parent dir of source-dir, bundle name taken from URL.')
 @click.option('-p', '--profile', help=f'The bundle profile to use.')
 @click.option('-u', '--update', help=f'Should the bundle be updated if present.')
 @click.option('-U', '--url', help=f'The controller URL to bootstrap (JENKINS_URL).')
