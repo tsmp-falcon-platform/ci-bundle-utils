@@ -561,10 +561,13 @@ def delete(ctx, source_dir, source_base, url, ci_version):
         logging.info(f'Deleting bundle {bundle_name} entry in the bundle-profiles.yaml')
         del bundle_profiles['bundles'][bundle_name]
     else:
-        logging.info(f'No bundle config found for {bundle_name}. Adding it to the bundles')
+        logging.info(f'No bundle config found for {bundle_name}. Nothing to delete')
 
-    logging.info(f'Deleting bundle {bundle_name} source directory')
-    remove_files_from_dir(source_dir)
+    if not os.path.exists(source_dir):
+        logging.info(f"Bundle {bundle_name} does not exist. Nothing to delete")
+    else:
+        logging.info(f'Deleting bundle {bundle_name} source directory')
+        shutil.rmtree(source_dir)
 
     # Loop through the profiles and reapply anchors dynamically since they get lost when loading the file
     for key, value in bundle_profiles['profiles'].items():
