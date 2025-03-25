@@ -1,0 +1,95 @@
+jenkins:
+  clouds:
+  - operationsCenterAgentProvisioningService
+  globalNodeProperties:
+    - envVars:
+        env:
+          - key: "VAR1"
+            value: "value-var1"
+          - key: "VAR2"
+            value: "value-var2"
+  primaryView:
+    all:
+      name: all
+  views:
+  - list:
+      columns:
+      - status
+      - jobName
+      - lastSuccess
+      - lastFailure
+      - lastDuration
+      - buildButton
+      filterExecutors: true
+      filterQueue: true
+      includeRegex: (casc-custom-.*|casc-local-.*)
+      name: Bundles
+  - all:
+      name: all
+
+unclassified:
+  artifactoryBuilder:
+    jfrogInstances:
+    - artifactoryUrl: "jFrogServer1.com/artifactory"
+      bypassProxy: false
+      connectionRetry: 3
+      deployerCredentialsConfig:
+        credentialsId: "casc-validation-cert"
+        overridingCredentials: false
+        password: "{AQAAABAAAAAQwsfcusmHYdDwQ6B+SfTvQ+TT8CCUlLk4N81RldDp4Pg=}"
+        username: "****"
+      deploymentThreads: 3
+      distributionUrl: "jFrogServer1.com/distribution"
+      instanceId: "jFrogServer1"
+      platformUrl: "jFrogServer1.com"
+      resolverCredentialsConfig:
+        credentialsId: "casc-validation-cert"
+        overridingCredentials: true
+        password: "{AQAAABAAAAAQ/I3lYJPzaiAnBKpPq3zMBJp82go0yacUfsVNbgY+F1Y=}"
+        username: "****"
+      timeout: 300
+    - artifactoryUrl: "jFrogServer2.com/artifactory"
+      bypassProxy: false
+      connectionRetry: 3
+      deployerCredentialsConfig:
+        credentialsId: "casc-validation-cert"
+        overridingCredentials: false
+        password: "{AQAAABAAAAAQwsfcusmHYdDwQ6B+SfTvQ+TT8CCUlLk4N81RldDp4Pg=}"
+        username: "****"
+      deploymentThreads: 3
+      distributionUrl: "jFrogServer2.com/distribution"
+      instanceId: "jFrogServer2"
+      platformUrl: "jFrogServer2.com"
+      resolverCredentialsConfig:
+        credentialsId: "casc-validation-cert"
+        overridingCredentials: true
+        password: "{AQAAABAAAAAQ/I3lYJPzaiAnBKpPq3zMBJp82go0yacUfsVNbgY+F1Y=}"
+        username: "****"
+      timeout: 300
+    jfrogPipelinesServer:
+      bypassProxy: false
+      connectionRetries: 3
+      credentialsConfig:
+        credentialsId: "4360d53e-4888-4fe2-b74f-9ac1c44f311f"
+        ignoreCredentialPluginDisabled: true
+        overridingCredentials: false
+        password: "{AQAAABAAAAAQbCKq5reVKb8XBC/qc8JmzJBskjxMkqxcNtePv4ySqa4=}"
+        username: "****"
+      integrationUrl: "jFrogServerServer"
+      timeout: 300
+    useCredentialsPlugin: true
+  bundleUpdateTiming:
+    automaticReload: true
+    automaticRestart: true
+    rejectWarnings: true
+    reloadAlwaysOnRestart: false
+    skipNewVersions: false
+  cascItemsConfiguration:
+    variableInterpolationEnabledForAdmin: false
+    variableInterpolationEnabledForNonAdmin: false
+  hibernationConfiguration:
+    activities:
+    - build
+    - web
+    enabled: true
+    gracePeriod: 3600

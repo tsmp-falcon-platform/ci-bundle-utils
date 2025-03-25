@@ -1,0 +1,6 @@
+apiVersion: '2'
+id: using-wildcard-delete-expected
+description: Bundle for using-wildcard-delete-expected
+version: ac24fd24-fdc0-a3ef-c2d2-f26692a896aa
+jcasc:
+- jenkins.views-only.yaml

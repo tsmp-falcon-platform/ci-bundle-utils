@@ -1,0 +1,42 @@
+patches:
+
+  items.yaml:
+    # Disable the base-drift pipeline
+  - op: replace
+    path: /items/{{select "kind=pipeline,name=base-drift"}}/disabled
+    value: true
+    # Enable concurrent builds for all items in root
+  - op: replace
+    path: /items/*/concurrentBuild
+    value: true
+    # Disable the all items in all folders in folder-1
+  - op: replace
+    path: /items/{{select "kind=folder,name=folder-base"}}/items/{{select "kind=folder"}}/items/*/disabled
+    value: hello
+
+# delete other files for brevity
+splits:
+  jcasc:
+    jenkins.yaml:
+      # Delete all sections
+    - target: delete
+      paths:
+      - /*
+
+    plugins.yaml:
+      # Delete all sections
+    - target: delete
+      paths:
+      - /*
+
+    rbac.yaml:
+      # Delete all sections
+    - target: delete
+      paths:
+      - /*
+
+    variables.yaml:
+      # Delete all sections
+    - target: delete
+      paths:
+      - /*

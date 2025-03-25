@@ -1,0 +1,6 @@
+apiVersion: '2'
+id: using-selectors-jenkins-expected-2
+description: Bundle for using-selectors-jenkins-expected-2
+version: 4fdf0311-8c68-325d-c87b-5c2d2334ee7d
+jcasc:
+- jenkins.yaml
