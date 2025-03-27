@@ -2514,6 +2514,7 @@ def _transform(configs, source_dir, target_dir, dry_run = False):
     for filename in os.listdir(source_dir):
         source_filename = os.path.join(source_dir, filename)
         target_filename = os.path.join(target_dir, filename)
+        logging.debug(f'Copying {source_filename} to {target_filename}')
         with open(source_filename, 'r') as inp:
             obj = yaml.load(inp)
         with open(target_filename, 'w') as out:
@@ -2785,7 +2786,16 @@ def split_jcasc(target_dir, filename, configs):
                         logging.debug(f' - > {key}')
                         new_paths.append(f'{key}')
             else:
+                # delete leading slash if it exists
+                if path.startswith('/'):
+                    logging.debug(f'Removing leading slash from path: {path}')
+                    path = path[1:]
                 new_paths.append(path)
+
+        logging.debug(f'Old paths before wildcards: {new_paths}')
+        logging.debug(f'New paths after wildcards: {new_paths}')
+        if is_truthy(os.environ.get('BUNDLEUTILS_TRACE', '')):
+            logging.debug(f'Source data: \n{printYaml(source_data)}')
 
         # For each path to move...
         for path in new_paths:
