@@ -2567,8 +2567,9 @@ def preprocess_yaml_object(ctx, data, parent_key = None):
 @click.option('-t', '--target-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The target directory to update the bundle.yaml file (defaults to CWD).')
 @click.option('-d', '--description', help=f'Optional description for the bundle (also {BUNDLEUTILS_BUNDLE_DESCRIPTION}).')
 @click.option('-o', '--output-sorted', help=f'Optional place to put the sorted yaml string used to created the version.')
+@click.option('-e', '--empty-bundle-strategy', help=f'Optional strategy for handling empty bundles ({BUNDLEUTILS_EMPTY_BUNDLE_STRATEGY}).')
 @click.pass_context
-def update_bundle(ctx, target_dir, description, output_sorted):
+def update_bundle(ctx, target_dir, description, output_sorted, empty_bundle_strategy):
     """
     \b
     Update the bundle.yaml file in the target directory:
@@ -2581,9 +2582,16 @@ def update_bundle(ctx, target_dir, description, output_sorted):
     - Sorts files alphabetically to ensure consistent order.
     - Sorts YAML keys recursively inside each file.
     - Generates a SHA-256 hash and converts it into a UUID.
+
+    \b
+    Empty bundle strategy must be one of:
+    - 'fail': Fail if the bundle is empty.
+    - 'delete': Delete the bundle if it is empty
+    - 'noop': Create a noop jenkins.yaml and continue
+
     """
     set_logging(ctx)
-    _update_bundle(target_dir, description, output_sorted)
+    _update_bundle(target_dir, description, output_sorted, empty_bundle_strategy)
 
 def _basename(dir):
     return os.path.basename(os.path.normpath(dir))
@@ -2675,8 +2683,9 @@ def _get_files_for_key(target_dir, key):
         return files
 
 @click.pass_context
-def _update_bundle(ctx, target_dir, description=None, output_sorted=None):
+def _update_bundle(ctx, target_dir, description=None, output_sorted=None, empty_bundle_strategy=None):
     description = null_check(description, 'description', BUNDLEUTILS_BUNDLE_DESCRIPTION, False)
+    empty_bundle_strategy = null_check(empty_bundle_strategy, 'empty_bundle_strategy', BUNDLEUTILS_EMPTY_BUNDLE_STRATEGY, False, default_empty_bundle_strategy)
 
     if not target_dir:
         target_dir = ctx.obj.get(ORIGINAL_CWD)
@@ -2708,7 +2717,6 @@ def _update_bundle(ctx, target_dir, description=None, output_sorted=None):
         all_files.extend(files)
 
     if len(all_files) == 0:
-        empty_bundle_strategy = os.getenv(BUNDLEUTILS_EMPTY_BUNDLE_STRATEGY, default_empty_bundle_strategy)
         if empty_bundle_strategy == 'delete':
             logging.warning(f'Empty Bundle Strategy: No files found. Removing target directory {target_dir}')
             shutil.rmtree(target_dir)
