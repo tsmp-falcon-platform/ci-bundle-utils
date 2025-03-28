@@ -46,11 +46,12 @@ script_name_upper = script_name.upper()
 plugin_json_url_path = '/manage/pluginManager/api/json?pretty&depth=1&tree=plugins[*[*]]'
 fetch_url_path = '/core-casc-export'
 validate_url_path = '/casc-bundle-mgnt/casc-bundle-validate'
-
+empty_bundle_strategies = ['fail', 'delete', 'noop']
 default_target = 'target/docs'
 default_auto_env_file = 'bundle-profiles.yaml'
 default_bundle_api_version = '2'
 default_keys_to_scalars = ['systemMessage','script','description']
+default_empty_bundle_strategy = 'delete'
 
 bundle_yaml_keys = {'jcasc': 'jenkins.yaml', 'items': 'items.yaml', 'plugins': 'plugins.yaml', 'rbac': 'rbac.yaml', 'catalog': 'plugin-catalog.yaml', 'variables': 'variables.yaml'}
 selector_pattern = re.compile(r"\{\{select\s+\"([^\"]+)\"\s*\}\}")
@@ -65,6 +66,7 @@ BUNDLEUTILS_AUTO_ENV_FILE = 'BUNDLEUTILS_AUTO_ENV_FILE'
 BUNDLEUTILS_ENV = 'BUNDLEUTILS_ENV'
 BUNDLEUTILS_ENV_OVERRIDE = 'BUNDLEUTILS_ENV_OVERRIDE'
 BUNDLEUTILS_USE_PROFILE = 'BUNDLEUTILS_USE_PROFILE'
+BUNDLEUTILS_EMPTY_BUNDLE_STRATEGY = 'BUNDLEUTILS_EMPTY_BUNDLE_STRATEGY'
 BUNDLEUTILS_KEYS_TO_CONVERT_TO_SCALARS = 'BUNDLEUTILS_KEYS_TO_CONVERT_TO_SCALARS'
 BUNDLEUTILS_BOOTSTRAP_SOURCE_DIR = 'BUNDLEUTILS_BOOTSTRAP_SOURCE_DIR'
 BUNDLEUTILS_BOOTSTRAP_SOURCE_BASE = 'BUNDLEUTILS_BOOTSTRAP_SOURCE_BASE'
@@ -2705,6 +2707,22 @@ def _update_bundle(ctx, target_dir, description=None, output_sorted=None):
         # Add the files to the all_files list
         all_files.extend(files)
 
+    if len(all_files) == 0:
+        empty_bundle_strategy = os.getenv(BUNDLEUTILS_EMPTY_BUNDLE_STRATEGY, default_empty_bundle_strategy)
+        if empty_bundle_strategy == 'delete':
+            logging.warning(f'Empty Bundle Strategy: No files found. Removing target directory {target_dir}')
+            shutil.rmtree(target_dir)
+            return
+        elif empty_bundle_strategy == 'fail':
+            die(f'Empty Bundle Strategy: No files found for bundle.yaml {target_dir}/bundle.yaml')
+        elif empty_bundle_strategy == 'noop':
+            logging.info('Empty Bundle Strategy: No files found. Creating an empty jenkins.yaml')
+            data['jcasc'] = 'jenkins.yaml'
+            with open(os.path.join(target_dir, 'jenkins.yaml'), 'w') as file:
+                yaml.dump({"jenkins": {}}, file)
+        else:
+            die(f"Empty Bundle Strategy: Strategy '{empty_bundle_strategy}' not supported. {BUNDLEUTILS_EMPTY_BUNDLE_STRATEGY} must be one of {empty_bundle_strategies}")
+
     # update the id key with the basename of the target_dir
     data['id'] = _basename(target_dir)
     data['description'] = f"Bundle for {data['id']}" if not description else description
@@ -2712,6 +2730,7 @@ def _update_bundle(ctx, target_dir, description=None, output_sorted=None):
     # update the version key with the md5sum of the content of all files
     data['version'] = generate_collection_uuid(target_dir, all_files, output_sorted)
     logging.info(f'Updated version to {data["version"]}')
+
 
     # Save the YAML file
     logging.info(f'Wrote {target_dir}/bundle.yaml')
