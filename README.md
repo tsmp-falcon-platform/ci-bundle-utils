@@ -455,14 +455,22 @@ Usage: bundleutils update-bundle [OPTIONS]
   - Sorts YAML keys recursively inside each file.
   - Generates a SHA-256 hash and converts it into a UUID.
 
+  Empty bundle strategy must be one of:
+  - 'fail': Fail if the bundle is empty.
+  - 'delete': Delete the bundle if it is empty
+  - 'noop': Create a noop jenkins.yaml and continue
+
 Options:
-  -t, --target-dir DIRECTORY  The target directory to update the bundle.yaml
-                              file (defaults to CWD).
-  -d, --description TEXT      Optional description for the bundle (also
-                              BUNDLEUTILS_BUNDLE_DESCRIPTION).
-  -o, --output-sorted TEXT    Optional place to put the sorted yaml string
-                              used to created the version.
-  --help                      Show this message and exit.
+  -t, --target-dir DIRECTORY      The target directory to update the
+                                  bundle.yaml file (defaults to CWD).
+  -d, --description TEXT          Optional description for the bundle (also
+                                  BUNDLEUTILS_BUNDLE_DESCRIPTION).
+  -o, --output-sorted TEXT        Optional place to put the sorted yaml string
+                                  used to created the version.
+  -e, --empty-bundle-strategy TEXT
+                                  Optional strategy for handling empty bundles
+                                  (BUNDLEUTILS_EMPTY_BUNDLE_STRATEGY).
+  --help                          Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils update-plugins [OPTIONS]
 
