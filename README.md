@@ -85,6 +85,7 @@ Commands:
   delete                          Delete a bundle source dir and the...
   diff                            Diff two YAML directories or files.
   diff-merged                     Diff two bundle directories by...
+  extract-from-pattern            Extract the controller name from a...
   extract-name-from-url           Smart extraction of the controller...
   fetch                           Fetch YAML documents from a URL or path.
   find-bundle-by-url              Find a bundle by Jenkins URL and CI...
@@ -274,6 +275,31 @@ Options:
   -a, --api-version TEXT   Optional apiVersion in case bundle does not contain
                            a bundle.yaml. Defaults to 2
   --help                   Show this message and exit.
+------------------------------------------------------------------------------------------------------------------------
+Usage: bundleutils extract-from-pattern [OPTIONS]
+
+  Extract the controller name from a string using a regex pattern. e.g.
+
+  - Full string. Pattern: ^([a-z0-9\-]+)$
+
+  - Prefix: main-, Suffix: -drift. Pattern: ^main-([a-z0-9\-]+)-drift$
+
+  - Prefix: feature/testing-, no suffix. Pattern:
+  ^feature/testing-([a-z0-9\-]+)$
+
+  - Prefix: testing-, no suffix. Pattern: ^testing-([a-z0-9\-]+)$
+
+  - Prefix: feature/JIRA-1234/, Suffix: optional __something. Pattern:
+  ^feature/[A-Z]+-\d+/([a-z0-9\-]+)(?:__[a-z0-9\-]+)*$
+
+Options:
+  -s, --string TEXT            The string to test (e.g. a feature/testing-
+                               controller-a or main-controller-a-drift).
+                               [required]
+  -p, --pattern TEXT           Optional version (taken from the remote
+                               instance otherwise).
+  -b, --bundles-dir DIRECTORY  The directory containing the bundles.
+  --help                       Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils extract-name-from-url [OPTIONS]
 
@@ -555,7 +581,7 @@ Options:
   -p, --password TEXT         Password for basic authentication
                               (BUNDLEUTILS_PASSWORD).
   -s, --source-dir DIRECTORY  The source directory for the YAML documents
-                              (BUNDLEUTILS_VALIDATE_SOURCE_DIR).  [required]
+                              (BUNDLEUTILS_VALIDATE_SOURCE_DIR).
   -w, --ignore-warnings       Do not fail if warnings are found.
   -r, --external-rbac FILE    Path to an external rbac.yaml from an Operations
                               Center bundle.

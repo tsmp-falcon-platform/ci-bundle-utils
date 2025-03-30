@@ -206,3 +206,67 @@ def test_transform_using_selectors_items(request, runner):
     testdir = os.path.dirname(__file__)
     test_name = request.node.name
     _test_transform(testdir, test_name, runner)
+
+def _test_extract_from_pattern(runner, string, pattern, expected_output, exit_code=0):
+    command_args = ["extract-from-pattern", "-s", string]
+    if pattern:
+        command_args += ["-p", pattern]
+    print(f"Running command: bundleutils {' '.join(command_args)}")
+    result = runner.invoke(bundleutils, command_args)
+    _traceback(result)
+    assert result.exit_code == exit_code
+    if exit_code == 0:
+        assert expected_output in result.output
+    else:
+        # stderr should contain the error message
+        assert result.exit_code != 0
+        print(f"{result}")
+
+def test_extract_from_pattern_default_pattern(runner):
+    string = "main-controller-name-drift"
+    expected_output = "controller-name"
+    _test_extract_from_pattern(runner, string, None, expected_output)
+
+def test_extract_from_pattern_full_string(runner):
+    string = "controller-name"
+    pattern = r"^([a-z0-9\-]+)$"
+    expected_output = "controller-name"
+    _test_extract_from_pattern(runner, string, pattern, expected_output)
+
+def test_extract_from_pattern_prefix_suffix(runner):
+    string = "main-controller-name-drift"
+    pattern = r"^main-([a-z0-9\-]+)-drift$"
+    expected_output = "controller-name"
+    _test_extract_from_pattern(runner, string, pattern, expected_output)
+
+def test_extract_from_pattern_prefix_only(runner):
+    string = "feature/testing-controller-name"
+    pattern = r"^feature/testing-([a-z0-9\-]+)$"
+    expected_output = "controller-name"
+    _test_extract_from_pattern(runner, string, pattern, expected_output)
+
+def test_extract_from_pattern_prefix_suffix_optional(runner):
+    string = "feature/JIRA-1234/controller-name__something"
+    pattern = r"^feature/[A-Z]+-\d+/([a-z0-9\-]+)(?:__[a-z0-9\-]+)*$"
+    expected_output = "controller-name"
+    _test_extract_from_pattern(runner, string, pattern, expected_output)
+
+def test_extract_from_pattern_invalid_string(runner):
+    string = "invalid-string"
+    pattern = r"^main-([a-z0-9\-]+)-drift$"
+    expected_output = "No match found"
+    _test_extract_from_pattern(runner, string, pattern, expected_output, exit_code=1)
+
+def test_extract_from_pattern_missing_pattern(runner):
+    command_args = ["extract-from-pattern"]
+    result = runner.invoke(bundleutils, command_args)
+    _traceback(result)
+    assert result.exit_code != 0
+    assert "Error: Missing option '-s'" in result.output
+
+def test_extract_from_pattern_env_var(runner, monkeypatch):
+    string = "feature/testing-controller-name"
+    pattern = r"^feature/testing-([a-z0-9\-]+)$"
+    expected_output = "controller-name"
+    monkeypatch.setenv("BUNDLEUTILS_BUNDLES_PATTERN", pattern)
+    _test_extract_from_pattern(runner, string, pattern, expected_output)

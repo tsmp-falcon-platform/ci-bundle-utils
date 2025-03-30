@@ -388,14 +388,14 @@ class JenkinsServerManager:
             file.write(str(process.pid))
         logging.info(f"Jenkins server starting with PID {process.pid}")
         logging.info(f"Jenkins server logging to {self.target_jenkins_log}")
-        self.wait_for_server(ci_max_start_time)
+        self.wait_for_server(ci_max_start_time, process.pid)
         self.check_auth_token()
         # look for any WARN or ERROR messages in the log, and print the log line if found
         logging.info("Jenkins server - Checking for WARN or ERROR messages in the Jenkins log...")
         with open(self.target_jenkins_log, 'r', encoding='utf-8') as log_file:
             for line in log_file:
                 if 'WARN' in line or 'ERROR' in line:
-                    logging.warn(line)
+                    logging.warning(line)
         logging.info("Jenkins server - Finished checking the Jenkins log")
 
     def get_envelope_json_from_war(self):
@@ -458,11 +458,22 @@ class JenkinsServerManager:
             # print the response
             logging.info(f"Authentication successful. Response: {response_json}")
 
-    def wait_for_server(self, ci_max_start_time):
+    def is_strictly_alive(self, pid):
+        try:
+            with open(f"/proc/{pid}/status", "r") as f:
+                for line in f:
+                    if line.startswith("State:"):
+                        state = line.split()[1]
+                        return state != "Z"  # Z = zombie
+        except FileNotFoundError:
+            return False  # Process doesn't exist
+        return False  # Failed to read state or unexpected format
+
+    def wait_for_server(self, ci_max_start_time, pid):
         """Wait for the Jenkins server to start."""
         server_started = False
         end_time = time.time() + ci_max_start_time
-        logging.info(f"Waiting max {ci_max_start_time} minutes for server to start...")
+        logging.info(f"Waiting max {ci_max_start_time} seconds for server to start...")
         server_url = self.get_server_url()
         while time.time() < end_time:
             try:
@@ -478,8 +489,14 @@ class JenkinsServerManager:
             except requests.ConnectionError:
                 time.sleep(5)
                 logging.info("Waiting for server to start...")
+                # check if the server is running
+                if self.is_strictly_alive(pid):
+                    logging.info(f"Process {pid} is running. Server may not be started yet.")
+                else:
+                    self.die(f"Process {pid} not found. Server may not be running. Stopping server just in case.")
+                    self.stop_server()
         if not server_started:
-            logging.warn("ERROR: Server not started in time. Printing the Jenkins log....")
+            logging.warning("ERROR: Server not started in time. Printing the Jenkins log....")
             with open(self.target_jenkins_log, "r", encoding='utf-8') as log_file:
                 logging.info(log_file.read())
             self.stop_server()
