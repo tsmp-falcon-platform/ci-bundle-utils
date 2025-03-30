@@ -12,8 +12,8 @@ footer: <sup>1</sup> thanks [@teilo]()![alt text](https://a.slack-edge.com/produ
 
 # 👷‍♂️ Meet Bob McBobface<sup>1<sup>
 
-DevOps engineer.
-Shared services team.
+DevOps Engineer.
+Shared Services team.
 Maintainer of the entire **CloudBees CI** ecosystem.
 
 _Sounds impressive, right?_
@@ -157,7 +157,7 @@ bundleutils ci-setup
 bundleutils ci-start
 ...
 ...
-INFO:root:Waiting max 120 minutes for server to start...
+INFO:root:Waiting max 120 seconds for server to start...
 INFO:root:Server started
 ...
 ...
@@ -169,7 +169,7 @@ bundleutils ci-stop
 
 # 💡 "Wait a minute..." Bob thought
 
-> _"...besides sanitising, I wonder what else transform can do?"_
+> _"...besides sanitising, what else can I `transform`?"_
 
 ---
 
@@ -189,7 +189,7 @@ plugins:
 
 ---
 
-# ✂️ Custom Yaml Splitting
+# ✂️ Custom YAML Splitting
 
 ```mono
 ❯ cat tc2/bundle.yaml
@@ -281,7 +281,7 @@ items:
 
 > _“Look, Ma! No args!”_
 
-Using **`bundle-profiles.yaml`**
+Bob uses the **`bundle-profiles.yaml`**
 to drive repeatable, preconfigured workflows.
 
 ---
@@ -308,7 +308,7 @@ bundles:
 
 ---
 
-# 🧩 Introducing Auto Envs
+# 🧩 Auto Envs (based on the CWD)
 
 ```mono
 ❯ cd bundles/controller-bundles/tc1
@@ -328,7 +328,7 @@ BUNDLEUTILS_VALIDATE_SOURCE_DIR=bundles/controller-bundles/tc1
 
 ---
 
-# 😢 Bob fetched using `--args`
+# 😢 Bob fetched a bundle using `--args`
 
 ```mono
 ❯ bundleutils fetch \
@@ -354,7 +354,7 @@ bundleutils fetch
 
 ---
 
-# 🫠 With `bundle-profiles.yaml`
+# 🫠 And finally with `bundle-profiles.yaml`
 
 ```mono
 ❯ bundleutils fetch
@@ -373,20 +373,30 @@ bundleutils fetch
 
 ---
 
+# 🙌 Thanks, Bob
+
+> Sometimes the best DevOps is knowing your limits —
+> and building around them.
+
+---
+
 # 🎉 Be Like Bob
 
 - Empower your teams
 - Reduce YAML anxiety
 - Use CasC Export as a safe route to GitOps
 
-_Configuration as Code doesn’t have to be scary._
+_Configuration as Code doesn’t have to be complicated._
 
 ---
 
-# 🙌 Thanks, Bob
+# 🙏 Call for Support 🙏
 
-> Sometimes the best DevOps is knowing your limits —
-> and building around them.
+- Contributions
+- Real-world Testing (CasC Export)
+- Documentation Cleanup
+  - Examples
+  - Workflows
 
 ---
 
