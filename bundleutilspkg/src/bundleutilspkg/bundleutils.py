@@ -52,6 +52,7 @@ default_auto_env_file = 'bundle-profiles.yaml'
 default_bundle_api_version = '2'
 default_keys_to_scalars = ['systemMessage','script','description']
 default_empty_bundle_strategy = 'delete'
+default_bundle_detection_pattern = re.compile(r"^main-([a-z0-9\-]+)-drift$")
 
 bundle_yaml_keys = {'jcasc': 'jenkins.yaml', 'items': 'items.yaml', 'plugins': 'plugins.yaml', 'rbac': 'rbac.yaml', 'catalog': 'plugin-catalog.yaml', 'variables': 'variables.yaml'}
 selector_pattern = re.compile(r"\{\{select\s+\"([^\"]+)\"\s*\}\}")
@@ -115,6 +116,7 @@ BUNDLEUTILS_PLUGINS_JSON_PATH = 'BUNDLEUTILS_PLUGINS_JSON_PATH'
 BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY = 'BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY'
 BUNDLEUTILS_PLUGINS_JSON_MERGE_STRATEGY = 'BUNDLEUTILS_PLUGINS_JSON_MERGE_STRATEGY'
 BUNDLEUTILS_BUNDLES_DIR = 'BUNDLEUTILS_BUNDLES_DIR'
+BUNDLEUTILS_BUNDLES_PATTERN = 'BUNDLEUTILS_BUNDLES_PATTERN'
 BUNDLEUTILS_CREDENTIAL_DELETE_SIGN = 'PLEASE_DELETE_ME'
 # used to hash the credentials instead of creating environment variables for them
 # this will be used in the new audit feature
@@ -130,6 +132,7 @@ ENV_FILE_ARG = 'env_file'
 KEYS_TO_CONVERT_TO_SCALARS_ARG = 'keys_to_convert_to_scalars'
 INTERACTIVE_ARG = 'interactive'
 BUNDLES_DIR_ARG = 'bundles_dir'
+BUNDLES_PATTERN_ARG = 'pattern'
 CI_VERSION_ARG = 'ci_version'
 CI_TYPE_ARG = 'ci_type'
 CI_SERVER_HOME_ARG = 'ci_server_home'
@@ -150,7 +153,7 @@ BUNDLES_ARG = 'bundles'
 OUTDIR_ARG = 'outdir'
 
 def die(msg):
-    logging.error(f"{msg}\n")
+    click.echo(f"{msg}\n")
     sys.exit(1)
 
 # - 'FAIL' - fail the command if there are warnings
@@ -1232,6 +1235,43 @@ def _extract_name_from_url(url):
         return subdomain
 
 @bundleutils.command()
+@click.option('-s', '--string', required=True, type=click.STRING, help=f'The string to test (e.g. a feature/testing-controller-a or main-controller-a-drift).')
+@click.option('-p', '--pattern', type=click.STRING, help=f'Optional version (taken from the remote instance otherwise).')
+@click.option('-b', '--bundles-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The directory containing the bundles.')
+@click.pass_context
+def extract_from_pattern(ctx, string, pattern, bundles_dir):
+    r"""
+    Extract the controller name from a string using a regex pattern. e.g.
+
+    - Full string.
+    Pattern: ^([a-z0-9\-]+)$
+
+    - Prefix: main-, Suffix: -drift.
+    Pattern: ^main-([a-z0-9\-]+)-drift$
+
+    - Prefix: feature/testing-, no suffix.
+    Pattern: ^feature/testing-([a-z0-9\-]+)$
+
+    - Prefix: testing-, no suffix.
+    Pattern: ^testing-([a-z0-9\-]+)$
+
+    - Prefix: feature/JIRA-1234/, Suffix: optional __something.
+    Pattern: ^feature/[A-Z]+-\d+/([a-z0-9\-]+)(?:__[a-z0-9\-]+)*$
+    """
+    bundles_dir = null_check(bundles_dir, BUNDLES_DIR_ARG, BUNDLEUTILS_BUNDLES_DIR, False, ctx.obj.get(ORIGINAL_CWD))
+    pattern = null_check(pattern, BUNDLES_PATTERN_ARG, BUNDLEUTILS_BUNDLES_PATTERN, False, default_bundle_detection_pattern)
+    # return the first match of the pattern in the string
+    match = re.search(pattern, string)
+    if match:
+        # if the match is a group, return the first group
+        if match.groups():
+            click.echo(match.group(1))
+        else:
+            click.echo(match.group(0))
+    else:
+        die(f"No match found for pattern '{pattern}' in string '{string}'")
+
+@bundleutils.command()
 @click.option('-U', '--url', help=f'The controller URL to test for (JENKINS_URL).')
 @click.option('-v', '--ci-version', type=click.STRING, help=f'Optional version (taken from the remote instance otherwise).')
 @click.option('-b', '--bundles-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The directory containing the bundles.')
@@ -1320,7 +1360,7 @@ def null_check(ctx, obj, obj_name, obj_env_var=None, mandatory=True, default='')
 @click.option('-U', '--url', help=f'The controller URL to validate agianst ({BUNDLEUTILS_JENKINS_URL}).')
 @click.option('-u', '--username', help=f'Username for basic authentication ({BUNDLEUTILS_USERNAME}).')
 @click.option('-p', '--password', help=f'Password for basic authentication ({BUNDLEUTILS_PASSWORD}).')
-@click.option('-s', '--source-dir', required=True, type=click.Path(file_okay=False, dir_okay=True), help=f'The source directory for the YAML documents ({BUNDLEUTILS_VALIDATE_SOURCE_DIR}).')
+@click.option('-s', '--source-dir', required=False, type=click.Path(file_okay=False, dir_okay=True), help=f'The source directory for the YAML documents ({BUNDLEUTILS_VALIDATE_SOURCE_DIR}).')
 @click.option('-w', '--ignore-warnings', default=False, is_flag=True, help=f'Do not fail if warnings are found.')
 @click.option('-r', '--external-rbac', type=click.Path(file_okay=True, dir_okay=False), help=f'Path to an external rbac.yaml from an Operations Center bundle.')
 @click.pass_context
