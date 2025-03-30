@@ -52,7 +52,7 @@ default_auto_env_file = 'bundle-profiles.yaml'
 default_bundle_api_version = '2'
 default_keys_to_scalars = ['systemMessage','script','description']
 default_empty_bundle_strategy = 'delete'
-default_bundle_detection_pattern = re.compile(r"^main-([a-z0-9\-]+)-drift$")
+default_bundle_detection_pattern = re.compile(r"^main-([a-z0-9\-]+)-drift(?:__[a-zA-Z0-9\-]+)*$")
 
 bundle_yaml_keys = {'jcasc': 'jenkins.yaml', 'items': 'items.yaml', 'plugins': 'plugins.yaml', 'rbac': 'rbac.yaml', 'catalog': 'plugin-catalog.yaml', 'variables': 'variables.yaml'}
 selector_pattern = re.compile(r"\{\{select\s+\"([^\"]+)\"\s*\}\}")
