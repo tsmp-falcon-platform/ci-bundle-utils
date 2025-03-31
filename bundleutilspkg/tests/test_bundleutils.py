@@ -215,12 +215,7 @@ def _test_extract_from_pattern(runner, string, pattern, expected_output, exit_co
     result = runner.invoke(bundleutils, command_args)
     _traceback(result)
     assert result.exit_code == exit_code
-    if exit_code == 0:
-        assert expected_output in result.output
-    else:
-        # stderr should contain the error message
-        assert result.exit_code != 0
-        print(f"{result}")
+    assert expected_output in result.output
 
 def test_extract_from_pattern_default_pattern(runner):
     string = "main-controller-name-drift"
