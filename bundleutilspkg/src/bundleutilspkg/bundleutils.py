@@ -2603,13 +2603,39 @@ def preprocess_yaml_object(ctx, data, parent_key = None):
     # For scalar values, just return as-is
     return data
 
+def _find_bundles(target_dir):
+    # find all bundle.yaml files in the target directory
+    bundles = []
+    for root, dirs, files in os.walk(target_dir):
+        # ignore any target directories
+        if 'target' in dirs:
+            dirs.remove('target')
+        # check if the bundle.yaml file exists in the directory
+        for file in files:
+            if file == 'bundle.yaml':
+                # if the bundle.yaml file is in the target directory, skip it
+                if os.path.abspath(root) == os.path.abspath(target_dir):
+                    continue
+                bundles.append(root)
+    return bundles
+
+@bundleutils.command()
+@click.option('-t', '--target-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The target directory to find bundles (defaults to CWD).')
+@click.pass_context
+def find_bundles(ctx, target_dir):
+    if not target_dir:
+        target_dir = os.curdir
+    for bundle_path in _find_bundles(target_dir):
+        click.echo(bundle_path)
+
 @bundleutils.command()
 @click.option('-t', '--target-dir', type=click.Path(file_okay=False, dir_okay=True), help=f'The target directory to update the bundle.yaml file (defaults to CWD).')
 @click.option('-d', '--description', help=f'Optional description for the bundle (also {BUNDLEUTILS_BUNDLE_DESCRIPTION}).')
 @click.option('-o', '--output-sorted', help=f'Optional place to put the sorted yaml string used to created the version.')
 @click.option('-e', '--empty-bundle-strategy', help=f'Optional strategy for handling empty bundles ({BUNDLEUTILS_EMPTY_BUNDLE_STRATEGY}).')
+@click.option('-r', '--recursive', default=False, is_flag=True, help=f'Update recursively on all bundles found from target dir.')
 @click.pass_context
-def update_bundle(ctx, target_dir, description, output_sorted, empty_bundle_strategy):
+def update_bundle(ctx, target_dir, description, output_sorted, empty_bundle_strategy, recursive):
     """
     \b
     Update the bundle.yaml file in the target directory:
@@ -2631,7 +2657,19 @@ def update_bundle(ctx, target_dir, description, output_sorted, empty_bundle_stra
 
     """
     set_logging(ctx)
-    _update_bundle(target_dir, description, output_sorted, empty_bundle_strategy)
+    if recursive:
+        if not target_dir:
+            target_dir = ctx.obj.get(ORIGINAL_CWD)
+        target_dir = os.path.normpath(target_dir)
+        bundle_paths = _find_bundles(target_dir)
+        if not bundle_paths:
+            die(f'No bundle.yaml files found in {target_dir}')
+        for bundle_path in bundle_paths:
+            relative_path = os.path.relpath(bundle_path, target_dir)
+            rel_output_sorted = os.path.join(output_sorted, relative_path) if output_sorted else None
+            _update_bundle(_get_relative_path(bundle_path, target_dir), description, rel_output_sorted, empty_bundle_strategy)
+    else:
+        _update_bundle(target_dir, description, output_sorted, empty_bundle_strategy)
 
 def _basename(dir):
     return os.path.basename(os.path.normpath(dir))
@@ -2719,7 +2757,7 @@ def _get_files_for_key(target_dir, key):
                         logging.info(f'Removing {file} from the list due to missing or empty roles and groups')
                         files.remove(file)
                         os.remove(file)
-        logging.info(f'Files for {key}: {files}')
+        logging.debug(f'Files for {key}: {files}')
         return files
 
 @click.pass_context
@@ -2729,7 +2767,7 @@ def _update_bundle(ctx, target_dir, description=None, output_sorted=None, empty_
 
     if not target_dir:
         target_dir = ctx.obj.get(ORIGINAL_CWD)
-    logging.info(f'Updating bundle in {target_dir}')
+    logging.debug(f'Updating bundle in {target_dir}')
     # Load the YAML file
     with open(os.path.join(target_dir, 'bundle.yaml'), 'r') as file:
         data = yaml.load(file)
@@ -2777,13 +2815,19 @@ def _update_bundle(ctx, target_dir, description=None, output_sorted=None, empty_
 
     # update the version key with the md5sum of the content of all files
     data['version'] = generate_collection_uuid(target_dir, all_files, output_sorted)
-    logging.info(f'Updated version to {data["version"]}')
-
 
     # Save the YAML file
-    logging.info(f'Wrote {target_dir}/bundle.yaml')
+    logging.info(f'Updated version to {data["version"]} in {target_dir}/bundle.yaml')
     with open(os.path.join(target_dir, 'bundle.yaml'), 'w') as file:
         yaml.dump(data, file)
+
+def _get_relative_path(target_path, source_path):
+    """Get the relative path from source_path to target_path."""
+    try:
+        return os.path.relpath(target_path, source_path)
+    except ValueError as e:
+        return target_path
+
 
 def get_nested(data, path):
     """Get a nested item from a dictionary."""
