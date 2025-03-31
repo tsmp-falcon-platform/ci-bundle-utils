@@ -153,8 +153,7 @@ BUNDLES_ARG = 'bundles'
 OUTDIR_ARG = 'outdir'
 
 def die(msg):
-    click.echo(f"{msg}\n")
-    sys.exit(1)
+    sys.exit(f"ERROR: {msg}")
 
 # - 'FAIL' - fail the command if there are warnings
 # - 'COMMENT' - add a comment to the yaml with the warnings
