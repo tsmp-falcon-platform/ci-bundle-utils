@@ -89,6 +89,7 @@ Commands:
   extract-name-from-url           Smart extraction of the controller...
   fetch                           Fetch YAML documents from a URL or path.
   find-bundle-by-url              Find a bundle by Jenkins URL and CI...
+  find-bundles
   help-pages                      Show all help pages by running...
   merge-bundles                   Used for merging bundles.
   merge-yamls                     Used for merging YAML files of the...
@@ -374,6 +375,13 @@ Options:
   -b, --bundles-dir DIRECTORY  The directory containing the bundles.
   --help                       Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
+Usage: bundleutils find-bundles [OPTIONS]
+
+Options:
+  -t, --target-dir DIRECTORY  The target directory to find bundles (defaults
+                              to CWD).
+  --help                      Show this message and exit.
+------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils help-pages [OPTIONS]
 
   Show all help pages by running 'bundleutils --help' at the global level and
@@ -496,6 +504,8 @@ Options:
   -e, --empty-bundle-strategy TEXT
                                   Optional strategy for handling empty bundles
                                   (BUNDLEUTILS_EMPTY_BUNDLE_STRATEGY).
+  -r, --recursive                 Update recursively on all bundles found from
+                                  target dir.
   --help                          Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils update-plugins [OPTIONS]
