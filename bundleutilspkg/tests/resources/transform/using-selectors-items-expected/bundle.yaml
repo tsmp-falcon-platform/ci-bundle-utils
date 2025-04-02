@@ -1,6 +1,6 @@
 apiVersion: '2'
 id: using-selectors-items-expected
 description: Bundle for using-selectors-items-expected
-version: 024df690-784b-818e-06ac-92e70775ffe6
+version: 759ae3b0-d98b-2f74-7671-83e1be6871f4
 items:
 - items.yaml

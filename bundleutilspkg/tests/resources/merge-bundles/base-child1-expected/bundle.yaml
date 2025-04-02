@@ -1,7 +1,7 @@
 apiVersion: 2
 id: base-child1-expected
 description: Bundle for base-child1-expected
-version: ebeb5af2-9999-94bf-2aa8-478af3588f26
+version: 0b6845c7-3c2e-1331-8d25-6620377bb60e
 jcasc:
 - jenkins.yaml
 items:

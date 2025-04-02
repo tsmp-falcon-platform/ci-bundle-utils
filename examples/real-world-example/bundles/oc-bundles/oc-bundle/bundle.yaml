@@ -1,7 +1,7 @@
 apiVersion: '1'
 id: oc-bundle
 description: Bundle for oc-bundle
-version: 9752f6da83e2fd1328e7058b36ead8ce
+version: 744a4172-2ab2-c84d-5002-41ba77a3a62a
 jcasc:
 - jenkins.yaml
 - jenkins.casc.yaml
