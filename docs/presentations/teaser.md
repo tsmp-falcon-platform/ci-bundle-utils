@@ -2,7 +2,6 @@
 marp: true
 theme: default
 paginate: false
-backgroundImage: image.png
 ---
 ![bg height:15cm right:37%](image.png)
 

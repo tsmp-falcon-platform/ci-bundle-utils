@@ -379,6 +379,7 @@ bundleutils fetch
 > and building around them.
 
 ---
+![bg height:15cm right:37%](image.png)
 
 # 🎉 Be Like Bob
 
@@ -399,14 +400,16 @@ _Configuration as Code doesn’t have to be complicated._
   - Workflows
 
 ---
+![bg height:11cm right:52%](magician.png)
 
-# 🎬 Demo Time (again)
+# 🎬 Bob the Magician
 
-(Because you never know if you still have time)
+(Since we have time...)
 
-- Partial bundles...
-- Merging bundles...
-- Next steps...
+What are...
+
+- Partial bundles
+- Merged bundles
 
 ---
 
