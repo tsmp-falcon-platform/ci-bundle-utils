@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from enum import Enum, auto
 import hashlib
 import importlib
@@ -187,9 +188,12 @@ def ordered_yaml_dump(data):
 
     def recursive_sort(obj):
         """Recursively sort dictionary keys to ensure a consistent order."""
-        if isinstance(obj, dict):
+        if isinstance(obj, (CommentedMap, dict)):
             return OrderedDict(sorted((k, recursive_sort(v)) for k, v in obj.items()))
-        elif isinstance(obj, list):
+        elif isinstance(obj, (CommentedSeq, list)):
+            # Sort lists of dictionaries by the 'name' key if present
+            if all(isinstance(i, dict) and 'name' in i for i in obj):
+                return sorted(obj, key=lambda x: x['name'])
             return [recursive_sort(i) for i in obj]
         return obj
 
@@ -1110,6 +1114,15 @@ def diff(ctx, sources):
     if diff_detected:
         die("Differences detected")
 
+@contextmanager
+def maybe_temp_dir():
+    override = os.getenv("BUNDLEUTILS_TEMP_DIR")
+    if override:
+        yield override
+    else:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            yield temp_dir
+
 @bundleutils.command()
 @click.option('-m', '--config', type=click.Path(file_okay=True, dir_okay=False), help=f'An optional custom merge config file if needed.')
 @click.option('-s', '--sources', multiple=True, type=click.Path(file_okay=False, dir_okay=True, exists=True), help=f'The bundles to be diffed.')
@@ -1127,13 +1140,13 @@ def diff_merged(ctx, config, sources, api_version):
         die("Please provide two bundle directories")
 
     if os.path.isdir(src1) and os.path.isdir(src2):
-        # create a temporary directory to store the merged bundle
-        with tempfile.TemporaryDirectory() as temp_dir:
+        with maybe_temp_dir() as temp_dir:
             merged1 = os.path.join(temp_dir, 'merged1', 'dummy')
             merged2 = os.path.join(temp_dir, 'merged2', 'dummy')
             _merge_bundles([src1], False, merged1, config, api_version)
             _merge_bundles([src2], False, merged2, config, api_version)
             diff_detected = diff_dirs(merged1, merged2)
+
     else:
         die("src1 and src2 must both be directories")
 
