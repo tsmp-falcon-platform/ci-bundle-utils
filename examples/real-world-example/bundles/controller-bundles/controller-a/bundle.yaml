@@ -1,7 +1,7 @@
 apiVersion: '2'
 id: controller-a
 description: Bundle for controller-a
-version: b04aafe13f3ac3cbf6a13e4704d54d39
+version: 807c14ec-a110-80c1-ee34-19c2ac72bf55
 jcasc:
 - jenkins.yaml
 - jenkins.beekeeper.yaml
