@@ -654,6 +654,7 @@ Targets:
   test                   Run the pytest suite
   test/%                 Run the pytest suite tests containing 'test/<string>'
   pyinstaller            Build the bundleutils package
+  marp                   Build the Marp presentation
   compose/start-dev      Start the bundleutils container
   compose/start          Start the bundleutils container
   compose/stop           Stop the bundleutils container

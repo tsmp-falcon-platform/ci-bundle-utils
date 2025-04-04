@@ -42,6 +42,15 @@ pyinstaller: ## Build the bundleutils package
 	--copy-metadata bundleutilspkg \
 	src/bundleutilspkg/bundleutils.py
 
+.PHONY: marp
+marp: ## Build the Marp presentation
+	@docker run \
+		-v $$(pwd):/home/marp/app \
+		-e MARP_USER="$$(id -u):$$(id -g)" \
+		-e LANG=$$LANG \
+		marpteam/marp-cli docs/presentations/intro.md
+	@browse docs/presentations/intro.html
+
 .PHONY: compose/start-dev
 compose/start-dev: ## Start the bundleutils container
 compose/start-dev: compose/stop
