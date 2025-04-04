@@ -55,7 +55,7 @@ default_keys_to_scalars = ['systemMessage','script','description']
 default_empty_bundle_strategy = 'delete'
 default_bundle_detection_pattern = re.compile(r"^main-([a-z0-9\-]+)-drift(?:__[a-zA-Z0-9\-]+)*$")
 
-bundle_yaml_keys = {'jcasc': 'jenkins.yaml', 'items': 'items.yaml', 'plugins': 'plugins.yaml', 'rbac': 'rbac.yaml', 'catalog': 'plugin-catalog.yaml', 'variables': 'variables.yaml'}
+bundle_yaml_keys = {'jcasc': 'jenkins.yaml', 'plugins': 'plugins.yaml', 'catalog': 'plugin-catalog.yaml', 'rbac': 'rbac.yaml', 'items': 'items.yaml', 'variables': 'variables.yaml'}
 selector_pattern = re.compile(r"\{\{select\s+\"([^\"]+)\"\s*\}\}")
 
 # environment variables
@@ -2827,6 +2827,17 @@ def _update_bundle(ctx, target_dir, description=None, output_sorted=None, empty_
 
     # update the version key with the md5sum of the content of all files
     data['version'] = generate_collection_uuid(target_dir, all_files, output_sorted)
+
+    # turn apiVersion into an int
+    if 'apiVersion' in data:
+        data['apiVersion'] = int(data['apiVersion'])
+    # ensure any keys present in the data are in the order of the bundle_yaml_keys
+    for key in bundle_yaml_keys.keys():
+        if key in data:
+            # remove the key from the data
+            value = data.pop(key)
+            # add it back in the correct order
+            data[key] = value
 
     # Save the YAML file
     logging.info(f'Updated version to {data["version"]} in {target_dir}/bundle.yaml')
