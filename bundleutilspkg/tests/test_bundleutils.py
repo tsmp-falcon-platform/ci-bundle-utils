@@ -43,9 +43,9 @@ def _test_merge_bundles(testdir, test_name, runner, command_args, expected_dir):
     # compare the yaml files in the output directory with the equivalent yaml files in the expected directory
     expected_dir = os.path.join(os.path.dirname(__file__), expected_dir)
     for file in os.listdir(outdir):
-        with open(os.path.join(outdir, file), 'r') as f:
+        with open(os.path.join(outdir, file), 'r', encoding='utf-8') as f:
             outdata = yaml.load(f)
-        with open(os.path.join(expected_dir, file), 'r') as f:
+        with open(os.path.join(expected_dir, file), 'r', encoding='utf-8') as f:
             expected_data = yaml.load(f)
         if file == 'bundle.yaml':
             assert 'parent' not in outdata.keys()
@@ -134,7 +134,7 @@ def _test_fetch(testdir, test_name, runner, command_args, expected_strings):
     assert os.path.exists(os.path.join(outdir, 'bundle.yaml'))
     assert os.path.exists(os.path.join(outdir, 'jenkins.yaml'))
     # asssert expected_string is in the jenkins.yaml file
-    with open(os.path.join(outdir, 'jenkins.yaml'), 'r') as f:
+    with open(os.path.join(outdir, 'jenkins.yaml'), 'r', encoding='utf-8') as f:
         lines = f.readlines()
     for expected_string in expected_strings:
         found = False

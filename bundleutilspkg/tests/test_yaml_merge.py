@@ -19,7 +19,7 @@ def _test_merge_yaml_files(merger, test_dir, expected_file, *files):
     expected_file = os.path.join(test_dir, expected_file)
     files = [os.path.join(test_dir, file) for file in files]
     merged_data = merger.merge_yaml_files(files)
-    with open(expected_file, 'r') as f:
+    with open(expected_file, 'r', encoding='utf-8') as f:
         expected_data = yaml.load(f)
     assert merged_data == expected_data
 
