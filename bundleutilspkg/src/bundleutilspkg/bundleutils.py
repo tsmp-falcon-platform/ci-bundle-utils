@@ -218,7 +218,7 @@ def generate_collection_uuid(target_dir, yaml_files, output_sorted=None):
     if output_sorted:
         if not os.path.exists(output_sorted):
             if output_sorted.endswith('.yaml'):
-                with open(output_sorted, 'w') as f:
+                with open(output_sorted, 'w', encoding='utf-8') as f:
                     f.write('')
             else:
                 os.makedirs(output_sorted)
@@ -232,7 +232,7 @@ def generate_collection_uuid(target_dir, yaml_files, output_sorted=None):
                 shutil.copy(target_bundle_yaml, output_sorted)
             # copy other files
             for file_name, data in combined_yaml_data.items():
-                with open(os.path.join(output_sorted, file_name), 'w') as f:
+                with open(os.path.join(output_sorted, file_name), 'w', encoding='utf-8') as f:
                     logging.info(f"Writing {file_name} sorted YAML to {output_sorted}")
                     f.write(ordered_yaml_dump(data))
             # run _update_bundle without the --output-sorted flag
@@ -240,7 +240,7 @@ def generate_collection_uuid(target_dir, yaml_files, output_sorted=None):
             announce(f"Updating the sorted bundle.yaml with UUID: {yaml_hash}")
             _update_bundle(output_sorted)
         else:
-            with open(output_sorted, 'w') as f:
+            with open(output_sorted, 'w', encoding='utf-8') as f:
                 logging.info(f"Writing {yaml_hash} ({uuid.UUID(yaml_hash[:32])}) sorted YAML to {output_sorted}")
                 f.write(ordered_yaml_str)
     return str(uuid.UUID(yaml_hash[:32]))  # Convert first 32 chars to UUID format
@@ -348,7 +348,7 @@ def _check_for_env_file(ctx):
         os.environ[BUNDLEUTILS_ENV] = env_file
 
         logging.debug(f'Loading config file: {env_file}')
-        with open(env_file, 'r') as f:
+        with open(env_file, 'r', encoding='utf-8') as f:
             bundle_profiles = yaml.load(f)
             # sanity checks
             if not isinstance(bundle_profiles, dict):
@@ -477,6 +477,8 @@ def set_logging(ctx, switch_dirs = True):
 @click.pass_context
 def bundleutils(ctx, log_level, env_file, interactive):
     """A tool to fetch and transform YAML documents."""
+    # inject PYTHONUTF8=1 into the environment
+    os.environ["PYTHONUTF8"] = "1"
     ctx.ensure_object(dict)
     ctx.max_content_width=120
     ctx.obj[ENV_FILE_ARG] = env_file
@@ -492,7 +494,7 @@ def bundleutils(ctx, log_level, env_file, interactive):
 
 def yaml2dict(yamlFile):
     dict_res = {}
-    with open(yamlFile, 'r') as fp:
+    with open(yamlFile, 'r', encoding='utf-8') as fp:
         datax = yaml.load_all(fp)
         for data in datax:
             for key, value in data.items():
@@ -582,7 +584,7 @@ def delete(ctx, source_dir, source_base, url, ci_version):
         if isinstance(value, dict):
             value.yaml_set_anchor(key, always_dump=True)
     # write the updated file
-    with open(ctx.obj.get(BUNDLEUTILS_ENV), 'w') as ofp:
+    with open(ctx.obj.get(BUNDLEUTILS_ENV), 'w', encoding='utf-8') as ofp:
         yaml.dump(bundle_profiles, ofp)
 
 @bundleutils.command()
@@ -640,7 +642,7 @@ def bootstrap(ctx, source_dir, source_base, profile, update, url, ci_version):
             if not os.path.exists(bundle_yaml):
                 logging.info(f"Creating an empty {bundle_yaml}")
                 os.makedirs(source_dir)
-                with open(bundle_yaml, 'w') as file:
+                with open(bundle_yaml, 'w', encoding='utf-8') as file:
                     file.write('')
             else:
                 logging.info(f"The bundle yaml already exists {bundle_yaml}")
@@ -659,7 +661,7 @@ def bootstrap(ctx, source_dir, source_base, profile, update, url, ci_version):
             data['bundles'][bundle_name]['BUNDLEUTILS_JENKINS_URL'] = f"{url}"
             data['bundles'][bundle_name]['BUNDLEUTILS_CI_VERSION'] = f"{ci_version}"
             # write the updated file
-            with open(ctx.obj.get(BUNDLEUTILS_ENV), 'w') as ofp:
+            with open(ctx.obj.get(BUNDLEUTILS_ENV), 'w', encoding='utf-8') as ofp:
                 yaml.dump(data, ofp)
             logging.info(f"Added/updated bundle {bundle_name} with profile {bootstrap_profile}, URL {url}, and version {ci_version}")
         else:
@@ -716,7 +718,7 @@ def ci_setup(ctx, ci_version, ci_type, ci_server_home, source_dir, ci_bundle_tem
     # parse the source directory bundle.yaml file and copy the files under the plugins and catalog keys to the target_jenkins_home_casc_startup_bundle directory
     bundle_yaml = os.path.join(source_dir, 'bundle.yaml')
     plugin_files = [bundle_yaml]
-    with open(bundle_yaml, 'r') as file:
+    with open(bundle_yaml, 'r', encoding='utf-8') as file:
         bundle_yaml = yaml.load(file)
         for key in ['plugins', 'catalog']:
             # list paths to all entries under bundle_yaml.plugins
@@ -760,7 +762,7 @@ def merge_yamls(ctx, config, files, outfile = None):
     if not outfile:
         yaml.dump(output, sys.stdout)
     else:
-        with open(outfile, "w") as f:
+        with open(outfile, 'w', encoding='utf-8') as f:
             yaml.dump(output, f)
 
 def _collect_parents(current_bundle, bundles):
@@ -768,7 +770,7 @@ def _collect_parents(current_bundle, bundles):
     bundle_yaml = os.path.join(current_bundle, 'bundle.yaml')
     if not os.path.exists(bundle_yaml):
         die(f"Bundle file '{bundle_yaml}' does not exist")
-    with open(bundle_yaml, 'r') as file:
+    with open(bundle_yaml, 'r', encoding='utf-8') as file:
         bundle_yaml = yaml.load(file)
         if 'parent' in bundle_yaml:
             parent = bundle_yaml['parent']
@@ -857,7 +859,7 @@ def _merge_bundles(bundles, use_parent, outdir, config, api_version = None):
                 logging.debug(f"Bundle file '{last_bundle_yaml}' does not exist. Using default apiVersion: {api_version}")
                 api_version = default_bundle_api_version
 
-        with open(out_bundle_yaml, "w") as f:
+        with open(out_bundle_yaml, 'w', encoding='utf-8') as f:
             logging.info(f"Writing bundle.yaml to {out_bundle_yaml}")
             f.write(f"apiVersion: {api_version}\n")
             f.write(f"id: ''\n")
@@ -885,7 +887,7 @@ def _merge_bundles(bundles, use_parent, outdir, config, api_version = None):
             yaml.dump(output, sys.stdout)
         else:
             out_section_yaml = os.path.join(outdir, section_file)
-            with open(out_section_yaml, "w") as f:
+            with open(out_section_yaml, 'w', encoding='utf-8') as f:
                 logging.info(f"Writing section: {section} to {out_section_yaml}")
                 yaml.dump(output, f)
             _update_bundle(outdir)
@@ -1012,7 +1014,7 @@ def ci_sanitize_plugins(ctx, ci_version, ci_type, ci_server_home, source_dir, pi
     plugins_file = os.path.join(source_dir, 'plugins.yaml')
     if not os.path.exists(plugins_file):
         die(f"Plugins file '{plugins_file}' does not exist")
-    with open(plugins_file, 'r') as f:
+    with open(plugins_file, 'r', encoding='utf-8') as f:
         plugins_data = yaml.load(f)  # Load the existing data
 
     envelope_json = jenkins_manager.get_envelope_json()
@@ -1065,7 +1067,7 @@ def ci_sanitize_plugins(ctx, ci_version, ci_type, ci_server_home, source_dir, pi
                     logging.info(f"SANITIZE PLUGINS -> not pinning: {plugin['id']}")
                     updated_plugins.append(plugin)
         plugins_data['plugins'] = updated_plugins
-    with open(plugins_file, 'w') as f:
+    with open(plugins_file, 'w', encoding='utf-8') as f:
         yaml.dump(plugins_data, f)  # Write the updated data back to the file
     _update_bundle(source_dir)
 
@@ -1412,7 +1414,7 @@ def _validate(url, username, password, source_dir, ignore_warnings, external_rba
             subprocess.run(['cp', external_rbac, temp_dir], check=True)
             _update_bundle(temp_dir)
         # zip and post the YAML to the URL
-        with zipfile.ZipFile('bundle.zip', 'w') as zip_ref:
+        with zipfile.ZipFile('bundle.zip', 'w', encoding='utf-8') as zip_ref:
             for filename in os.listdir(temp_dir):
                 zip_ref.write(os.path.join(temp_dir, filename), filename)
         with open('bundle.zip', 'rb') as f:
@@ -1509,6 +1511,7 @@ def fetch(ctx, url, path, username, password, target_dir, keys_to_scalars, plugi
     try:
         fetch_yaml_docs()
     except Exception as e:
+        # print the error trace
         die(f'Failed to fetch and write YAML documents: {e}')
     try:
         _update_plugins()
@@ -1526,7 +1529,7 @@ def handle_unwanted_escape_characters(ctx):
     jenkins_yaml = os.path.join(target_dir, 'jenkins.yaml')
     if not os.path.exists(jenkins_yaml):
         die(f"Jenkins YAML file '{jenkins_yaml}' does not exist (something seriously wrong here)")
-    with open(jenkins_yaml, 'r') as f:
+    with open(jenkins_yaml, 'r', encoding='utf-8') as f:
         jenkins_data = yaml.load(f)
     if 'unclassified' in jenkins_data and 'cascItemsConfiguration' in jenkins_data['unclassified'] and 'variableInterpolationEnabledForAdmin' in jenkins_data['unclassified']['cascItemsConfiguration']:
         pattern = r"\^{1,}\$\{"
@@ -1538,13 +1541,13 @@ def handle_unwanted_escape_characters(ctx):
             search_replace = '^${'
         items_yaml = os.path.join(target_dir, 'items.yaml')
         if os.path.exists(items_yaml):
-            with open(items_yaml, 'r') as f:
+            with open(items_yaml, 'r', encoding='utf-8') as f:
                 items_data = yaml.load(f)
             logging.info(f"{prefix}Variable interpolation enabled for admin = {interpolation_enabled}. Replacing '{pattern}' with '{search_replace}' in items.yaml")
             items_data = replace_string_in_dict(items_data, pattern, search_replace, prefix)
             logging.info(f"EQUAL DISPLAY_NAME CHECK: Setting 'displayName' to empty string if necessary...")
             items_data = replace_display_name_if_necessary(items_data)
-        with open(items_yaml, 'w') as f:
+        with open(items_yaml, 'w', encoding='utf-8') as f:
                 yaml.dump(items_data, f)
 
 def replace_display_name_if_necessary(data):
@@ -1866,7 +1869,7 @@ def _update_plugins(ctx):
         # find the apiVersion from the bundle.yaml file
         bundle_yaml = os.path.join(target_dir, 'bundle.yaml')
         if os.path.exists(bundle_yaml):
-            with open(bundle_yaml, 'r') as f:
+            with open(bundle_yaml, 'r', encoding='utf-8') as f:
                 bundle_yaml = yaml.load(f)
                 api_version = bundle_yaml.get('apiVersion', '')
                 if not api_version:
@@ -1890,14 +1893,14 @@ def _update_plugins(ctx):
     plugin_json_str = None
     if plugin_json_path:
         logging.debug(f'Loading plugin JSON from path: {plugin_json_path}')
-        with open(plugin_json_path, 'r') as f:
+        with open(plugin_json_path, 'r', encoding='utf-8') as f:
             plugin_json_str = f.read()
     elif url:
         plugin_json_url = url + plugin_json_url_path
         logging.debug(f'Loading plugin JSON from URL: {plugin_json_url}')
         plugin_json_str = call_jenkins_api(plugin_json_url, username, password)
         if offline:
-            with open(export_json, 'w') as f:
+            with open(export_json, 'w', encoding='utf-8') as f:
                 logging.info(f'[offline] Writing plugins.json to {export_json}')
                 f.write(plugin_json_str)
     else:
@@ -1912,7 +1915,7 @@ def _update_plugins(ctx):
     plugin_catalog_plugin_ids = []
     plugin_catalog = os.path.join(target_dir, 'plugin-catalog.yaml')
     if os.path.exists(plugin_catalog):
-        with open(plugin_catalog, 'r') as f:
+        with open(plugin_catalog, 'r', encoding='utf-8') as f:
             catalog_data = yaml.load(f)  # Load the existing data
         logging.info(f"Looking for disabled/deleted plugins to remove from plugin-catalog.yaml")
         # Check and remove plugins listed in filtered_plugins from includePlugins
@@ -1933,13 +1936,13 @@ def _update_plugins(ctx):
         if plugins_json_merge_strategy == PluginJsonMergeStrategy.DO_NOTHING:
             logging.info(f"Skipping writing to plugin-catalog.yaml according to merge strategy: {plugins_json_merge_strategy.name}")
         else:
-            with open(plugin_catalog, 'w') as file:
+            with open(plugin_catalog, 'w', encoding='utf-8') as file:
                 yaml.dump(catalog_data, file) # Write the updated data back to the file
 
     # removing from the plugins.yaml file
     plugins_file = os.path.join(target_dir, 'plugins.yaml')
     if os.path.exists(plugins_file):
-        with open(plugins_file, 'r') as f:
+        with open(plugins_file, 'r', encoding='utf-8') as f:
             plugins_data = yaml.load(f)  # Load the existing data
 
         original_plugin_data = plugins_data.copy()
@@ -2013,7 +2016,7 @@ def _update_plugins(ctx):
             logging.info(f"Skipping writing to plugins.yaml according to merge strategy: {plugins_json_merge_strategy.name}")
         else:
             if original_plugin_data != plugins_data:
-                with open(plugins_file, 'w') as f:
+                with open(plugins_file, 'w', encoding='utf-8') as f:
                     logging.info(f"Writing updated plugins to {plugins_file}")
                     yaml.dump(plugins_data, f)  # Write the updated data back to the file
             else:
@@ -2059,7 +2062,7 @@ def fetch_yaml_docs(ctx):
         # if the path points to a zip file, extract the YAML from the zip file
         if path.endswith('.zip'):
             logging.info(f'Extracting YAML from ZIP file: {path}')
-            with zipfile.ZipFile(path, 'r') as zip_ref:
+            with zipfile.ZipFile(path, 'r', encoding='utf-8') as zip_ref:
                 # list the files in the zip file
                 for filename in zip_ref.namelist():
                     # read the YAML from the file
@@ -2076,7 +2079,7 @@ def fetch_yaml_docs(ctx):
                             logging.warning(f'Skipping empty file: {filename}')
         else:
             logging.info(f'Read YAML from path: {path}')
-            with open(path, 'r') as f:
+            with open(path, 'r', encoding='utf-8') as f:
                 response_text = f.read()
                 response_text = preprocess_yaml_text(response_text)
                 yaml_docs = list(yaml.load_all(response_text))
@@ -2087,7 +2090,7 @@ def fetch_yaml_docs(ctx):
         logging.info(f'Read YAML from url: {url}')
         response_text = call_jenkins_api(url, username, password)
         if offline:
-            with open(export_yaml, 'w') as f:
+            with open(export_yaml, 'w', encoding='utf-8') as f:
                 f.write(response_text)
         response_text = preprocess_yaml_text(response_text)
         # logging.debug(f'Fetched YAML from url {url}:\n{response_text}')
@@ -2144,16 +2147,16 @@ def write_yaml_doc(doc, target_dir, filename):
     doc = preprocess_yaml_object(doc)
 
     # create a new file for each YAML document
-    with open(filename, 'w') as f:
+    with open(filename, 'w', encoding='utf-8') as f:
         # dump without quotes for strings and without line break at the end
         yaml.dump(doc, f)
         logging.info(f'Wrote {filename}')
     # remove the last empty line break if necessary
-    with open(filename, 'r') as f:
+    with open(filename, 'r', encoding='utf-8') as f:
         lines = f.readlines()
     if lines and lines[-1] == '\n':
         lines = lines[:-1]
-    with open(filename, 'w') as f:
+    with open(filename, 'w', encoding='utf-8') as f:
         f.writelines(lines)
 
 def traverse_credentials(hash_only, hash_seed, filename, obj, custom_replacements={}, path=""):
@@ -2277,7 +2280,7 @@ def expand_patch_paths(obj, patch_list):
 
 
 def apply_patch(filename, patch_list):
-    with open(filename, 'r') as inp:
+    with open(filename, 'r', encoding='utf-8') as inp:
         obj = yaml.load(inp)
 
     if obj is None:
@@ -2312,7 +2315,7 @@ def apply_patch(filename, patch_list):
             return
 
     # save the patched object back to the file
-    with open(filename, 'w') as out:
+    with open(filename, 'w', encoding='utf-8') as out:
         yaml.dump(obj, out)
 
 def handle_patches(patches, target_dir):
@@ -2331,7 +2334,7 @@ def handle_patches(patches, target_dir):
 
 @click.pass_context
 def apply_replacements(ctx, filename, custom_replacements):
-    with open(filename, 'r') as inp:
+    with open(filename, 'r', encoding='utf-8') as inp:
         obj = yaml.load(inp)
         if obj is None:
             logging.error(f'Failed to load YAML object from file {filename}')
@@ -2369,7 +2372,7 @@ def handle_substitutions(substitutions, target_dir):
         if not _file_check(filename):
             continue
         logging.info(f'Transform: applying substitutions to {filename}')
-        with open(filename, 'r') as inp:
+        with open(filename, 'r', encoding='utf-8') as inp:
             # use pattern as a regex to replace the text in the file
             text = inp.read()
             for replacement in replacements:
@@ -2377,7 +2380,7 @@ def handle_substitutions(substitutions, target_dir):
                 value = replacement['value']
                 logging.debug(f'Applying substitution: {pattern} -> {value}')
                 text = re.sub(pattern, value, text)
-            with open(filename, 'w') as out:
+            with open(filename, 'w', encoding='utf-8') as out:
                 out.write(text)
             logging.info(f'Wrote {filename}')
 
@@ -2543,7 +2546,7 @@ def _transform(configs, source_dir, target_dir, dry_run = False):
     merged_config = {}
     for config in configs:
         _file_check(config, True)
-        with open(config, 'r') as inp:
+        with open(config, 'r', encoding='utf-8') as inp:
             logging.info(f'Transformation: processing {config}')
             obj = yaml.load(inp)
             merged_config = recursive_merge(merged_config, obj)
@@ -2569,9 +2572,9 @@ def _transform(configs, source_dir, target_dir, dry_run = False):
         source_filename = os.path.join(source_dir, filename)
         target_filename = os.path.join(target_dir, filename)
         logging.debug(f'Copying {source_filename} to {target_filename}')
-        with open(source_filename, 'r') as inp:
+        with open(source_filename, 'r', encoding='utf-8') as inp:
             obj = yaml.load(inp)
-        with open(target_filename, 'w') as out:
+        with open(target_filename, 'w', encoding='utf-8') as out:
             yaml.dump(obj, out)
 
     handle_patches(merged_config.get('patches', {}), target_dir)
@@ -2719,7 +2722,7 @@ def _get_files_for_key(target_dir, key):
         # special case for 'plugins'. If any of the files does not contain the yaml key 'plugins', remove the key from the data
         if key == 'jcasc':
             for file in files:
-                with open(file, 'r') as f:
+                with open(file, 'r', encoding='utf-8') as f:
                     jcasc_file = yaml.load(f)
                     # if jenkins the only key and jenkins is empty, remove the file from the list
                     if jcasc_file.keys() == ['jenkins'] and not jcasc_file['jenkins']:
@@ -2729,7 +2732,7 @@ def _get_files_for_key(target_dir, key):
         # special case for 'plugins'. If any of the files does not contain the yaml key 'plugins', remove the key from the data
         if key == 'plugins':
             for file in files:
-                with open(file, 'r') as f:
+                with open(file, 'r', encoding='utf-8') as f:
                     plugins_file = yaml.load(f)
                     # if no plugins key or plugins is empty, remove the file from the list
                     if 'plugins' not in plugins_file or not plugins_file['plugins']:
@@ -2740,7 +2743,7 @@ def _get_files_for_key(target_dir, key):
         # special case for 'catalog'. If any of the files does not contain the yaml key 'configurations', remove the key from the data
         if key == 'catalog':
             for file in files:
-                with open(file, 'r') as f:
+                with open(file, 'r', encoding='utf-8') as f:
                     catalog_file = yaml.load(f)
                     # if no configurations key or configurations is empty, remove the file from the list
                     if 'configurations' not in catalog_file or not catalog_file['configurations']:
@@ -2751,7 +2754,7 @@ def _get_files_for_key(target_dir, key):
         # special case for 'items'. If any of the files does not contain the yaml key 'items', remove the key from the data
         if key == 'items':
             for file in files:
-                with open(file, 'r') as f:
+                with open(file, 'r', encoding='utf-8') as f:
                     items_file = yaml.load(f)
                     # if no items key or items is empty, remove the file from the list
                     if 'items' not in items_file or not items_file['items']:
@@ -2762,7 +2765,7 @@ def _get_files_for_key(target_dir, key):
         # special case for 'rbac'. If any of the files does not contain the yaml key 'roles' and 'groups', remove the key from the data
         if key == 'rbac':
             for file in files:
-                with open(file, 'r') as f:
+                with open(file, 'r', encoding='utf-8') as f:
                     rbac_file = yaml.load(f)
                     # if no roles key or roles is empty, remove the file from the list
                     if ('roles' not in rbac_file or not rbac_file['roles']) and ('groups' not in rbac_file or not rbac_file['groups']):
@@ -2781,7 +2784,7 @@ def _update_bundle(ctx, target_dir, description=None, output_sorted=None, empty_
         target_dir = ctx.obj.get(ORIGINAL_CWD)
     logging.debug(f'Updating bundle in {target_dir}')
     # Load the YAML file
-    with open(os.path.join(target_dir, 'bundle.yaml'), 'r') as file:
+    with open(os.path.join(target_dir, 'bundle.yaml'), 'r', encoding='utf-8') as file:
         data = yaml.load(file)
 
     all_files = []
@@ -2816,7 +2819,7 @@ def _update_bundle(ctx, target_dir, description=None, output_sorted=None, empty_
         elif empty_bundle_strategy == 'noop':
             logging.info('Empty Bundle Strategy: No files found. Creating an empty jenkins.yaml')
             data['jcasc'] = 'jenkins.yaml'
-            with open(os.path.join(target_dir, 'jenkins.yaml'), 'w') as file:
+            with open(os.path.join(target_dir, 'jenkins.yaml'), 'w', encoding='utf-8') as file:
                 yaml.dump({"jenkins": {}}, file)
         else:
             die(f"Empty Bundle Strategy: Strategy '{empty_bundle_strategy}' not supported. {BUNDLEUTILS_EMPTY_BUNDLE_STRATEGY} must be one of {empty_bundle_strategies}")
@@ -2841,7 +2844,7 @@ def _update_bundle(ctx, target_dir, description=None, output_sorted=None, empty_
 
     # Save the YAML file
     logging.info(f'Updated version to {data["version"]} in {target_dir}/bundle.yaml')
-    with open(os.path.join(target_dir, 'bundle.yaml'), 'w') as file:
+    with open(os.path.join(target_dir, 'bundle.yaml'), 'w', encoding='utf-8') as file:
         yaml.dump(data, file)
 
 def _get_relative_path(target_path, source_path):
@@ -2884,7 +2887,7 @@ def split_jcasc(target_dir, filename, configs):
     full_filename = os.path.join(target_dir, filename)
     if not _file_check(full_filename):
         return
-    with open(full_filename, 'r') as f:
+    with open(full_filename, 'r', encoding='utf-8') as f:
         source_data = yaml.load(f)
 
     # For each target in the configuration...
@@ -2951,7 +2954,7 @@ def split_jcasc(target_dir, filename, configs):
                     # Load the target file if it exists, or create a new one if it doesn't
                     if os.path.exists(target_file):
                         logging.debug(f'Loading existing target file {target_file}')
-                        with open(target_file, 'r') as file:
+                        with open(target_file, 'r', encoding='utf-8') as file:
                             target_data = yaml.load(file)
                     else:
                         logging.debug(f'Creating new target file {target_file}')
@@ -2964,7 +2967,7 @@ def split_jcasc(target_dir, filename, configs):
                     # Save the target file
                     if target_data:
                         logging.info(f'Saving target file {target_file}')
-                        with open(target_file, 'w') as file:
+                        with open(target_file, 'w', encoding='utf-8') as file:
                             yaml.dump(target_data, file)
                     else:
                         logging.info(f'No data found at {path}. Skipping saving target file {target_file}')
@@ -2974,7 +2977,7 @@ def split_jcasc(target_dir, filename, configs):
     # Save the modified source file if it has any data left
     if source_data:
         logging.info(f'Saving source file {full_filename}')
-        with open(full_filename, 'w') as file:
+        with open(full_filename, 'w', encoding='utf-8') as file:
             yaml.dump(source_data, file)
         # rename the source files base name to "'jenkins.' + filename" if not already done
         if not filename.startswith('jenkins.'):
@@ -2991,7 +2994,7 @@ def split_items(target_dir, filename, configs):
     full_filename = os.path.join(target_dir, filename)
     if not _file_check(full_filename):
         return
-    with open(full_filename, 'r') as f:
+    with open(full_filename, 'r', encoding='utf-8') as f:
         data = yaml.load(f)
 
     new_data = {}
@@ -3036,7 +3039,7 @@ def split_items(target_dir, filename, configs):
         os.remove(full_filename)
     else:
         # Save the modified source file
-        with open(full_filename, 'w') as f:
+        with open(full_filename, 'w', encoding='utf-8') as f:
             yaml.dump(data, f)
 
     # rename the source files base name to "'items.' + filename" if not already done
@@ -3049,7 +3052,7 @@ def split_items(target_dir, filename, configs):
     for pattern_filename, items in new_data.items():
         new_file_path = os.path.join(target_dir, 'items.' + pattern_filename)
         logging.info(f'Writing {new_file_path}')
-        with open(new_file_path, 'w') as f:
+        with open(new_file_path, 'w', encoding='utf-8') as f:
             yaml.dump({'removeStrategy': data['removeStrategy'], 'items': items}, f)
 
 if getattr(sys, 'frozen', False):
