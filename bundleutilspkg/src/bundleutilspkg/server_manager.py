@@ -340,7 +340,7 @@ class JenkinsServerManager:
         os.environ["CASC_VALIDATION_LICENSE_CERT"] = os.getenv('CASC_VALIDATION_LICENSE_CERT','').replace("\\n", "\n")
 
         # Add token script to init.groovy.d
-        with open(os.path.join(self.target_jenkins_home_init_scripts, "init_02_admin_token.groovy"), "w") as file:
+        with open(os.path.join(self.target_jenkins_home_init_scripts, "init_02_admin_token.groovy"), 'w', encoding='utf-8') as file:
             file.write(token_script)
 
         java_opts = os.getenv('BUNDLEUTILS_CI_JAVA_OPTS', '')
@@ -353,7 +353,7 @@ class JenkinsServerManager:
         except requests.ConnectionError:
             pass
         # write the server URL to the jenkins_url file
-        with open(self.url_file, 'w') as file:
+        with open(self.url_file, 'w', encoding='utf-8') as file:
             file.write(f"http://localhost:{http_port}")
         jenkins_opts = os.getenv('BUNDLEUTILS_JENKINS_OPTS', '')
         # if BUNDLEUTILS_JENKINS_OPTS contains -Dcore.casc.config.bundle, fail
@@ -382,9 +382,9 @@ class JenkinsServerManager:
             env['ADMIN_PASSWORD'] = admin_password
             logging.info(f"Temporary ADMIN_PASSWORD set to: {admin_password}")
         logging.info(f"Starting Jenkins server with command: {' '.join(command)}")
-        with open(self.target_jenkins_log, 'w') as log_file:
+        with open(self.target_jenkins_log, 'w', encoding='utf-8') as log_file:
             process = subprocess.Popen(command, env=env, stdout=log_file, stderr=subprocess.STDOUT)
-        with open(self.pid_file, 'w') as file:
+        with open(self.pid_file, 'w', encoding='utf-8') as file:
             file.write(str(process.pid))
         logging.info(f"Jenkins server starting with PID {process.pid}")
         logging.info(f"Jenkins server logging to {self.target_jenkins_log}")
@@ -401,7 +401,7 @@ class JenkinsServerManager:
     def get_envelope_json_from_war(self):
         if os.path.exists(self.war_cache_envelope_file):
             logging.info(f"Reading envelope.json from {self.war_cache_envelope_file}")
-            with open(self.war_cache_envelope_file, 'r') as file:
+            with open(self.war_cache_envelope_file, 'r', encoding='utf-8') as file:
                 envelope_json = file.read()
             return envelope_json
         # read the envelope.json from self. /WEB-INF/plugins/envelope.json
@@ -421,20 +421,20 @@ class JenkinsServerManager:
         envelope_json = os.path.join(self.target_jenkins_webroot, 'WEB-INF', 'plugins', 'envelope.json')
         if not os.path.exists(envelope_json):
             self.die(f"envelope.json not found in {envelope_json}")
-        with open(envelope_json, 'r') as file:
+        with open(envelope_json, 'r', encoding='utf-8') as file:
             # read as json
             envelope_json = file.read()
         return envelope_json
 
     def get_server_url(self):
         # Get the Jenkins server url, username, and password (from self.target_jenkins_home/secrets/initialAdminToken)
-        with open(self.url_file, 'r') as file:
+        with open(self.url_file, 'r', encoding='utf-8') as file:
             server_url = file.read().strip()
         return server_url
 
     def get_server_details(self):
         # Get the Jenkins server url, username, and password (from self.target_jenkins_home/secrets/initialAdminToken)
-        with open(os.path.join(self.target_jenkins_home, 'secrets', 'initialAdminToken'), 'r') as file:
+        with open(os.path.join(self.target_jenkins_home, 'secrets', 'initialAdminToken'), 'r', encoding='utf-8') as file:
             initial_admin_token = file.read().strip()
         server_url = self.get_server_url()
         return server_url, 'admin', initial_admin_token
@@ -505,7 +505,7 @@ class JenkinsServerManager:
     def stop_server(self):
         """Stop the Jenkins server using the PID file."""
         if os.path.exists(self.pid_file):
-            with open(self.pid_file, 'r') as file:
+            with open(self.pid_file, 'r', encoding='utf-8') as file:
                 pidstr = file.read().strip()
                 os.remove(self.pid_file)
                 if os.path.exists(self.url_file):
