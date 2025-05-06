@@ -1610,16 +1610,16 @@ def show_diff(title, plugins, col1, col2):
         # in the format plugin_name | < or > or = | plugin_name
         str = ""
         if plugin not in col2:
-            logging.info(f"{plugin:40} < {str:40}")
+            logging.debug(f"{plugin:40} < {str:40}")
         elif plugin not in col1:
-            logging.info(f"{str:40} > {plugin:40}")
+            logging.debug(f"{str:40} > {plugin:40}")
         else:
-            logging.info(f"{plugin:40} | {plugin:40}")
+            logging.debug(f"{plugin:40} | {plugin:40}")
 
 def hline(text):
-    logging.info("-" * 80)
-    logging.info(text)
-    logging.info("-" * 80)
+    logging.debug("-" * 80)
+    logging.debug(text)
+    logging.debug("-" * 80)
 
 # graph types
 graph_type_all = 'all'
@@ -1925,7 +1925,7 @@ def _update_plugins(ctx):
                     plugin_catalog_plugin_ids_previous.append(plugin_id)
                     if plugin_id in all_deleted_or_inactive_plugins:
                         if plugins_json_merge_strategy.should_delete:
-                            logging.info(f" -> removing disabled/deleted plugin {plugin_id} according to merge strategy: {plugins_json_merge_strategy.name}")
+                            logging.debug(f" -> removing disabled/deleted plugin {plugin_id} according to merge strategy: {plugins_json_merge_strategy.name}")
                             del configuration['includePlugins'][plugin_id]
                         else:
                             logging.warning(f" -> unexpected plugin {plugin_id} found but not removed according to merge strategy: {plugins_json_merge_strategy.name}")
@@ -1956,35 +1956,35 @@ def _update_plugins(ctx):
         logging.info(f"Looking for disabled/deleted plugins to remove from current plugins.yaml")
         for plugin in current_plugins:
             if plugin['id'] in plugin_catalog_plugin_ids:
-                logging.info(f" -> skipping plugin {plugin['id']} due to entry in plugin-catalog.yaml")
+                logging.debug(f" -> skipping plugin {plugin['id']} due to entry in plugin-catalog.yaml")
                 updated_plugins.append(plugin)
                 continue
             if plugin['id'] in all_bootstrap_plugins:
                 if plugins_json_merge_strategy == PluginJsonMergeStrategy.ALL:
-                    logging.info(f" -> keeping bootstrap plugin {plugin['id']} according to merge strategy: {plugins_json_merge_strategy.name}")
+                    logging.debug(f" -> keeping bootstrap plugin {plugin['id']} according to merge strategy: {plugins_json_merge_strategy.name}")
                     updated_plugins.append(plugin)
                 else:
-                    logging.info(f" -> removing bootstrap plugin {plugin['id']}")
+                    logging.debug(f" -> removing bootstrap plugin {plugin['id']}")
                 continue
             if not plugin['id'] in expected_plugins:
                 if plugins_json_merge_strategy.skip_pinned:
                     # if plugin map has a url or version, skip it
                     if 'url' in plugin:
-                        logging.info(f" -> skipping plugin {plugin['id']} with pinned url according to merge strategy: {plugins_json_merge_strategy.name}")
+                        logging.debug(f" -> skipping plugin {plugin['id']} with pinned url according to merge strategy: {plugins_json_merge_strategy.name}")
                         updated_plugins.append(plugin)
                     elif 'version' in plugin:
-                        logging.info(f" -> skipping plugin {plugin['id']} with pinned version according to merge strategy: {plugins_json_merge_strategy.name}")
+                        logging.debug(f" -> skipping plugin {plugin['id']} with pinned version according to merge strategy: {plugins_json_merge_strategy.name}")
                         updated_plugins.append(plugin)
                     else:
                         # find the plugins in the reverse_dependencies that are also in the expected_plugins
                         associated_parents = plugins_with_plugin_in_tree(graphs, graph_type_minus_bootstrap, plugin['id'])
                         expected_parents = ', '.join(associated_parents.intersection(expected_plugins))
-                        logging.info(f" -> removing non-pinned plugin {plugin['id']} (parents: {expected_parents}) according to merge strategy: {plugins_json_merge_strategy.name}")
+                        logging.debug(f" -> removing non-pinned plugin {plugin['id']} (parents: {expected_parents}) according to merge strategy: {plugins_json_merge_strategy.name}")
                 elif plugins_json_merge_strategy.should_delete:
                     # find the plugins in the reverse_dependencies that are also in the expected_plugins
                     associated_parents = plugins_with_plugin_in_tree(graphs, graph_type_minus_bootstrap, plugin['id'])
                     expected_parents = ', '.join(associated_parents.intersection(expected_plugins))
-                    logging.info(f" -> removing plugin {plugin['id']} (parents: {expected_parents}) according to merge strategy: {plugins_json_merge_strategy.name}")
+                    logging.debug(f" -> removing plugin {plugin['id']} (parents: {expected_parents}) according to merge strategy: {plugins_json_merge_strategy.name}")
                 else:
                     logging.warning(f" -> plugin {plugin['id']} found but not removed according to merge strategy: {plugins_json_merge_strategy.name}")
                     updated_plugins.append(plugin)
