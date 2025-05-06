@@ -106,8 +106,9 @@ Usage: bundleutils audit [OPTIONS]
 
   Transform using the normalize.yaml but obfuscating any sensitive data.
 
-  NOTE: The credentials and sensitive data will be hashed and cannot be used
-  in an actual bundle.
+  NOTE:
+  - The credentials and sensitive data will be hashed and cannot be used in an actual bundle.
+  - Setting BUNDLEUTILS_CREDENTIAL_HASH=false will revert to the standard method.
 
 Options:
   -t, --target-dir DIRECTORY  The target directory for the YAML documents.

@@ -123,7 +123,7 @@ BUNDLEUTILS_CREDENTIAL_DELETE_SIGN = 'PLEASE_DELETE_ME'
 # this will be used in the new audit feature
 BUNDLEUTILS_CREDENTIAL_HASH = 'BUNDLEUTILS_CREDENTIAL_HASH'
 BUNDLEUTILS_CREDENTIAL_HASH_SEED = 'BUNDLEUTILS_CREDENTIAL_HASH_SEED'
-
+BUNDLEUTILS_AUDIT_FIXED_VERSION = 'BUNDLEUTILS_AUDIT_FIXED_VERSION'
 # context object keys
 BUNDLE_PROFILES = 'BUNDLE_PROFILES'
 ORIGINAL_CWD = 'ORIGINAL_CWD'
@@ -2489,7 +2489,11 @@ def audit(ctx, strict, configs, source_dir, target_dir, hash_seed, dry_run):
     """
     Transform using the normalize.yaml but obfuscating any sensitive data.
 
-    NOTE: The credentials and sensitive data will be hashed and cannot be used in an actual bundle.
+    \b
+    NOTE:
+    - The credentials and sensitive data will be hashed and cannot be used in an actual bundle.
+    - Setting BUNDLEUTILS_CREDENTIAL_HASH=false will revert to the standard method.
+
     """
     set_logging(ctx)
 
@@ -2497,8 +2501,13 @@ def audit(ctx, strict, configs, source_dir, target_dir, hash_seed, dry_run):
     target_dir = null_check(target_dir, TARGET_DIR_ARG, BUNDLEUTILS_AUDIT_TARGET_DIR)
     configs = null_check(configs, 'configs', BUNDLEUTILS_AUDIT_CONFIGS, False)
 
-    os.environ[BUNDLEUTILS_CREDENTIAL_HASH] = 'true'
+    # set the environment variable if not already set
+    if BUNDLEUTILS_CREDENTIAL_HASH not in os.environ:
+        os.environ[BUNDLEUTILS_CREDENTIAL_HASH] = 'true'
     null_check(hash_seed, 'hash_seed', BUNDLEUTILS_CREDENTIAL_HASH_SEED, False,'')
+
+    # set the is_audit flag for the bundle update later (we want to set the version later)
+    os.environ[BUNDLEUTILS_AUDIT_FIXED_VERSION] = 'AUDITED_BUNDLE_DO_NOT_USE'
 
     source_dir, target_dir, configs = source_target_prep(source_dir, target_dir, configs, '-audit', 'normalize.yaml')
     _transform(configs, source_dir, target_dir, dry_run)
@@ -2828,8 +2837,11 @@ def _update_bundle(ctx, target_dir, description=None, output_sorted=None, empty_
     data['id'] = _basename(target_dir)
     data['description'] = f"Bundle for {data['id']}" if not description else description
 
-    # update the version key with the md5sum of the content of all files
-    data['version'] = generate_collection_uuid(target_dir, all_files, output_sorted)
+    if BUNDLEUTILS_AUDIT_FIXED_VERSION in os.environ:
+        # if the bundle is an audit, set the version to the fixed version
+        data['version'] = os.environ[BUNDLEUTILS_AUDIT_FIXED_VERSION]
+    else:
+        data['version'] = generate_collection_uuid(target_dir, all_files, output_sorted)
 
     # turn apiVersion into an int
     if 'apiVersion' in data:
