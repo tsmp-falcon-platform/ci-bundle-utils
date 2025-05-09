@@ -28,7 +28,7 @@ def test_completion_missing_argument(runner):
     assert result.exit_code != 0  # Click should return an error
     assert "Missing option '-s'" in result.output
 
-def _test_merge_bundles(testdir, test_name, runner, command_args, expected_dir):
+def _test_audit(testdir, test_name, runner, command_args, expected_dir):
     outdir = os.path.join(testdir, 'resources', 'target', test_name)
     assert outdir.endswith(f'tests/resources/target/{test_name}')
     # print out command and args for debugging
@@ -53,6 +53,52 @@ def _test_merge_bundles(testdir, test_name, runner, command_args, expected_dir):
         else:
             assert outdata == expected_data
 
+def test_audit(request, runner):
+    testdir = os.path.dirname(__file__)
+    test_name = request.node.name
+    outdir = os.path.join(testdir, 'resources', 'target', test_name)
+    expected_dir = 'resources/credentials/audit-expected'
+    command_args = ["audit",
+                    "-s", f"{testdir}/resources/credentials/fetched-bundle",
+                    "-t", outdir]
+    _test_audit(testdir, test_name, runner, command_args, expected_dir)
+
+def test_audit_no_hash(request, runner):
+    testdir = os.path.dirname(__file__)
+    test_name = request.node.name
+    outdir = os.path.join(testdir, 'resources', 'target', test_name)
+    expected_dir = 'resources/credentials/audit-no-hash-expected'
+    command_args = ["audit",
+                    "-s", f"{testdir}/resources/credentials/fetched-bundle",
+                    "-t", outdir, '--no-hash']
+    _test_audit(testdir, test_name, runner, command_args, expected_dir)
+
+
+
+def _test_merge_bundles(testdir, test_name, runner, command_args, expected_dir):
+    outdir = os.path.join(testdir, 'resources', 'target', test_name)
+    assert outdir.endswith(f'tests/resources/target/{test_name}')
+    # print out command and args for debugging
+    print(f"Running command: bundleutils {' '.join(command_args)}")
+    # delete the output directory recursively if it exists
+    shutil.rmtree(outdir, ignore_errors=True)
+    os.makedirs(outdir, exist_ok=True)
+    result = runner.invoke(bundleutils, command_args)
+    _traceback(result)
+    assert result.exit_code == 0
+    assert os.path.exists(os.path.join(outdir, 'bundle.yaml'))
+    # compare the yaml files in the output directory with the equivalent yaml files in the expected directory
+    expected_dir = os.path.join(os.path.dirname(__file__), expected_dir)
+    for file in os.listdir(outdir):
+        with open(os.path.join(outdir, file), 'r', encoding='utf-8') as f:
+            outdata = yaml.load(f)
+        with open(os.path.join(expected_dir, file), 'r', encoding='utf-8') as f:
+            expected_data = yaml.load(f)
+        if file == 'bundle.yaml':
+            assert 'parent' not in outdata.keys()
+            assert outdata['version'] == expected_data['version']
+        else:
+            assert outdata == expected_data
 
 def test_merge_bundles_base_only(request, runner):
     testdir = os.path.dirname(__file__)
