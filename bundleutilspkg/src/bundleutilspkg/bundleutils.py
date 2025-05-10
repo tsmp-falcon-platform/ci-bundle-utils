@@ -91,7 +91,6 @@ BUNDLEUTILS_PASSWORD = 'BUNDLEUTILS_PASSWORD'
 BUNDLEUTILS_PATH = 'BUNDLEUTILS_PATH'
 BUNDLEUTILS_BUNDLE_NAME = 'BUNDLEUTILS_BUNDLE_NAME'
 BUNDLEUTILS_BUNDLE_NAME_FROM_PROFILES = 'BUNDLEUTILS_BUNDLE_NAME_FROM_PROFILES'
-BUNDLEUTILS_FETCH_TARGET_DIR = 'BUNDLEUTILS_FETCH_TARGET_DIR'
 BUNDLEUTILS_MERGE_CONFIG = 'BUNDLEUTILS_MERGE_CONFIG'
 BUNDLEUTILS_MERGE_BUNDLES = 'BUNDLEUTILS_MERGE_BUNDLES'
 BUNDLEUTILS_MERGE_USE_PARENT = 'BUNDLEUTILS_MERGE_USE_PARENT'
@@ -111,7 +110,9 @@ BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK_SOURCE_DIR = 'BUNDLEUTILS_MERGE_TRANSFORM_
 # --- Exported plugin catalog and plugins list might be incorrect and might need manual fixing before use.
 # --- Pipeline: Groovy Libraries (pipeline-groovy-lib). Version 740.va_2701257fe8d is currently installed but version 727.ve832a_9244dfa_ is recommended for this version of the product.
 BUNDLEUTILS_CATALOG_WARNINGS_STRATEGY = 'BUNDLEUTILS_CATALOG_WARNINGS_STRATEGY'
+BUNDLEUTILS_FETCH_TARGET_DIR = 'BUNDLEUTILS_FETCH_TARGET_DIR'
 BUNDLEUTILS_FETCH_OFFLINE = 'BUNDLEUTILS_FETCH_OFFLINE'
+BUNDLEUTILS_FETCH_IGNORE_ITEMS = 'BUNDLEUTILS_FETCH_IGNORE_ITEMS'
 BUNDLEUTILS_FETCH_USE_CAP_ENVELOPE = 'BUNDLEUTILS_FETCH_USE_CAP_ENVELOPE'
 BUNDLEUTILS_PLUGINS_JSON_PATH = 'BUNDLEUTILS_PLUGINS_JSON_PATH'
 BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY = 'BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY'
@@ -271,6 +272,7 @@ def fetch_options(func):
     func = click.option('-M', '--plugin-json-path', help=f'The path to fetch JSON file from (found at {plugin_json_url_path}).')(func)
     func = click.option('-P', '--path', 'path', type=click.Path(file_okay=True, dir_okay=False), help=f'The path to fetch YAML from ({BUNDLEUTILS_PATH}).')(func)
     func = click.option('-O', '--offline', default=False, is_flag=True, help=f'Save the export and plugin data to <target-dir>-offline ({BUNDLEUTILS_FETCH_OFFLINE}).')(func)
+    func = click.option('-I', '--ignore-items', default=False, is_flag=True, help=f'Do not fetch the computationally expensive items.yaml ({BUNDLEUTILS_FETCH_IGNORE_ITEMS}).')(func)
     func = click.option('-U', '--url', 'url', help=f'The URL to fetch YAML from ({BUNDLEUTILS_JENKINS_URL}).')(func)
     func = click.option('-u', '--username', help=f'Username for basic authentication ({BUNDLEUTILS_USERNAME}).')(func)
     func = click.option('-p', '--password', help=f'Password for basic authentication ({BUNDLEUTILS_PASSWORD}).')(func)
@@ -1470,9 +1472,10 @@ def update_plugins_options_null_check(ctx, plugins_json_list_strategy, plugins_j
             ''')
 
 @click.pass_context
-def fetch_options_null_check(ctx, url, path, username, password, target_dir, keys_to_scalars, plugin_json_path, offline):
+def fetch_options_null_check(ctx, url, path, username, password, target_dir, keys_to_scalars, plugin_json_path, offline, ignore_items):
     # creds boolean True if URL set and not empty
     creds_needed = url is not None and url != ''
+    ignore_items = null_check(ignore_items, 'ignore_items', BUNDLEUTILS_FETCH_IGNORE_ITEMS, False, '')
     offline = null_check(offline, 'offline', BUNDLEUTILS_FETCH_OFFLINE, False, '')
     url = lookup_url(url, '', False)
     username = null_check(username, USERNAME_ARG, BUNDLEUTILS_USERNAME, creds_needed)
@@ -1503,11 +1506,11 @@ def fetch_options_null_check(ctx, url, path, username, password, target_dir, key
 @update_plugins_options
 @fetch_options
 @click.pass_context
-def fetch(ctx, url, path, username, password, target_dir, keys_to_scalars, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, offline, cap):
+def fetch(ctx, url, path, username, password, target_dir, keys_to_scalars, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, offline, ignore_items, cap):
     """Fetch YAML documents from a URL or path."""
     set_logging(ctx)
     update_plugins_options_null_check(plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, cap)
-    fetch_options_null_check(url, path, username, password, target_dir, keys_to_scalars, plugin_json_path, offline)
+    fetch_options_null_check(url, path, username, password, target_dir, keys_to_scalars, plugin_json_path, offline, ignore_items)
     try:
         fetch_yaml_docs()
     except Exception as e:
@@ -1547,8 +1550,8 @@ def handle_unwanted_escape_characters(ctx):
             items_data = replace_string_in_dict(items_data, pattern, search_replace, prefix)
             logging.info(f"EQUAL DISPLAY_NAME CHECK: Setting 'displayName' to empty string if necessary...")
             items_data = replace_display_name_if_necessary(items_data)
-        with open(items_yaml, 'w', encoding='utf-8') as f:
-                yaml.dump(items_data, f)
+            with open(items_yaml, 'w', encoding='utf-8') as f:
+                    yaml.dump(items_data, f)
 
 def replace_display_name_if_necessary(data):
     if isinstance(data, dict):
@@ -1810,11 +1813,11 @@ def find_plugin_by_id(plugins, plugin_id):
 @update_plugins_options
 @fetch_options
 @click.pass_context
-def update_plugins(ctx, url, path, username, password, target_dir, keys_to_convert, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, offline, cap):
+def update_plugins(ctx, url, path, username, password, target_dir, keys_to_convert, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, offline, ignore_items, cap):
     """Update plugins in the target directory."""
     set_logging(ctx)
     update_plugins_options_null_check(ctx, plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, cap)
-    fetch_options_null_check(url, path, username, password, target_dir, keys_to_convert, plugin_json_path, offline)
+    fetch_options_null_check(url, path, username, password, target_dir, keys_to_convert, plugin_json_path, offline, ignore_items)
     _update_plugins()
 
 
@@ -2031,12 +2034,13 @@ def remove_files_from_dir(dir):
 
 @click.pass_context
 def fetch_yaml_docs(ctx):
+    ignore_items = is_truthy(ctx.obj.get('ignore_items'))
     url = ctx.obj.get('url')
     path = ctx.obj.get('path')
     username = ctx.obj.get('username')
     password = ctx.obj.get('password')
     target_dir = ctx.obj.get('target_dir')
-    offline = ctx.obj.get('offline')
+    offline = is_truthy(ctx.obj.get('offline'))
     # place each document in a separate file under a target directory
     logging.debug(f'Creating target directory: {target_dir}')
     os.makedirs(target_dir, exist_ok=True)
@@ -2084,6 +2088,26 @@ def fetch_yaml_docs(ctx):
                 response_text = preprocess_yaml_text(response_text)
                 yaml_docs = list(yaml.load_all(response_text))
                 write_all_yaml_docs_from_comments(yaml_docs, target_dir)
+    elif ignore_items:
+        logging.info(f'Not downloading the items.yaml (computationally expensive)')
+        # read bundle.yaml from JENKINS_URL/core-casc-export/bundle.yaml
+        filename = 'bundle.yaml'
+        export_url = url + f'/core-casc-export/{filename}'
+        response_text = call_jenkins_api(export_url, username, password)
+        response_text = preprocess_yaml_text(response_text)
+        logging.debug(f'Read YAML from URL: {export_url}')
+        doc = yaml.load(response_text)
+        write_yaml_doc(doc, target_dir, filename)
+        for key in bundle_yaml_keys:
+            if key != 'items' and key in doc.keys():
+                # traverse the list under the key
+                for filename in doc[key]:
+                    export_url = url + f'/core-casc-export/{filename}'
+                    response_text = call_jenkins_api(export_url, username, password)
+                    response_text = preprocess_yaml_text(response_text)
+                    doc2 = yaml.load(response_text)
+                    write_yaml_doc(doc2, target_dir, filename)
+
     elif url:
         if fetch_url_path not in url:
             url = url + fetch_url_path

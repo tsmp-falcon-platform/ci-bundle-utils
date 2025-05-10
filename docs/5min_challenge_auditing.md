@@ -9,6 +9,7 @@ This tutorial will explain have your controller audited in 5 mins.
 - [3, 2, 1...Go](#3-2-1go)
 - [Bonus Exercise #1: using `BUNDLEUTILS_CREDENTIAL_HASH`](#bonus-exercise-1-using-bundleutils_credential_hash)
 - [Bonus Exercise #2: using a custom `normalize.yaml`](#bonus-exercise-2-using-a-custom-normalizeyaml)
+- [Bonus Exercise #3: avoid downloading expensive `items.yaml`](#bonus-exercise-3-avoid-downloading-expensive-itemsyaml)
 - [Running in Production](#running-in-production)
   - [Pipeline Job](#pipeline-job)
   - [Operation Center](#operation-center)
@@ -40,13 +41,17 @@ Start a container:
 }
 ```
 
-Create a test repo with a default main branch:
+Create a test repo with a default main branch and the `.gitignore` file:
 
 ```sh
 {
   mkdir audits
   cd audits
   git init -b main
+  touch .gitignore
+  echo target >> .gitignore
+  echo .bundleutils.env >> .gitignore
+  git add .gitignore
 }
 ```
 
@@ -189,6 +194,52 @@ AUDITING: Committing changes to cjoc
  1 file changed, 2 insertions(+)
 AUDITING: Commit: YOUR_GIT_REPO/commit/a5e4b17 Audit bundle cjoc
 AUDITING: Bundle audit complete.
+```
+
+## Bonus Exercise #3: avoid downloading expensive `items.yaml`
+
+Sometimes it is not required to include the items in the bundle, e.g.
+
+- it is simply not required by the corporate management
+- exporting the `items.yaml` is computationally expensive due to the large number of jobs
+
+In this case, either add the `--ignore-items` option to the fetch command, or set `export BUNDLEUTILS_FETCH_IGNORE_ITEMS=true` environment variable.
+
+**Using...** `export BUNDLEUTILS_FETCH_IGNORE_ITEMS=false`
+
+```sh
+❯ time BUNDLEUTILS_FETCH_IGNORE_ITEMS=false bundleutils fetch
+INFO:root:Read YAML from url: http://35.227.58.163.nip.io/default-controller/core-casc-export
+...
+...
+1,83s user 0,04s system 16% cpu 11,317 total    # <-- 11 seconds
+
+❯ find target/docs
+target/docs
+target/docs/rbac.yaml
+target/docs/items.yaml                          # <-- items downloaded
+target/docs/plugins.yaml
+target/docs/plugin-catalog.yaml
+target/docs/bundle.yaml
+target/docs/jenkins.yaml
+```
+
+**Using...** `export BUNDLEUTILS_FETCH_IGNORE_ITEMS=true`
+
+```sh
+❯ time BUNDLEUTILS_FETCH_IGNORE_ITEMS=true bundleutils fetch
+INFO:root:Not downloading the items.yaml (computationally expensive)
+...
+...
+1,10s user 0,06s system 23% cpu 4,863 total     # <-- 5 seconds
+
+❯ find target/docs                              # <-- no items.yaml
+target/docs
+target/docs/rbac.yaml
+target/docs/plugins.yaml
+target/docs/plugin-catalog.yaml
+target/docs/bundle.yaml
+target/docs/jenkins.yaml
 ```
 
 ## Running in Production

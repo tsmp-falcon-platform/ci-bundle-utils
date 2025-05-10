@@ -16,24 +16,15 @@
 
 ## What is it?
 
-The `bundleutils` is:
+The `bundleutils` is a python utility used for managing CasC bundles.
 
-- a python utility
-- packaged in a docker container
-- used for managing CasC bundles
-
-The simple use-cases are:
+Simple use-cases are:
 
 - [validating your existing CasC bundles](./docs/use-case-validating-exsting-bundles.md)
 - [fetching, transforming, and validating CasC bundles from existing servers](./docs/use-case-validating-exsting-bundles.md)
 - [merge multiple bundles into one](./docs/use-case-merging-bundles.md)
 
-Runtime variants explained here include:
-
-- [docker](./docs/setup-docker.md)
-- [docker-compose](./docs/setup-docker-compose.md)
-- [kubernetes](./docs/setup-kubernetes.md)
-- [using CloudBees Jobs](./docs/setup-cloudbees-casc.md)
+Runtime variants explained here include [docker](./docs/setup-docker.md), [docker-compose](./docs/setup-docker-compose.md), [kubernetes](./docs/setup-kubernetes.md), [using CloudBees Jobs](./docs/setup-cloudbees-casc.md)
 
 **Since it is a container, it can be run virtually anywhere.**
 
@@ -347,6 +338,8 @@ Options:
                                   (BUNDLEUTILS_USERNAME).
   -U, --url TEXT                  The URL to fetch YAML from
                                   (BUNDLEUTILS_JENKINS_URL).
+  -I, --ignore-items              Do not fetch the computationally expensive
+                                  items.yaml (BUNDLEUTILS_FETCH_IGNORE_ITEMS).
   -O, --offline                   Save the export and plugin data to <target-
                                   dir>-offline (BUNDLEUTILS_FETCH_OFFLINE).
   -P, --path FILE                 The path to fetch YAML from
@@ -535,6 +528,8 @@ Options:
                                   (BUNDLEUTILS_USERNAME).
   -U, --url TEXT                  The URL to fetch YAML from
                                   (BUNDLEUTILS_JENKINS_URL).
+  -I, --ignore-items              Do not fetch the computationally expensive
+                                  items.yaml (BUNDLEUTILS_FETCH_IGNORE_ITEMS).
   -O, --offline                   Save the export and plugin data to <target-
                                   dir>-offline (BUNDLEUTILS_FETCH_OFFLINE).
   -P, --path FILE                 The path to fetch YAML from
@@ -681,4 +676,3 @@ A [walkthrough](https://dictionary.cambridge.org/dictionary/english/walkthrough)
 The walkthough contains a comprehensive list of steps to setting up bundle management.
 
 TODO: An issue has been created to add a "merge bundles" workflow to the walkthrough - see [Issue #70](https://github.com/tsmp-falcon-platform/ci-bundle-utils/issues/70)
-
