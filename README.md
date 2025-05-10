@@ -5,8 +5,7 @@
 
 - [What is it?](#what-is-it)
 - [5 Minute Challenges](#5-minute-challenges)
-- [Commands](#commands)
-- [Help Pages](#help-pages)
+- [Commands and Help Pages](#commands-and-help-pages)
 - [Local Development](#local-development)
   - [Setup](#setup)
   - [Code Completion](#code-completion)
@@ -46,11 +45,9 @@ The following tutorials get you **up and running** and **in your own environment
 - Coming soon - Bundle Management Challenge
 - Coming soon - Upgrade Management Challenge
 
-## Commands
+## Commands and Help Pages
 
 For a summary of commands, see [explaining the main commands](./docs/explaining-commands.md)
-
-## Help Pages
 
 Below is a list of the current help pages coming from the `bundleutils` tool. Ideally, the tools help pages will contain enough information to be self explanatory.
 

@@ -7,8 +7,8 @@ This tutorial will explain have your controller audited in 5 mins.
 
 - [Prerequisites](#prerequisites)
 - [3, 2, 1...Go](#3-2-1go)
-  - [Bonus Exercise #1: using `BUNDLEUTILS_CREDENTIAL_HASH`](#bonus-exercise-1-using-bundleutils_credential_hash)
-  - [Bonus Exercise #2: using a custom `normalize.yaml`](#bonus-exercise-2-using-a-custom-normalizeyaml)
+- [Bonus Exercise #1: using `BUNDLEUTILS_CREDENTIAL_HASH`](#bonus-exercise-1-using-bundleutils_credential_hash)
+- [Bonus Exercise #2: using a custom `normalize.yaml`](#bonus-exercise-2-using-a-custom-normalizeyaml)
 - [Running in Production](#running-in-production)
   - [Pipeline Job](#pipeline-job)
   - [Operation Center](#operation-center)
@@ -93,7 +93,7 @@ Make a change to your target controller the `audit.sh` after making a change:
 > [!NOTE]
 > 5 minutes...and stop!
 
-### Bonus Exercise #1: using `BUNDLEUTILS_CREDENTIAL_HASH`
+## Bonus Exercise #1: using `BUNDLEUTILS_CREDENTIAL_HASH`
 
 Auditing will, by default, hash any encrypted values it finds, so that...
 
@@ -138,9 +138,9 @@ If this is not wanted, setting `BUNDLEUTILS_CREDENTIAL_HASH=false` will use a en
            username: bob
 ```
 
-### Bonus Exercise #2: using a custom `normalize.yaml`
+## Bonus Exercise #2: using a custom `normalize.yaml`
 
-Auditing will, by default, use the [default `normalize.yaml`](./bundleutilspkg/src/bundleutilspkg/data/configs/normalize.yaml) to transform the fetched bundle.
+Auditing will, by default, use the [default `normalize.yaml`](../bundleutilspkg/src/bundleutilspkg/data/configs/normalize.yaml) to transform the fetched bundle.
 
 If you wish to use a custom `normalize.yaml`, simply place the file in the root directory and make the appropriate changes.
 
@@ -216,16 +216,18 @@ There are various methods, such as:
 
 - Kubernetes Cloud:
   - Adding a kubernetes cloud, pod template, and appropriate label to run the `ci-bundle-utils` container.
-  - Create a Freestyle job which can only run with that particular label.
-  - Add the git repository
-  - Run the appropriate `audit.sh` command as before
+  - Create a freestyle job which can only run with that particular label.
+    - Add the git repository
+    - Add credential bindings for the aforementioned credentials
+    - Run the appropriate `audit.sh` command as before
 
 - Static Agent
   - Create a static agent with the appropriate label
   - Create a kubernetes pod/deployment and connect to the operations center
-  - Create the Freestyle job as mentioned above
+  - Create the freestyle job as mentioned above
 
 - On one of the controllers:
   - create a special **CJOC** pipeline job similar to one above:
-  - Add the `BUNDLEUTILS_JENKINS_URL=<operations-center-url>` environment variable
-- Run the job
+  - Add the `BUNDLEUTILS_JENKINS_URL=<operations-center-url>` environment variable instead of using the controllers own `JENKINS_URL`
+
+Once created, run the job.
