@@ -1,39 +1,32 @@
 # CI Bundle Utils Tool
 
-
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 
 - [What is it?](#what-is-it)
-- [Why create it?](#why-create-it)
-- [How can I run it?](#how-can-i-run-it)
-- [Walkthrough](#walkthrough)
-- [Commands](#commands)
-- [Help Pages](#help-pages)
+- [5 Minute Challenges](#5-minute-challenges)
+- [Commands and Help Pages](#commands-and-help-pages)
 - [Local Development](#local-development)
   - [Setup](#setup)
   - [Code Completion](#code-completion)
   - [Makefile](#makefile)
+- [Walkthrough](#walkthrough)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
 ## What is it?
 
-The `bundleutils` tool is:
+The `bundleutils` is:
 
 - a python utility
 - packaged in a docker container
 - used for managing CasC bundles
-
-## Why create it?
 
 The simple use-cases are:
 
 - [validating your existing CasC bundles](./docs/use-case-validating-exsting-bundles.md)
 - [fetching, transforming, and validating CasC bundles from existing servers](./docs/use-case-validating-exsting-bundles.md)
 - [merge multiple bundles into one](./docs/use-case-merging-bundles.md)
-
-## How can I run it?
 
 Runtime variants explained here include:
 
@@ -44,19 +37,17 @@ Runtime variants explained here include:
 
 **Since it is a container, it can be run virtually anywhere.**
 
-## Walkthrough
+## 5 Minute Challenges
 
-A [walkthrough](https://dictionary.cambridge.org/dictionary/english/walkthrough) setup has been provided at [example-bundles-drift](https://github.com/tsmp-falcon-platform/example-bundles-drift).
+The following tutorials get you **up and running** and **in your own environment** in just **5 mins**.
 
-The walkthough contains a comprehensive list of steps to setting up bundle management.
+- [Auditing Challenge](./docs/5min_challenge_auditing.md)
+- Coming soon - Bundle Management Challenge
+- Coming soon - Upgrade Management Challenge
 
-TODO: An issue has been created to add a "merge bundles" workflow to the walkthrough - see [Issue #70](https://github.com/tsmp-falcon-platform/ci-bundle-utils/issues/70)
-
-## Commands
+## Commands and Help Pages
 
 For a summary of commands, see [explaining the main commands](./docs/explaining-commands.md)
-
-## Help Pages
 
 Below is a list of the current help pages coming from the `bundleutils` tool. Ideally, the tools help pages will contain enough information to be self explanatory.
 
@@ -125,6 +116,8 @@ Options:
                               NOTE: Ideally, this should be a secret value
                               that is not shared with anyone. Changing this
                               value will result in different hashes.
+  --no-hash                   Replace sensitive data with its
+                              ${THIS_IS_THE_SECRET} equivalent.
   --help                      Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils bootstrap [OPTIONS]
@@ -614,14 +607,22 @@ Options:
 
 ### Setup
 
-Python virtualenv setup:
+Initial tests:
 
 ```sh
-# setup local python environment
-make setup
+{
+  # setup local python environment
+  make setup
 
-# run the tests
-make test
+  # activate the virtual env
+  source .venv/bin/activate
+
+  # activate the virtual env
+  make install-dev
+
+  # run the tests
+  make test
+}
 ```
 
 ### Code Completion
@@ -670,3 +671,14 @@ Targets:
   help                   Makefile Help Page
 ```
 <!-- END makefile-doc -->
+
+## Walkthrough
+
+This is most likely too complicated for and is therefore being relegated to the bottom for now.
+
+A [walkthrough](https://dictionary.cambridge.org/dictionary/english/walkthrough) setup has been provided at [example-bundles-drift](https://github.com/tsmp-falcon-platform/example-bundles-drift).
+
+The walkthough contains a comprehensive list of steps to setting up bundle management.
+
+TODO: An issue has been created to add a "merge bundles" workflow to the walkthrough - see [Issue #70](https://github.com/tsmp-falcon-platform/ci-bundle-utils/issues/70)
+

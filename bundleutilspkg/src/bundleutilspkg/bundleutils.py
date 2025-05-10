@@ -2159,62 +2159,109 @@ def write_yaml_doc(doc, target_dir, filename):
     with open(filename, 'w', encoding='utf-8') as f:
         f.writelines(lines)
 
-def traverse_credentials(hash_only, hash_seed, filename, obj, custom_replacements={}, path=""):
+def find_paths_of_values_matching_pattern(obj, pattern, path=""):
+    """
+    Find all paths in the object which have a non-dict/non-list value
+    and save as a dict where the path is key and the value is true
+    if it matches the pattern, and false otherwise.
+    """
+    paths = {}
     if isinstance(obj, dict):
         for k, v in obj.items():
             new_path = f"{path}/{k}" if path else f"/{k}"
-            # does custom_replacements contain an id that matches the id in the object and a key matching k?
-            if isinstance(v, str) and 'id' in obj:
-                id = obj['id']
-                matching_tuple = None
-                # hashing only for auditing purposes - no need to check for custom replacements
-                if not hash_only:
-                    custom_replacements_for_id = [item for item in custom_replacements if item['id'] == id]
-                    for custom_replacement in custom_replacements_for_id:
-                        if k in custom_replacement:
-                            matching_tuple = custom_replacement
-                if re.match(r'{.*}', v) or matching_tuple is not None:
-                    if hash_only:
-                        # create a hash of the hash_seed + v
-                        replacement = hashlib.sha256((hash_seed + v).encode()).hexdigest()
-                    elif matching_tuple is None or k not in matching_tuple:
-                        logging.debug(f"Matching tuple NOT found. Creating replacement for {id} and {k}")
-                        # create a string consisting of:
-                        # - all non-alphanumeric characters changed to underscores
-                        # - the id and k joined with an underscore
-                        # - all uppercased
-                        replacement = "${" + re.sub(r'\W', '_', id + "_" + k).upper() + "}"
-                    else:
-                        logging.debug(f"Matching tuple found: {matching_tuple}")
-                        replacement = matching_tuple[k]
+            if isinstance(v, (dict, list)):
+                paths.update(find_paths_of_values_matching_pattern(v, pattern, new_path))
+            elif isinstance(v, str) and re.match(pattern, v):
+                paths[new_path] = { "value": v, "matches": True }
+            else:
+                paths[new_path] = { "value": v, "matches": False }
+    elif isinstance(obj, list):
+        for i, v in enumerate(obj):
+            new_path = f"{path}/{i}"
+            paths.update(find_paths_of_values_matching_pattern(v, pattern, new_path))
+    return paths
 
-                    if replacement == BUNDLEUTILS_CREDENTIAL_DELETE_SIGN:
-                        parent_path = re.sub(r'/[^/]*$', '', path)
-                        logging.warning(f"Found a credential '{id}' string that needs to be deleted at path: {parent_path}")
-                        # print the JSON Patch operation for the deletion of the parent object
-                        patch = {"op": "remove", "path": f'{parent_path}'}
-                        apply_patch(filename, [patch])
-                        break
-                    else:
-                        # print the JSON Patch operation for the replacement
-                        patch = {"op": "replace", "path": f'{new_path}', "value": f'{replacement}'}
-                        apply_patch(filename, [patch])
+def traverse_credentials(hash_only, hash_seed, filename, obj, traversed_paths, custom_replacements={}, path=""):
+    """
+    Traverse the object and find all paths that match the pattern.
+    If a path matches, create a JSON Patch operation to replace the value
+    with a replacement string.
+    """
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            new_path = f"{path}/{k}" if path else f"/{k}"
+            # if the path has already been traversed, skip it
+            if new_path in traversed_paths:
+                logging.debug(f"1Traversing path (N): {new_path} - already traversed!")
+                continue
+            if not 'id' in obj:
+                logging.debug(f"1Traversing path (Y): {new_path}")
+                traversed_paths.append(new_path)
+            else:
+                sub_paths = find_paths_of_values_matching_pattern(obj, r'{.*}', '')
+                for sub_path, matchesValueDict in sub_paths.items():
+                    matches = matchesValueDict['matches']
+                    val = matchesValueDict['value']
+                    # remove the leading slash from the path
+                    new_path = f"{path}{sub_path}" if path else f"{sub_path}"
+                    if new_path in traversed_paths:
+                        logging.debug(f"2Traversing path (N): {new_path} ({matches}) - already traversed!")
                         continue
-            traverse_credentials(hash_only, hash_seed, filename, v, custom_replacements, new_path)
+                    logging.debug(f"2Traversing path (Y): {new_path} ({matches})")
+                    traversed_paths.append(new_path)
+                    id = obj['id']
+                    matching_tuple = None
+                    # hashing only for auditing purposes - no need to check for custom replacements
+                    if not hash_only:
+                        custom_replacements_for_id = [item for item in custom_replacements if item['id'] == id]
+                        for custom_replacement in custom_replacements_for_id:
+                            # check if the sub_path is in the custom_replacement with or without the leading slash
+                            if sub_path in custom_replacement or sub_path.lstrip('/') in custom_replacement:
+                                matching_tuple = custom_replacement
+                    if matches or matching_tuple is not None:
+                        logging.debug(f"2Traversing2a path (Y): {new_path}")
+                        if hash_only:
+                            # create a hash of the hash_seed + v
+                            replacement = hashlib.sha256((hash_seed + val).encode()).hexdigest()
+                        elif matching_tuple is None:
+                            logging.debug(f"Matching tuple NOT found. Creating replacement for {id} and {sub_path}")
+                            # create a string consisting of:
+                            # - all non-alphanumeric characters changed to underscores
+                            # - the id and k joined with an underscore
+                            # - all uppercased
+                            logging.debug(f"Creating replacement for {id} and {k} and {sub_path}")
+                            replacement = "${" + re.sub(r'\W', '_', id + "_" + sub_path.removeprefix('/')).upper() + "}"
+                        else:
+                            logging.debug(f"Matching tuple found: {matching_tuple}")
+                            replacement = matching_tuple[sub_path]
+
+                        if replacement == BUNDLEUTILS_CREDENTIAL_DELETE_SIGN:
+                            parent_path = re.sub(r'/[^/]*$', '', path)
+                            logging.warning(f"Found a credential '{id}' string that needs to be deleted at path: {parent_path}")
+                            # print the JSON Patch operation for the deletion of the parent object
+                            patch = {"op": "remove", "path": f'{parent_path}'}
+                            apply_patch(filename, [patch])
+                            break
+                        else:
+                            # print the JSON Patch operation for the replacement
+                            patch = {"op": "replace", "path": f'{new_path}', "value": f'{replacement}'}
+                            apply_patch(filename, [patch])
+                continue
+            traverse_credentials(hash_only, hash_seed, filename, v, traversed_paths, custom_replacements, new_path)
     elif isinstance(obj, list):
         # traverse the list in reverse order to avoid index issues when deleting items
         for i, v in enumerate(reversed(obj)):
             # Calculate the original index by subtracting the reversed index from the length of the list minus 1
             original_index = len(obj) - 1 - i
             new_path = f"{path}/{original_index}"
-            traverse_credentials(hash_only, hash_seed, filename, v, custom_replacements, new_path)
+            traverse_credentials(hash_only, hash_seed, filename, v, traversed_paths, custom_replacements, new_path)
     else:
         if isinstance(obj, str) and re.match(r'{.*}', obj):
             # if the string is a replacement string, raise an exception
             logging.warning(f"Found a non-credential string (no id found) that needs to be replaced at path: {path}")
             if hash_only:
                 # create a hash of the hash_seed + v
-                replacement = hashlib.sha256((hash_seed + v).encode()).hexdigest()
+                replacement = hashlib.sha256((hash_seed + obj).encode()).hexdigest()
             else:
                 # the replacement string should be in the format ${ID_KEY}
                 replacement = "${" + re.sub(r'\W', '_', path.removeprefix('/')).upper() + "}"
@@ -2346,7 +2393,7 @@ def apply_replacements(ctx, filename, custom_replacements):
                 logging.info(f'Hashing encrypted data without seed')
             else:
                 logging.info(f'Hashing encrypted data with seed')
-        traverse_credentials(hash_only, hash_seed, filename, obj, custom_replacements)
+        traverse_credentials(hash_only, hash_seed, filename, obj, [], custom_replacements)
 
 def handle_credentials(credentials, target_dir):
     # if credentials is empty, skip
@@ -2484,8 +2531,9 @@ def normalize(ctx, strict, configs, source_dir, target_dir, dry_run):
     Optional prefix for the hashing process (also {BUNDLEUTILS_CREDENTIAL_HASH_SEED}).
 
     NOTE: Ideally, this should be a secret value that is not shared with anyone. Changing this value will result in different hashes.""")
+@click.option('--no-hash', default=False, is_flag=True, help='Replace sensitive data with its ${THIS_IS_THE_SECRET} equivalent.')
 @click.pass_context
-def audit(ctx, strict, configs, source_dir, target_dir, hash_seed, dry_run):
+def audit(ctx, strict, configs, source_dir, target_dir, dry_run, hash_seed, no_hash):
     """
     Transform using the normalize.yaml but obfuscating any sensitive data.
 
@@ -2501,9 +2549,12 @@ def audit(ctx, strict, configs, source_dir, target_dir, hash_seed, dry_run):
     target_dir = null_check(target_dir, TARGET_DIR_ARG, BUNDLEUTILS_AUDIT_TARGET_DIR)
     configs = null_check(configs, 'configs', BUNDLEUTILS_AUDIT_CONFIGS, False)
 
-    # set the environment variable if not already set
-    if BUNDLEUTILS_CREDENTIAL_HASH not in os.environ:
+    # set the environment variable if not already set, command line arg takes precedence
+    if no_hash:
+        os.environ[BUNDLEUTILS_CREDENTIAL_HASH] = 'false'
+    elif BUNDLEUTILS_CREDENTIAL_HASH not in os.environ:
         os.environ[BUNDLEUTILS_CREDENTIAL_HASH] = 'true'
+
     null_check(hash_seed, 'hash_seed', BUNDLEUTILS_CREDENTIAL_HASH_SEED, False,'')
 
     # set the is_audit flag for the bundle update later (we want to set the version later)
@@ -2604,7 +2655,8 @@ def preprocess_yaml_object(ctx, data, parent_key = None):
         # Convert values to block scalars if needed
         convert_to_scalars = [k for k in data if k in ctx.obj.get(KEYS_TO_CONVERT_TO_SCALARS_ARG)]
         for key in convert_to_scalars:
-            data[key] = scalarstring.LiteralScalarString(data[key])
+            if key in data and isinstance(data[key], str) and data[key].strip():
+                data[key] = scalarstring.LiteralScalarString(data[key])
         for key, value in data.items():
             preprocess_yaml_object(value, key)  # Recursively process nested items
     elif isinstance(data, (CommentedSeq, list)):
