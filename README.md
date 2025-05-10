@@ -1,15 +1,10 @@
 # CI Bundle Utils Tool
 
-
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 
 - [What is it?](#what-is-it)
-- [5 Minute Challenge: Auditing](#5-minute-challenge-auditing)
-  - [Prerequisites](#prerequisites)
-  - [3...2...1...Go](#321go)
-    - [Variations: `BUNDLEUTILS_CREDENTIAL_HASH`](#variations-bundleutils_credential_hash)
-    - [Variations: using a custom `normalize.yaml`](#variations-using-a-custom-normalizeyaml)
+- [5 Minute Challenges](#5-minute-challenges)
 - [Commands](#commands)
 - [Help Pages](#help-pages)
 - [Local Development](#local-development)
@@ -43,186 +38,13 @@ Runtime variants explained here include:
 
 **Since it is a container, it can be run virtually anywhere.**
 
-## 5 Minute Challenge: Auditing
+## 5 Minute Challenges
 
-This tutorial will explain have your controller audited in 5 mins.
+The following tutorials get you **up and running** and **in your own environment** in just **5 mins**.
 
-### Prerequisites
-
-- One or more target URL's (controller or operations center)
-- A valid username and corresponding API token
-
-### 3...2...1...Go
-
-A common usecase is to audit your controllers configuration. We want to:
-
-- save the current state of your controller
-- obfuscate any credentials or sensitive data
-- save the results to a git repository
-
-> [!NOTE]
-> 1 minute...
-
-Start a container:
-
-```sh
-{
-  docker pull ghcr.io/tsmp-falcon-platform/ci-bundle-utils
-  docker run --rm -it --name bundleutils --entrypoint bash ghcr.io/tsmp-falcon-platform/ci-bundle-utils
-}
-```
-
-> [!NOTE]
-> 2 minutes...
-
-Create a test repo with a default main branch:
-
-```sh
-{
-  mkdir audits
-  cd audits
-  git init -b main
-}
-```
-
-> [!NOTE]
-> 3 minutes...
-
-Run the `audit.sh` with `setup` mode to set the appropriate environment variables.
-
-I've predefined some git variables - change if you wish:
-
-```sh
-{
-  export GIT_COMMITTER_NAME="bundleutils-bot"
-  export GIT_COMMITTER_EMAIL="bundleutils-bot@example.org"
-  export GIT_ACTION=commit-only
-  ../examples/example-auditing/audit.sh setup
-}
-```
-
-Notice the new files in your git repository:
-
-```sh
-git show --stat
-```
-
-> [!NOTE]
-> 4 minutes...
-
-Make a change to your target controller the `audit.sh` after making a change:
-
-```sh
-../examples/example-auditing/audit.sh
-```
-
-Notice the new commit in your git repository:
-
-```sh
-{
-  git show --stat
-  git show
-}
-```
-
-> [!NOTE]
-> 5 minutes...and stop!
-
-#### Variations: `BUNDLEUTILS_CREDENTIAL_HASH`
-
-Auditing will, by default, hash any encrypted values it finds, so that...
-
-Original:
-
-```yaml
-       - usernamePassword:
-           description: |-
-             My secret thing
-           id: my-secret-thing
-           password: '{AQAAABAAAAAwqlTuvlbCX3zD6/M5K....}'
-           scope: GLOBAL
-           username: bob
-```
-
-`BUNDLEUTILS_CREDENTIAL_HASH: true`
-
-```yaml
-       - usernamePassword:
-           description: |-
-             My secret thing
-           id: my-secret-thing
-           password: 0292890669736921577497db2ea2f22cadb9778dcb0241456750a2dc2a23c941
-           scope: GLOBAL
-           username: bob
-```
-
-This is useful for noticing when the encrypted value changes without actually knowing the encrypted value.
-
-If this is not wanted, setting `BUNDLEUTILS_CREDENTIAL_HASH=false` will use a env var like representation instead.
-
-`BUNDLEUTILS_CREDENTIAL_HASH: true`
-
-```yaml
-       - usernamePassword:
-           description: |-
-             My secret thing
-           id: my-secret-thing
--          password: a9740aca387854a95ffc0272491d872781f48d178ddc4d410064ea927046e5ab
-+          password: ${MY_SECRET_THING_PASSWORD}
-           scope: GLOBAL
-           username: bob
-```
-
-#### Variations: using a custom `normalize.yaml`
-
-Auditing will, by default, use the [default `normalize.yaml`](./bundleutilspkg/src/bundleutilspkg/data/configs/normalize.yaml) to transform the fetched bundle.
-
-If you wish to use a custom `normalize.yaml`, simply place the file in the root directory and make the appropriate changes.
-
-Example: copy and alter the file (removing the patch which deletes the labelAtoms):
-
-```sh
-bundle-user@82b69d6e24b9:/opt/bundleutils/work/audits$ cp ../../.app/bundleutilspkg/src/bundleutilspkg/data/configs/normalize.yaml .
-bundle-user@82b69d6e24b9:/opt/bundleutils/work/audits$ vi normalize.yaml
-bundle-user@82b69d6e24b9:/opt/bundleutils/work/audits$ diff ../../.app/bundleutilspkg/src/bundleutilspkg/data/configs/normalize.yaml normalize.yaml
-7,9d6
-<     # these labels are dynamic based on the agents available
-<   - op: remove
-<     path: /jenkins/labelAtoms
-```
-
-Running the audit again now results in:
-
-```sh
-bundle-user@82b69d6e24b9:/opt/bundleutils/work/audits$ ../examples/example-auditing/audit.sh
-AUDITING: GIT_ACTION=commit-only
-AUDITING: Running bundleutils extract-name-from-url...
-AUDITING: Running bundleutils fetch -t target/fetched/cjoc
-...
-...
-INFO:root:Using normalize.yaml in the current directory            # <-- Here we see it using the custom normalize.yaml
-INFO:root:Transformation: processing normalize.yaml
-...
-...
-diff --git a/cjoc/jenkins.yaml b/cjoc/jenkins.yaml
-index 85649d5..7e562cd 100644
---- a/cjoc/jenkins.yaml
-+++ b/cjoc/jenkins.yaml
-@@ -109,6 +109,8 @@ jenkins:
-   - OldData
-   - hudson.util.DoubleLaunchChecker
-   - controllerBundlesWithErrorMonitor
-+  labelAtoms:                                                     # <-- Here we see labelAtoms are now not deleted
-+  - name: built-in
-   log:
-     recorders:
-     - loggers:
-AUDITING: Committing changes to cjoc
-[main a5e4b17] Audit bundle cjoc
- 1 file changed, 2 insertions(+)
-AUDITING: Commit: YOUR_GIT_REPO/commit/a5e4b17 Audit bundle cjoc
-AUDITING: Bundle audit complete.
-```
+- [Auditing Challenge](./docs/5min_challenge_auditing.md)
+- Coming soon - Bundle Management Challenge
+- Coming soon - Upgrade Management Challenge
 
 ## Commands
 

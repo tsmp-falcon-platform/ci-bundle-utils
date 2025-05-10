@@ -27,7 +27,7 @@ pipeline {
                     gitUsernamePassword(credentialsId: 'github-token-rw', gitToolName: 'Default'),
                     usernamePassword(credentialsId: 'bundleutils-creds', passwordVariable: 'BUNDLEUTILS_PASSWORD', usernameVariable: 'BUNDLEUTILS_USERNAME')
                 ]){
-                    sh '/opt/bundleutils/work/examples/example-auditing/audit.sh'
+                    sh '/opt/bundleutils/work/examples/tutorials/auditing/audit.sh'
                 }
             }
         }
