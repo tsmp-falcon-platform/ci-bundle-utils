@@ -310,8 +310,9 @@ def transform_options(func):
 def _set_env_if_not_set(prefix, env_var, value):
     if not os.environ.get(env_var, ''):
         logging.info(f'{prefix} environment variable: {env_var}={value}')
-        os.environ[env_var] = value
+        os.environ[env_var] = str(value)
 
+@click.pass_context
 def _check_for_env_file(ctx):
     if ctx.obj.get(BUNDLEUTILS_ENV, ''):
         # we have an env file, no need to check for auto vars
@@ -373,6 +374,7 @@ def _check_for_env_file(ctx):
         ctx.obj[BUNDLEUTILS_ENV] = ''
         logging.debug(f'No env file provided or found')
 
+@click.pass_context
 def _check_cwd_for_bundle_auto_vars(ctx, switch_dirs = True):
     """Check the current working directory for a bundle.yaml file and set the auto vars if found"""
     # no bundle_profiles found, no need to check
@@ -470,11 +472,11 @@ def _check_cwd_for_bundle_auto_vars(ctx, switch_dirs = True):
                     logging.info(f'Replacing {key}={value} with {new_value}')
                     os.environ[key] = new_value
 
+@click.pass_context
 def _check_url_and_determine_env_vars(ctx):
     """Create the environment variables based on the URL"""
     # no bundle_profiles found, no need to check
 
-    env_vars = {}
     cwd = os.getcwd()
     if not ctx.obj.get(ORIGINAL_CWD, ''):
         ctx.obj[ORIGINAL_CWD] = cwd
@@ -487,19 +489,17 @@ def _check_url_and_determine_env_vars(ctx):
 
     bundle_name = instance_name
     last_known_bundle_name = ''
-    append_version = ctx.obj.get('auto_env_append_version', False)
+    append_version = is_truthy(ctx.obj.get('auto_env_append_version'))
     if append_version:
         bundle_name = f"{instance_name}-{version}"
         # if the bundle name directory does not exist, create it
         if not os.path.exists(bundle_name):
             # find the last directory that matches the pattern "{instance_name}-x.x.x.x"
-            regex = re.compile(f"^{instance_name}-[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$")
+            regex = re.compile(rf"^{instance_name}-[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$")
             for dir in reversed(sorted(os.listdir(cwd), key=lambda x: x.lower())):
                 if regex.match(dir):
                     last_known_bundle_name = dir
                     break
-
-
 
     # get target dir values
     bundle_target_dir = os.path.join(cwd, bundle_name)
@@ -534,14 +534,18 @@ def _check_url_and_determine_env_vars(ctx):
                 os.environ[key] = new_value
 
 def is_truthy(value):
-    return value.lower() in ['true', '1', 't', 'y', 'yes']
+    """Check if a value is truthy."""
+    if value is None:
+        return False
+    return str(value).lower() in ['true', '1', 't', 'y', 'yes']
 
+@click.pass_context
 def set_logging(ctx, switch_dirs = True):
     if ctx.obj.get('auto_env_url_only', False):
-        _check_url_and_determine_env_vars(ctx)
+        _check_url_and_determine_env_vars()
     else:
-        _check_for_env_file(ctx)
-        _check_cwd_for_bundle_auto_vars(ctx, switch_dirs)
+        _check_for_env_file()
+        _check_cwd_for_bundle_auto_vars(switch_dirs)
 
 @click.group(invoke_without_command=True)
 @common_options
@@ -783,7 +787,7 @@ def ci_setup(ctx, ci_version, ci_type, ci_server_home, source_dir, ci_bundle_tem
             BUNDLEUTILS_CB_DOCKER_IMAGE_MM=my-registry/cloudbees-core-mm
 
     """
-    set_logging(ctx)
+    set_logging()
     ci_version, ci_type, ci_server_home = server_options_null_check(ci_version, ci_type, ci_server_home)
     source_dir = null_check(source_dir, SOURCE_DIR_ARG, BUNDLEUTILS_SETUP_SOURCE_DIR)
     source_dir = os.path.normpath(source_dir)
@@ -1007,7 +1011,7 @@ def merge_bundles(ctx, strict, config, bundles, use_parent, outdir, transform, d
     - perform a diff check against the source bundle and the transformed bundle
         (BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK_SOURCE_DIR needed for this)
     """
-    set_logging(ctx)
+    set_logging()
 
     config = null_check(config, MERGE_CONFIG_ARG, BUNDLEUTILS_MERGE_CONFIG, False, '')
     bundles = null_check(bundles, BUNDLES_ARG, BUNDLEUTILS_MERGE_BUNDLES, False, '')
@@ -1057,7 +1061,7 @@ def announce(string):
 @click.pass_context
 def ci_validate(ctx, ci_version, ci_type, ci_server_home, source_dir, ignore_warnings, external_rbac):
     """Validate bundle against controller started with ci-start."""
-    set_logging(ctx)
+    set_logging()
     ci_version, ci_type, ci_server_home = server_options_null_check(ci_version, ci_type, ci_server_home)
     source_dir = null_check(source_dir, SOURCE_DIR_ARG, BUNDLEUTILS_VALIDATE_SOURCE_DIR)
     if not os.path.exists(source_dir):
@@ -1075,7 +1079,7 @@ def ci_validate(ctx, ci_version, ci_type, ci_server_home, source_dir, ignore_war
 @click.pass_context
 def ci_sanitize_plugins(ctx, ci_version, ci_type, ci_server_home, source_dir, pin_plugins, custom_url):
     """Sanitizes plugins (needs ci-start)."""
-    set_logging(ctx)
+    set_logging()
     ci_version, ci_type, ci_server_home = server_options_null_check(ci_version, ci_type, ci_server_home)
     source_dir = null_check(source_dir, SOURCE_DIR_ARG, BUNDLEUTILS_TRANSFORM_TARGET_DIR)
     if not os.path.exists(source_dir):
@@ -1151,7 +1155,7 @@ def ci_sanitize_plugins(ctx, ci_version, ci_type, ci_server_home, source_dir, pi
 @click.pass_context
 def ci_start(ctx, ci_version, ci_type, ci_server_home, ci_max_start_time):
     """Start CloudBees Server"""
-    set_logging(ctx)
+    set_logging()
     ci_version, ci_type, ci_server_home = server_options_null_check(ci_version, ci_type, ci_server_home)
     jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
     jenkins_manager.start_server(ci_max_start_time)
@@ -1161,7 +1165,7 @@ def ci_start(ctx, ci_version, ci_type, ci_server_home, ci_max_start_time):
 @click.pass_context
 def ci_stop(ctx, ci_version, ci_type, ci_server_home):
     """Stop CloudBees Server"""
-    set_logging(ctx)
+    set_logging()
     ci_version, ci_type, ci_server_home = server_options_null_check(ci_version, ci_type, ci_server_home)
     jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
     jenkins_manager.stop_server()
@@ -1268,7 +1272,7 @@ def config(ctx, key):
     # if key disable logging
     if key:
         logging.getLogger().setLevel(logging.ERROR)
-    set_logging(ctx)
+    set_logging()
     if key:
         # check if the key starts with BUNDLEUTILS_
         if not key.startswith('BUNDLEUTILS_'):
@@ -1392,7 +1396,7 @@ def find_bundle_by_url(ctx, url, ci_version, bundles_dir):
 
     Use -v '.*' to match any version.
     """
-    set_logging(ctx)
+    set_logging()
     if not ctx.obj.get(BUNDLE_PROFILES, ''):  # if no bundle profiles are found, exit
         logging.error("No bundle profiles found. Exiting.")
         return
@@ -1476,7 +1480,7 @@ def null_check(ctx, obj, obj_name, obj_env_var=None, mandatory=True, default='')
 @click.pass_context
 def validate(ctx, url, username, password, source_dir, ignore_warnings, external_rbac):
     """Validate bundle in source dir against URL."""
-    set_logging(ctx)
+    set_logging()
     _validate(url, username, password, source_dir, ignore_warnings, external_rbac)
 
 def _validate(url, username, password, source_dir, ignore_warnings, external_rbac):
@@ -1602,7 +1606,7 @@ def fetch_options_null_check(ctx, url, path, username, password, target_dir, key
 @click.pass_context
 def fetch(ctx, url, path, username, password, target_dir, keys_to_scalars, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, offline, ignore_items, cap):
     """Fetch YAML documents from a URL or path."""
-    set_logging(ctx)
+    set_logging()
     update_plugins_options_null_check(plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, cap)
     fetch_options_null_check(url, path, username, password, target_dir, keys_to_scalars, plugin_json_path, offline, ignore_items)
     try:
@@ -1909,7 +1913,7 @@ def find_plugin_by_id(plugins, plugin_id):
 @click.pass_context
 def update_plugins(ctx, url, path, username, password, target_dir, keys_to_convert, plugin_json_path, plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, offline, ignore_items, cap):
     """Update plugins in the target directory."""
-    set_logging(ctx)
+    set_logging()
     update_plugins_options_null_check(ctx, plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, cap)
     fetch_options_null_check(url, path, username, password, target_dir, keys_to_convert, plugin_json_path, offline, ignore_items)
     _update_plugins()
@@ -1924,7 +1928,7 @@ def update_plugins_from_test_server(ctx, ci_type, ci_version, ci_server_home, ta
     """
     Update plugins in the target directory using the plugins from the test server started for validation.
     """
-    set_logging(ctx)
+    set_logging()
     update_plugins_options_null_check(plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy, cap)
     ci_version, ci_type, ci_server_home = server_options_null_check(ci_type, ci_version, ci_server_home)
     target_dir = null_check(target_dir, TARGET_DIR_ARG, BUNDLEUTILS_MERGE_TRANSFORM_TARGET_DIR)
@@ -2222,6 +2226,10 @@ def preprocess_yaml_text(ctx, response_text):
         catalog_warnings_strategy = ctx.obj.get('catalog_warnings_strategy')
         if isinstance(response_text, bytes):
             response_text = response_text.decode('utf-8')
+        # if the response is empty, skip
+        if not response_text:
+            logging.warning('Empty response from server. Skipping.')
+            return response_text
         # find any occurrences of "^--- .*$"
         matching_lines = re.findall(r'^--- .*$', response_text, re.MULTILINE)
         if matching_lines:
@@ -2261,6 +2269,9 @@ def write_all_yaml_docs_from_comments(yaml_docs, target_dir):
         write_yaml_doc(doc, target_dir, filename)
 
 def write_yaml_doc(doc, target_dir, filename):
+    if not doc:
+        logging.warning(f'Skipping empty YAML document')
+        return
     filename = os.path.join(target_dir, filename)
     doc = preprocess_yaml_object(doc)
 
@@ -2639,7 +2650,7 @@ def source_target_prep(source_dir, target_dir, configs, suffix, filename):
 @click.pass_context
 def normalize(ctx, strict, configs, source_dir, target_dir, dry_run):
     """Transform using the normalize.yaml for better comparison."""
-    set_logging(ctx)
+    set_logging()
     source_dir, target_dir, configs = source_target_prep(source_dir, target_dir, configs, '-normalized', 'normalize.yaml')
     _transform(configs, source_dir, target_dir, dry_run)
 
@@ -2661,7 +2672,7 @@ def audit(ctx, strict, configs, source_dir, target_dir, dry_run, hash_seed, no_h
     - Setting BUNDLEUTILS_CREDENTIAL_HASH=false will revert to the standard method.
 
     """
-    set_logging(ctx)
+    set_logging()
 
     source_dir = null_check(source_dir, SOURCE_DIR_ARG, BUNDLEUTILS_AUDIT_SOURCE_DIR)
     target_dir = null_check(target_dir, TARGET_DIR_ARG, BUNDLEUTILS_AUDIT_TARGET_DIR)
@@ -2686,7 +2697,7 @@ def audit(ctx, strict, configs, source_dir, target_dir, dry_run, hash_seed, no_h
 @click.pass_context
 def transform(ctx, strict, configs, source_dir, target_dir, dry_run):
     """Transform using a custom transformation config."""
-    set_logging(ctx)
+    set_logging()
     source_dir = null_check(source_dir, SOURCE_DIR_ARG, BUNDLEUTILS_TRANSFORM_SOURCE_DIR)
     source_dir = os.path.normpath(source_dir)
     target_dir = null_check(target_dir, TARGET_DIR_ARG, BUNDLEUTILS_TRANSFORM_TARGET_DIR)
@@ -2850,7 +2861,7 @@ def update_bundle(ctx, target_dir, description, output_sorted, empty_bundle_stra
     - 'noop': Create a noop jenkins.yaml and continue
 
     """
-    set_logging(ctx)
+    set_logging()
     if recursive:
         if not target_dir:
             target_dir = ctx.obj.get(ORIGINAL_CWD)
