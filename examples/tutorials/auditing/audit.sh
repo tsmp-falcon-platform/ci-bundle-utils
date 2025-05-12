@@ -78,7 +78,7 @@ elif [[ "${1:-}" == "setup" ]]; then
     echo "AUDITING: Audit skipped. You can run it later with: ./audit.sh"
     exit 0
   else
-    echo "AUDITING: Running audit..."
+    echo "AUDITING: Performing audit..."
   fi
 fi
 
@@ -93,17 +93,8 @@ fi
 GIT_ACTION_ADD=$([[ "${GIT_ACTION}" =~ ^(add-only|commit-only|push)$ ]] && echo 'true' || echo 'false')
 GIT_ACTION_COMMIT=$([[ "${GIT_ACTION}" =~ ^(commit-only|push)$ ]] && echo 'true' || echo 'false')
 GIT_ACTION_PUSH=$([[ "${GIT_ACTION}" == "push" ]] && echo 'true' || echo 'false')
+GIT_BUNDLE_PRESERVE_HISTORY="${GIT_BUNDLE_PRESERVE_HISTORY:-}"
 echo "AUDITING: GIT_ACTION=${GIT_ACTION}"
-
-# Load positional parameters
-export JENKINS_URL="${JENKINS_URL:-${1:-}}"
-export BUNDLEUTILS_USERNAME="${BUNDLEUTILS_USERNAME:-${2:-}}"
-export BUNDLEUTILS_PASSWORD="${BUNDLEUTILS_PASSWORD:-${3:-}}"
-
-# This will ensure all plugins are left in the bundle.
-# If you want to remove dependencies, etc, comment the following lines:
-export BUNDLEUTILS_PLUGINS_JSON_MERGE_STRATEGY='ALL'
-export BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY='ALL'
 
 # Check mandatory environment variables function
 check_envs() {
@@ -119,25 +110,70 @@ check_envs() {
 check_envs "BUNDLEUTILS_PASSWORD BUNDLEUTILS_USERNAME" "Jenkins API token needed to fetch the bundle"
 check_envs "JENKINS_URL" "Jenkins URL needed to fetch the bundle"
 
+function migrate_bundle() {
+  echo "AUDITING: Migrating from previous version $LAST_KNOWN_VERSION to $BUNDLE_DIR"
+  if [[ "$GIT_ACTION_COMMIT" == "true" ]]; then
+    git mv "$LAST_KNOWN_VERSION"  "$BUNDLE_DIR"
+    git commit -m "Renaming $LAST_KNOWN_VERSION to $BUNDLE_DIR to preserve the git history" "$LAST_KNOWN_VERSION" "$BUNDLE_DIR"
+    cp -r "$BUNDLE_DIR" "$LAST_KNOWN_VERSION"
+    git add "$LAST_KNOWN_VERSION"
+    git commit -m "Last known state of $LAST_KNOWN_VERSION before moving to $BUNDLE_DIR"
+  fi
+}
+
 ###############################
 #### BUNDLEUTILS COMMANDS  ####
 ###############################
 
-# Get bundle name from the URL
-echo "AUDITING: Running bundleutils extract-name-from-url..."
-BUNDLE_NAME=$(bundleutils extract-name-from-url)
-FETCH_TARGET="target/fetched/${BUNDLE_NAME}"
+# This will ensure all plugins are left in the bundle.
+# If you want to remove dependencies, etc, comment the following lines:
+export BUNDLEUTILS_PLUGINS_JSON_MERGE_STRATEGY='ALL'
+export BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY='ALL'
 
-# Fetch the bundle
-echo "AUDITING: Running bundleutils fetch -t ${FETCH_TARGET}"
-bundleutils fetch -t "${FETCH_TARGET}"
+# Determine env vars simply by the URL alone
+export BUNDLEUTILS_AUTO_ENV_USE_URL_ONLY='true'
+
+# Get bundle name from the URL
+echo "AUDITING: Running bundleutils config..."
+bundleutils config
+
+# Get the CI version
+echo "AUDITING: Export the instance version to avoid fetching it every time..."
+BUNDLEUTILS_CI_VERSION=$(bundleutils  config --key BUNDLEUTILS_CI_VERSION)
+export BUNDLEUTILS_CI_VERSION
+
+# If we are appending the version to the bundle name, are we migrating from a previous version?
+# Get the current final bundle directory
+BUNDLE_DIR="$(bundleutils config --key BUNDLEUTILS_AUDIT_TARGET_DIR)"
+APPEND_VERSION="$(bundleutils config --key BUNDLEUTILS_AUTO_ENV_APPEND_VERSION)"
+if [[ "$APPEND_VERSION" == "true" ]] && [[ ! -d "$BUNDLE_DIR" ]]; then
+  echo "AUDITING: Bundle $BUNDLE_DIR not found. Looking for a previous version..."
+  LAST_KNOWN_VERSION="$(bundleutils config --key BUNDLEUTILS_AUTO_ENV_LAST_KNOWN_VERSION 2> /dev/null || true)"
+  if [[ -n "$LAST_KNOWN_VERSION" ]]; then
+    if [[ "$GIT_BUNDLE_PRESERVE_HISTORY" == "true" ]]; then
+      migrate_bundle
+    elif [[ "$GIT_BUNDLE_PRESERVE_HISTORY" == "false" ]]; then
+      echo "AUDITING: Bundle $BUNDLE_DIR will be created. Original bundle $LAST_KNOWN_VERSION will be left as is."
+    else
+      echo "AUDITING: Decision time!!! The $BUNDLE_DIR is not found. The last known version is $LAST_KNOWN_VERSION."
+      echo "AUDITING: The GIT_BUNDLE_PRESERVE_HISTORY is not set. Please set it to true or false."
+      echo "AUDITING: - true:  If you want to preserve the history of $LAST_KNOWN_VERSION by renaming it to $BUNDLE_DIR, and re-adding the old bundle."
+      echo "AUDITING: - false: If you want to keep the history of $LAST_KNOWN_VERSION and start a new history for $BUNDLE_DIR"
+      exit 1
+    fi
+  fi
+fi
+
+bundleutils fetch
 
 # Sanitize the fetched bundle
-echo "AUDITING: Running bundleutils audit -s $FETCH_TARGET -t $BUNDLE_NAME"
-bundleutils audit -s "${FETCH_TARGET}" -t "$BUNDLE_NAME"
+echo "AUDITING: Running bundleutils audit..."
+bundleutils audit
 
 # list the bundle files
-find "$BUNDLE_NAME"
+echo "AUDITING: Listing bundle files..."
+BUNDLE_DIR="$(bundleutils config --key BUNDLEUTILS_AUDIT_TARGET_DIR)"
+find "$BUNDLE_DIR"
 
 # Check if git command exists and directory is a git repository
 if ! command -v git &> /dev/null; then
@@ -165,15 +201,15 @@ echo "AUDITING: GIT_COMMITTER_EMAIL=$GIT_COMMITTER_EMAIL"
 echo "AUDITING: GIT_AUTHOR_NAME=$GIT_AUTHOR_NAME"
 echo "AUDITING: GIT_AUTHOR_EMAIL=$GIT_AUTHOR_EMAIL"
 
-if [ -d "$BUNDLE_NAME" ]; then
+if [ -d "$BUNDLE_DIR" ]; then
   if [[ "$GIT_ACTION_ADD" == "true" ]]; then
-    git add "$BUNDLE_NAME"
-    if git diff --cached --exit-code "$BUNDLE_NAME"; then
-      echo "AUDITING: No changes to commit for $BUNDLE_NAME."
+    git add "$BUNDLE_DIR"
+    if git diff --cached --exit-code "$BUNDLE_DIR"; then
+      echo "AUDITING: No changes to commit for $BUNDLE_DIR."
     else
       if [[ "$GIT_ACTION_COMMIT" == "true" ]]; then
-        echo "AUDITING: Committing changes to $BUNDLE_NAME"
-        git commit -m "Audit bundle $BUNDLE_NAME" "$BUNDLE_NAME"
+        echo "AUDITING: Committing changes to $BUNDLE_DIR"
+        git commit -m "Audit bundle $BUNDLE_DIR (version: $BUNDLEUTILS_CI_VERSION)" "$BUNDLE_DIR"
         echo "AUDITING: Commit: $(git --no-pager log -n1 --pretty=format:"YOUR_GIT_REPO/commit/%h %s")"
 
         if [[ "$GIT_ACTION_PUSH" == "true" ]]; then
@@ -184,6 +220,6 @@ if [ -d "$BUNDLE_NAME" ]; then
     fi
   fi
 else
-  echo "AUDITING: Bundle $BUNDLE_NAME not found. No changes to commit or push."
+  echo "AUDITING: Bundle $BUNDLE_DIR not found. No changes to commit or push."
 fi
 echo "AUDITING: Bundle audit complete."

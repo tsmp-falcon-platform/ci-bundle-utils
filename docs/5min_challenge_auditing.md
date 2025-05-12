@@ -10,6 +10,8 @@ This tutorial will explain have your controller audited in 5 mins.
 - [Bonus Exercise #1: using `BUNDLEUTILS_CREDENTIAL_HASH`](#bonus-exercise-1-using-bundleutils_credential_hash)
 - [Bonus Exercise #2: using a custom `normalize.yaml`](#bonus-exercise-2-using-a-custom-normalizeyaml)
 - [Bonus Exercise #3: avoid downloading expensive `items.yaml`](#bonus-exercise-3-avoid-downloading-expensive-itemsyaml)
+- [Bonus Exercise #4: version based bundles](#bonus-exercise-4-version-based-bundles)
+- [Bonus Exercise #5: version based bundles (and preserving git history)](#bonus-exercise-5-version-based-bundles-and-preserving-git-history)
 - [Running in Production](#running-in-production)
   - [Pipeline Job](#pipeline-job)
   - [Operation Center](#operation-center)
@@ -196,6 +198,15 @@ AUDITING: Commit: YOUR_GIT_REPO/commit/a5e4b17 Audit bundle cjoc
 AUDITING: Bundle audit complete.
 ```
 
+Revert by removing the custom file:
+
+```sh
+{
+  rm normalize.yaml
+  ../examples/tutorials/auditing/audit.sh
+}
+```
+
 ## Bonus Exercise #3: avoid downloading expensive `items.yaml`
 
 Sometimes it is not required to include the items in the bundle, e.g.
@@ -205,19 +216,41 @@ Sometimes it is not required to include the items in the bundle, e.g.
 
 In this case, either add the `--ignore-items` option to the fetch command, or set `export BUNDLEUTILS_FETCH_IGNORE_ITEMS=true` environment variable.
 
+Let's try it out in our example:
+
+```sh
+{
+  export BUNDLEUTILS_FETCH_IGNORE_ITEMS=true
+  ../examples/tutorials/auditing/audit.sh
+  git show --stat
+}
+```
+
+And revert our changes (re-adding the items):
+
+```sh
+{
+  export BUNDLEUTILS_FETCH_IGNORE_ITEMS=false
+  ../examples/tutorials/auditing/audit.sh
+  git show --stat
+}
+```
+
+So, just to recap:
+
 **Using...** `export BUNDLEUTILS_FETCH_IGNORE_ITEMS=false`
 
 ```sh
 ❯ time BUNDLEUTILS_FETCH_IGNORE_ITEMS=false bundleutils fetch
-INFO:root:Read YAML from url: http://35.227.58.163.nip.io/default-controller/core-casc-export
+INFO:root:Read YAML from url: http://ci.acme.org/default-controller/core-casc-export
 ...
 ...
 1,83s user 0,04s system 16% cpu 11,317 total    # <-- 11 seconds
 
-❯ find target/docs
+❯ find target/docs                              # <-- contains items.yaml
 target/docs
 target/docs/rbac.yaml
-target/docs/items.yaml                          # <-- items downloaded
+target/docs/items.yaml
 target/docs/plugins.yaml
 target/docs/plugin-catalog.yaml
 target/docs/bundle.yaml
@@ -240,6 +273,166 @@ target/docs/plugins.yaml
 target/docs/plugin-catalog.yaml
 target/docs/bundle.yaml
 target/docs/jenkins.yaml
+```
+
+## Bonus Exercise #4: version based bundles
+
+It might be useful to track the CI versions on bundles when performing audits.
+
+- The controller with the name `team-mobility` would normally result in a bundle of the same name.
+- Wouldn't it be nice if the bundle was called `team-mobility-2.492.3.5` instead?
+- This way, changes within a particular version could be tracked more easily.
+
+This is where the `BUNDLEUTILS_AUTO_ENV_APPEND_VERSION` comes in.
+
+Up until now, we have simple bundle names. E.g.
+
+```sh
+bundle-user@66df4d9bcd27:/opt/bundleutils/work/audits$ git ls-files
+.gitignore
+team-mobility/bundle.yaml
+team-mobility/items.yaml
+team-mobility/jenkins.yaml
+team-mobility/plugins.yaml
+```
+
+Let us use version based bundle names:
+
+```sh
+{
+  export BUNDLEUTILS_AUTO_ENV_APPEND_VERSION=true
+  ../examples/tutorials/auditing/audit.sh
+  git show --stat
+}
+```
+
+Performing the audit again appends the version to the bundle:
+
+```sh
+bundle-user@66df4d9bcd27:/opt/bundleutils/work/audits$ ../examples/tutorials/auditing/audit.sh
+...
+...
+AUDITING: Committing changes to team-mobility-2.479.3.1
+[main fda2da8] Audit bundle team-mobility-2.479.3.1 (version: 2.479.3.1)
+ 4 files changed, 1053 insertions(+)
+ create mode 100644 team-mobility-2.479.3.1/bundle.yaml
+ create mode 100644 team-mobility-2.479.3.1/items.yaml
+ create mode 100644 team-mobility-2.479.3.1/jenkins.yaml
+ create mode 100644 team-mobility-2.479.3.1/plugins.yaml
+AUDITING: Commit: YOUR_GIT_REPO/commit/fda2da8 Audit bundle team-mobility-2.479.3.1 (version: 2.479.3.1)
+AUDITING: Bundle audit complete.
+```
+
+List the files to see:
+
+```sh
+bundle-user@66df4d9bcd27:/opt/bundleutils/work/audits$ git ls-files
+.gitignore
+team-mobility-2.479.3.1/bundle.yaml
+team-mobility-2.479.3.1/items.yaml
+team-mobility-2.479.3.1/jenkins.yaml
+team-mobility-2.479.3.1/plugins.yaml
+team-mobility/bundle.yaml
+team-mobility/items.yaml
+team-mobility/jenkins.yaml
+team-mobility/plugins.yaml
+```
+
+## Bonus Exercise #5: version based bundles (and preserving git history)
+
+**NOTE:** you must have completed [Bonus Exercise #4: version based bundles](#bonus-exercise-4-version-based-bundles) before doing this exercise.
+
+Following on from the version based bundles example, you may want to:
+
+- Have version based bundles for the sake of transparency
+- Still preserve the git history on individual directories
+
+Enter the mandatory variable `GIT_BUNDLE_PRESERVE_HISTORY`.
+
+The [../examples/tutorials/auditing/audit.sh](../examples/tutorials/auditing/audit.sh) file needs to know what to do when:
+
+- a new version is detected
+- a previous version exists
+
+> Should the git history of the previous version be preserved in the new version, or should we add the files and start a new git history?
+
+**NONE:** If not set at all, the script will fail.
+
+**FALSE:** Setting `export GIT_BUNDLE_PRESERVE_HISTORY=false` will:
+
+- add a new/fresh directory for the new version
+- commit the changes
+- the previous versions directory will retain its own git history
+- the new versions directory will have a no previous git history
+
+**TRUE:** Setting `export GIT_BUNDLE_PRESERVE_HISTORY=true` will:
+
+- rename the previous versions directory to the new versions directory
+- commit the changes (thus preserving the git history)
+- add a new/fresh directory previous version with the last known configuration
+- commit the changes
+
+**Let's try this in our example:**
+
+Preparation: Normally, this will happen organically when upgrading controllers. However, for the challenge, we will just immitate having a previous version installed.
+
+- set your current version - enter: `MY_CURRENT_VERSION=team-mobility-2.479.3.1`
+- and a 'pretend' earlier version - enter: `MY_PREVIOUS_VERSION=team-mobility-2.479.3.0`.
+
+Now run:
+
+```sh
+{
+  git mv "$MY_CURRENT_VERSION" "$MY_PREVIOUS_VERSION"
+  git commit -m "We are just pretending this is an earlier version" "$MY_CURRENT_VERSION" "$MY_PREVIOUS_VERSION"
+  git ls-files
+}
+```
+
+Now the 'previous' version is in place, let's set the environment variable to preserve the git history.
+
+```sh
+export GIT_BUNDLE_PRESERVE_HISTORY=true
+```
+
+And perform the audit again:
+
+```sh
+../examples/tutorials/auditing/audit.sh
+```
+
+You will see something like:
+
+```sh
+bundle-user@66df4d9bcd27:/opt/bundleutils/work/audits$ ../examples/tutorials/auditing/audit.sh
+...
+...
+AUDITING: Bundle team-mobility-2.479.3.1 not found. Looking for a previous version...
+AUDITING: Migrating from previous version team-mobility-2.479.3.0 to team-mobility-2.479.3.1
+[main 40ee945] Renaming team-mobility-2.479.3.0 to team-mobility-2.479.3.1 to preserve the git history
+ 4 files changed, 0 insertions(+), 0 deletions(-)
+ rename {team-mobility-2.479.3.0 => team-mobility-2.479.3.1}/bundle.yaml (100%)
+ rename {team-mobility-2.479.3.0 => team-mobility-2.479.3.1}/items.yaml (100%)
+ rename {team-mobility-2.479.3.0 => team-mobility-2.479.3.1}/jenkins.yaml (100%)
+ rename {team-mobility-2.479.3.0 => team-mobility-2.479.3.1}/plugins.yaml (100%)
+[main aa9b096] Last known state of team-mobility-2.479.3.0 before moving to team-mobility-2.479.3.1
+ 5 files changed, 1055 insertions(+)
+ create mode 100644 .gitignore
+ create mode 100644 team-mobility-2.479.3.0/bundle.yaml
+ create mode 100644 team-mobility-2.479.3.0/items.yaml
+ create mode 100644 team-mobility-2.479.3.0/jenkins.yaml
+ create mode 100644 team-mobility-2.479.3.0/plugins.yaml
+...
+...
+```
+
+The git history of the 'new' version is a continuation of the old...
+
+```sh
+bundle-user@66df4d9bcd27:/opt/bundleutils/work/audits$ git log --oneline team-mobility-2.479.3.1
+40ee945 Renaming team-mobility-2.479.3.0 to team-mobility-2.479.3.1 to preserve the git history
+380be9e We are just pretending this is an earlier version
+fda2da8 Audit bundle team-mobility-2.479.3.1 (version: 2.479.3.1)
 ```
 
 ## Running in Production
