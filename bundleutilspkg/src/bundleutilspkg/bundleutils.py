@@ -64,6 +64,9 @@ BUNDLEUTILS_CI_TYPE = 'BUNDLEUTILS_CI_TYPE'
 BUNDLEUTILS_CI_SERVER_HOME = 'BUNDLEUTILS_CI_SERVER_HOME'
 BUNDLEUTILS_CI_MAX_START_TIME = 'BUNDLEUTILS_CI_MAX_START_TIME'
 BUNDLEUTILS_LOG_LEVEL = 'BUNDLEUTILS_LOG_LEVEL'
+BUNDLEUTILS_AUTO_ENV_USE_URL_ONLY = 'BUNDLEUTILS_AUTO_ENV_USE_URL_ONLY'
+BUNDLEUTILS_AUTO_ENV_APPEND_VERSION = 'BUNDLEUTILS_AUTO_ENV_APPEND_VERSION'
+BUNDLEUTILS_AUTO_ENV_LAST_KNOWN_VERSION = 'BUNDLEUTILS_AUTO_ENV_LAST_KNOWN_VERSION'
 BUNDLEUTILS_AUTO_ENV_FILE = 'BUNDLEUTILS_AUTO_ENV_FILE'
 BUNDLEUTILS_ENV = 'BUNDLEUTILS_ENV'
 BUNDLEUTILS_ENV_OVERRIDE = 'BUNDLEUTILS_ENV_OVERRIDE'
@@ -89,8 +92,8 @@ BUNDLEUTILS_JENKINS_URL = 'BUNDLEUTILS_JENKINS_URL'
 BUNDLEUTILS_USERNAME = 'BUNDLEUTILS_USERNAME'
 BUNDLEUTILS_PASSWORD = 'BUNDLEUTILS_PASSWORD'
 BUNDLEUTILS_PATH = 'BUNDLEUTILS_PATH'
+BUNDLEUTILS_INSTANCE_NAME = 'BUNDLEUTILS_INSTANCE_NAME'
 BUNDLEUTILS_BUNDLE_NAME = 'BUNDLEUTILS_BUNDLE_NAME'
-BUNDLEUTILS_BUNDLE_NAME_FROM_PROFILES = 'BUNDLEUTILS_BUNDLE_NAME_FROM_PROFILES'
 BUNDLEUTILS_MERGE_CONFIG = 'BUNDLEUTILS_MERGE_CONFIG'
 BUNDLEUTILS_MERGE_BUNDLES = 'BUNDLEUTILS_MERGE_BUNDLES'
 BUNDLEUTILS_MERGE_USE_PARENT = 'BUNDLEUTILS_MERGE_USE_PARENT'
@@ -255,11 +258,12 @@ def get_value_from_enum(value, my_enum):
 def get_name_from_enum(my_enum):
     return [x.name for x in my_enum]
 
-
 def common_options(func):
     func = click.option('-l', '--log-level', default=os.environ.get(BUNDLEUTILS_LOG_LEVEL, 'INFO'), help=f'The log level ({BUNDLEUTILS_LOG_LEVEL}).')(func)
     func = click.option('-e', '--env-file', default=os.environ.get(BUNDLEUTILS_ENV, ''), type=click.Path(file_okay=True, dir_okay=False), help=f'Optional bundle profiles file ({BUNDLEUTILS_ENV}).')(func)
     func = click.option('-i', '--interactive', default=False, is_flag=True, help=f'Run in interactive mode.')(func)
+    func = click.option('-u', '--auto-env-url-only', default=False, is_flag=True, help=f'Determine env vars via URL only ({BUNDLEUTILS_AUTO_ENV_USE_URL_ONLY}).')(func)
+    func = click.option('-a', '--auto-env-append-version', default=False, is_flag=True, help=f'Append the current version to the bundle directory ({BUNDLEUTILS_AUTO_ENV_APPEND_VERSION}).')(func)
     return func
 
 def server_options(func):
@@ -466,18 +470,83 @@ def _check_cwd_for_bundle_auto_vars(ctx, switch_dirs = True):
                     logging.info(f'Replacing {key}={value} with {new_value}')
                     os.environ[key] = new_value
 
+def _check_url_and_determine_env_vars(ctx):
+    """Create the environment variables based on the URL"""
+    # no bundle_profiles found, no need to check
+
+    env_vars = {}
+    cwd = os.getcwd()
+    if not ctx.obj.get(ORIGINAL_CWD, ''):
+        ctx.obj[ORIGINAL_CWD] = cwd
+
+    # if the BUNDLE_PROFILES exists, then the BUNDLEUTILS_ENV must also exist
+    url, version = lookup_url_and_version('', '')
+    if not url:
+        die(f'No URL found in environment variables or command line arguments')
+    instance_name = _extract_name_from_url(url)
+
+    bundle_name = instance_name
+    last_known_bundle_name = ''
+    append_version = ctx.obj.get('auto_env_append_version', False)
+    if append_version:
+        bundle_name = f"{instance_name}-{version}"
+        # if the bundle name directory does not exist, create it
+        if not os.path.exists(bundle_name):
+            # find the last directory that matches the pattern "{instance_name}-x.x.x.x"
+            regex = re.compile(f"^{instance_name}-[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$")
+            for dir in reversed(sorted(os.listdir(cwd), key=lambda x: x.lower())):
+                if regex.match(dir):
+                    last_known_bundle_name = dir
+                    break
+
+
+
+    # get target dir values
+    bundle_target_dir = os.path.join(cwd, bundle_name)
+    if bundle_target_dir.startswith(cwd):
+        bundle_target_dir = os.path.relpath(bundle_target_dir, cwd)
+
+    # set the BUNDLEUTILS_FETCH_TARGET_DIR and BUNDLEUTILS_TRANSFORM_SOURCE_DIR to the default target/docs
+    _set_env_if_not_set('AUTOSET', BUNDLEUTILS_JENKINS_URL, url)
+    _set_env_if_not_set('AUTOSET', BUNDLEUTILS_INSTANCE_NAME, instance_name)
+    _set_env_if_not_set('AUTOSET', BUNDLEUTILS_BUNDLE_NAME, bundle_name)
+    _set_env_if_not_set('AUTOSET', BUNDLEUTILS_CI_VERSION, version)
+    _set_env_if_not_set('AUTOSET', BUNDLEUTILS_FETCH_TARGET_DIR, f'target/fetched/{bundle_name}')
+    _set_env_if_not_set('AUTOSET', BUNDLEUTILS_TRANSFORM_SOURCE_DIR, os.environ.get(BUNDLEUTILS_FETCH_TARGET_DIR))
+    _set_env_if_not_set('AUTOSET', BUNDLEUTILS_TRANSFORM_TARGET_DIR, bundle_target_dir)
+    _set_env_if_not_set('AUTOSET', BUNDLEUTILS_SETUP_SOURCE_DIR, os.environ.get(BUNDLEUTILS_TRANSFORM_TARGET_DIR))
+    _set_env_if_not_set('AUTOSET', BUNDLEUTILS_VALIDATE_SOURCE_DIR, os.environ.get(BUNDLEUTILS_TRANSFORM_TARGET_DIR))
+    _set_env_if_not_set('AUTOSET', BUNDLEUTILS_MERGE_OUTDIR, f'target/merged/{bundle_name}')
+    _set_env_if_not_set('AUTOSET', BUNDLEUTILS_MERGE_TRANSFORM_SOURCE_DIR, os.environ.get(BUNDLEUTILS_MERGE_OUTDIR))
+    _set_env_if_not_set('AUTOSET', BUNDLEUTILS_MERGE_TRANSFORM_TARGET_DIR, f'target/expected/{bundle_name}')
+    _set_env_if_not_set('AUTOSET', BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK_SOURCE_DIR, bundle_target_dir)
+    _set_env_if_not_set('AUTOSET', BUNDLEUTILS_AUDIT_SOURCE_DIR, os.environ.get(BUNDLEUTILS_FETCH_TARGET_DIR))
+    _set_env_if_not_set('AUTOSET', BUNDLEUTILS_AUDIT_TARGET_DIR, bundle_target_dir)
+    _set_env_if_not_set('AUTOSET', BUNDLEUTILS_AUTO_ENV_LAST_KNOWN_VERSION, last_known_bundle_name)
+    _set_env_if_not_set('AUTOSET', BUNDLEUTILS_AUTO_ENV_APPEND_VERSION, append_version)
+    # loop through the env vars and replace any placeholders
+    placeholder_re = re.compile(r'\$\{([^\}]+)\}')
+    for key, value in os.environ.items():
+        if key.startswith('BUNDLEUTILS_'):
+            new_value = placeholder_re.sub(lambda m: os.environ.get(m.group(1), ''), value)
+            if new_value != value:
+                logging.info(f'Replacing {key}={value} with {new_value}')
+                os.environ[key] = new_value
 
 def is_truthy(value):
     return value.lower() in ['true', '1', 't', 'y', 'yes']
 
 def set_logging(ctx, switch_dirs = True):
-    _check_for_env_file(ctx)
-    _check_cwd_for_bundle_auto_vars(ctx, switch_dirs)
+    if ctx.obj.get('auto_env_url_only', False):
+        _check_url_and_determine_env_vars(ctx)
+    else:
+        _check_for_env_file(ctx)
+        _check_cwd_for_bundle_auto_vars(ctx, switch_dirs)
 
 @click.group(invoke_without_command=True)
 @common_options
 @click.pass_context
-def bundleutils(ctx, log_level, env_file, interactive):
+def bundleutils(ctx, log_level, env_file, interactive, auto_env_url_only, auto_env_append_version):
     """A tool to fetch and transform YAML documents."""
     # inject PYTHONUTF8=1 into the environment
     os.environ["PYTHONUTF8"] = "1"
@@ -485,6 +554,8 @@ def bundleutils(ctx, log_level, env_file, interactive):
     ctx.max_content_width=120
     ctx.obj[ENV_FILE_ARG] = env_file
     ctx.obj[INTERACTIVE_ARG] = interactive
+    null_check(auto_env_url_only, 'auto_env_url_only', BUNDLEUTILS_AUTO_ENV_USE_URL_ONLY, False)
+    null_check(auto_env_append_version, 'auto_env_append_version', BUNDLEUTILS_AUTO_ENV_APPEND_VERSION, False)
     if not ctx.obj.get(BUNDLEUTILS_LOG_LEVEL, ''):
         ctx.obj[BUNDLEUTILS_LOG_LEVEL] = log_level
         logging.getLogger().setLevel(log_level)
@@ -513,6 +584,7 @@ def lookup_url_and_version(url, ci_version, default_url = '', default_ci_version
     url = lookup_url(url, default_url)
     ci_version = null_check(ci_version, CI_VERSION_ARG, BUNDLEUTILS_CI_VERSION, False, default_ci_version)
     if not ci_version:
+        logging.debug(f'No version found in environment variables or command line arguments. Using whoami to determine the version')
         whoami_url = f'{url}/whoAmI/api/json?tree=authenticated'
         try:
             response = requests.get(whoami_url, timeout=5)
@@ -524,11 +596,11 @@ def lookup_url_and_version(url, ci_version, default_url = '', default_ci_version
                 ci_version = headers.get('x-jenkins', headers.get('X-Jenkins', '')).replace('\r', '')
                 logging.debug(f"Version: {ci_version} (taken from remote)")
             else:
-                die(f"URL {url} returned a non-OK status code: {response.status_code}")
+                die(f"Trying to get version from URL {url} - returned a non-OK status code: {response.status_code}")
         except requests.exceptions.RequestException as e:
-            die(f"URL {url} is not reachable. Reason: {e}")
+            die(f"Trying to get CI version from URL {url} - not reachable. Reason: {e}")
     else:
-        logging.debug(f"Version: {ci_version} (taken from command line)")
+        logging.debug(f"Version: {ci_version} (taken from command line or env)")
     return url, ci_version
 
 def lookup_url(url, default_url = '', mandatory = True):
@@ -1189,11 +1261,24 @@ def diff2(file1, file2):
         return False
 
 @bundleutils.command()
+@click.option('-k', '--key', type=click.STRING, help=f'Return the value of the key or an error if not found.')
 @click.pass_context
-def config(ctx):
+def config(ctx, key):
     """List evaluated config based on cwd and env file."""
-
+    # if key disable logging
+    if key:
+        logging.getLogger().setLevel(logging.ERROR)
     set_logging(ctx)
+    if key:
+        # check if the key starts with BUNDLEUTILS_
+        if not key.startswith('BUNDLEUTILS_'):
+            die(f"Key '{key}' must start with 'BUNDLEUTILS_'")
+        # check if the key is in the environment variables
+        if key in os.environ:
+            click.echo(os.environ[key])
+            return
+        else:
+            die(f"Key '{key}' not found in environment variables")
     # loop through all the environment variables, sorted alphabetically, starting with BUNDLEUTILS_ and print them as a single multiline string
     logging.info("Evaluated configuration:")
     lines = []
@@ -1221,6 +1306,13 @@ def version():
 
 @bundleutils.command()
 @click.option('-u', '--url', help=f'The URL to extract the controller name from.')
+def extract_version_from_url(url):
+    """Get the instance version from the URL."""
+    name, version = lookup_url_and_version(url, '')
+    click.echo(version)
+
+@bundleutils.command()
+@click.option('-u', '--url', help=f'The URL to extract the controller name from.')
 def extract_name_from_url(url):
     """
     Smart extraction of the controller name from the URL.
@@ -1236,11 +1328,13 @@ def extract_name_from_url(url):
     - https://NAME.b.c/
     - https://NAME.b.c
     """
+    url = lookup_url(url)
     name = _extract_name_from_url(url)
     click.echo(name)
 
 def _extract_name_from_url(url):
-    url = lookup_url(url)
+    if not url:
+        url = lookup_url(url)
     parsed = urlparse(url)
     # Check if the URL has a path
     if parsed.path and parsed.path != '/':

@@ -49,10 +49,16 @@ Usage: bundleutils [OPTIONS] COMMAND [ARGS]...
   A tool to fetch and transform YAML documents.
 
 Options:
-  -i, --interactive     Run in interactive mode.
-  -e, --env-file FILE   Optional bundle profiles file (BUNDLEUTILS_ENV).
-  -l, --log-level TEXT  The log level (BUNDLEUTILS_LOG_LEVEL).
-  --help                Show this message and exit.
+  -a, --auto-env-append-version  Append the current version to the bundle
+                                 directory
+                                 (BUNDLEUTILS_AUTO_ENV_APPEND_VERSION).
+  -u, --auto-env-url-only        Determine env vars via URL only
+                                 (BUNDLEUTILS_AUTO_ENV_USE_URL_ONLY).
+  -i, --interactive              Run in interactive mode.
+  -e, --env-file FILE            Optional bundle profiles file
+                                 (BUNDLEUTILS_ENV).
+  -l, --log-level TEXT           The log level (BUNDLEUTILS_LOG_LEVEL).
+  --help                         Show this message and exit.
 
 Commands:
   audit                           Transform using the normalize.yaml but...
@@ -69,6 +75,7 @@ Commands:
   diff-merged                     Diff two bundle directories by...
   extract-from-pattern            Extract the controller name from a...
   extract-name-from-url           Smart extraction of the controller...
+  extract-version-from-url        Get the instance version from the URL.
   fetch                           Fetch YAML documents from a URL or path.
   find-bundle-by-url              Find a bundle by Jenkins URL and CI...
   find-bundles
@@ -227,7 +234,8 @@ Usage: bundleutils config [OPTIONS]
   List evaluated config based on cwd and env file.
 
 Options:
-  --help  Show this message and exit.
+  -k, --key TEXT  Return the value of the key or an error if not found.
+  --help          Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils delete [OPTIONS]
 
@@ -300,6 +308,14 @@ Usage: bundleutils extract-name-from-url [OPTIONS]
   - http://NAME.b.c
   - https://NAME.b.c/
   - https://NAME.b.c
+
+Options:
+  -u, --url TEXT  The URL to extract the controller name from.
+  --help          Show this message and exit.
+------------------------------------------------------------------------------------------------------------------------
+Usage: bundleutils extract-version-from-url [OPTIONS]
+
+  Get the instance version from the URL.
 
 Options:
   -u, --url TEXT  The URL to extract the controller name from.
