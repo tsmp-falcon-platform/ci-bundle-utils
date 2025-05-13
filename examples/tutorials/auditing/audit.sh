@@ -38,7 +38,6 @@ elif [[ "${1:-}" == "cjoc-and-online-controllers" ]]; then
   ONLINE_CONTROLLERS=$(echo "$CONTROLLERS_JSON" | jq -r '.jobs[]|select(.online == true).endpoint')
   if [[ -z "$ONLINE_CONTROLLERS" ]]; then
     echo "AUDITING: No online controllers found."
-    exit 0
   else
     echo
     echo
