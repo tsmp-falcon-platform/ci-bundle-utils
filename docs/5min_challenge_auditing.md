@@ -1,11 +1,12 @@
 # 5 Minute Challenge: Auditing
 
-This tutorial will explain have your controller audited in 5 mins.
+This tutorial will explain to have your controller audited in 5 mins.
 
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 
 - [Prerequisites](#prerequisites)
+  - [Minimum Required Permissions](#minimum-required-permissions)
 - [3, 2, 1...Go](#3-2-1go)
 - [Bonus Exercise #1: using `BUNDLEUTILS_CREDENTIAL_HASH`](#bonus-exercise-1-using-bundleutils_credential_hash)
 - [Bonus Exercise #2: using a custom `normalize.yaml`](#bonus-exercise-2-using-a-custom-normalizeyaml)
@@ -21,7 +22,28 @@ This tutorial will explain have your controller audited in 5 mins.
 ## Prerequisites
 
 - One or more target URL's (controller or operations center)
-- A valid username and corresponding API token
+- A valid username and corresponding API token, referenced below
+  - `BUNDLEUTILS_USERNAME`
+  - `BUNDLEUTILS_PASSWORD`
+
+### Minimum Required Permissions
+
+The minimum set of permissions needed for the user are as follows:
+
+```yaml
+removeStrategy:
+  rbac: SYNC
+roles:
+- permissions:
+  - hudson.model.Hudson.SystemRead
+  - com.cloudbees.jenkins.plugins.casc.permissions.CascPermission.Item
+  - com.cloudbees.jenkins.plugins.casc.permissions.CascPermission.Administer
+  name: validate-casc
+```
+
+Whereby the `hudson.model.Hudson.SystemRead` can be enabled using a system property, see [Enable the optional Overall/SystemRead permission](https://www.jenkins.io/doc/book/managing/system-properties/#jenkins-security-systemreadpermission).
+
+**NOTE:** If you do not have the SystemRead available, `hudson.model.Hudson.Administer` will be needed.
 
 ## 3, 2, 1...Go
 
@@ -82,7 +104,7 @@ git show --stat
 > [!NOTE]
 > 4 minutes...
 
-Make a change to your target controller the `audit.sh` after making a change:
+Make a change to your target controller and run the `audit.sh` again:
 
 ```sh
 ../examples/tutorials/auditing/audit.sh
