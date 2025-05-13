@@ -612,13 +612,14 @@ def lookup_type_from_url(url, ci_type, default_ci_type = ''):
                     else:
                         die(f'Unknown CI type: {ci_type}')
                     logging.debug(f"Type: {ci_type} (taken from remote)")
-                logging.debug(f"Version: {ci_type} (taken from remote)")
+                else:
+                    die(f'Could not determine CI type from URL {url} - no match found')
             else:
-                die(f"Trying to get version from URL {url} - returned a non-OK status code: {response.status_code}")
+                die(f"Trying to get type from URL {url} - returned a non-OK status code: {response.status_code}")
         except requests.exceptions.RequestException as e:
-            die(f"Trying to get CI version from URL {url} - not reachable. Reason: {e}")
+            die(f"Trying to get CI type from URL {url} - not reachable. Reason: {e}")
     else:
-        logging.debug(f"Version: {ci_type} (taken from command line or env)")
+        logging.debug(f"Type: {ci_type} (taken from command line or env)")
     return ci_type
 
 
