@@ -62,7 +62,7 @@ roles:
 ```
 
 > [!NOTE]
-> System properties can used to enable the [Overall/SystemRead](https://www.jenkins.io/doc/book/managing/system-properties/#jenkins-security-systemreadpermission) and [Computer/ExtendedRead and Item/ExtendedRead](https://www.jenkins.io/doc/book/managing/system-properties/#hudson-security-extendedreadpermission) permissions.
+> System properties can be used to enable the [Overall/SystemRead](https://www.jenkins.io/doc/book/managing/system-properties/#jenkins-security-systemreadpermission) and [Computer/ExtendedRead and Item/ExtendedRead](https://www.jenkins.io/doc/book/managing/system-properties/#hudson-security-extendedreadpermission) permissions.
 >
 > If you do not have the SystemRead available, `hudson.model.Hudson.Administer` will be needed.
 
