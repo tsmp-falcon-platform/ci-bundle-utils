@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     less \
     vim \
     git \
+    jq \
     make \
     skopeo \
     python3 \

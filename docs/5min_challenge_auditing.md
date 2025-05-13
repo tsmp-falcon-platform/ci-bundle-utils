@@ -13,6 +13,7 @@ This tutorial will explain how to have your controller audited in 5 mins.
 - [Bonus Exercise #3: avoid downloading expensive `items.yaml`](#bonus-exercise-3-avoid-downloading-expensive-itemsyaml)
 - [Bonus Exercise #4: version based bundles](#bonus-exercise-4-version-based-bundles)
 - [Bonus Exercise #5: version based bundles (and preserving git history)](#bonus-exercise-5-version-based-bundles-and-preserving-git-history)
+- [Bonus Exercise #6: all in one](#bonus-exercise-6-all-in-one)
 - [Running in Production](#running-in-production)
   - [Pipeline Job](#pipeline-job)
   - [Operation Center](#operation-center)
@@ -493,6 +494,41 @@ bundle-user@66df4d9bcd27:/opt/bundleutils/work/audits$ git log --oneline team-mo
 40ee945 Renaming team-mobility-2.479.3.0 to team-mobility-2.479.3.1 to preserve the git history
 380be9e We are just pretending this is an earlier version
 fda2da8 Audit bundle team-mobility-2.479.3.1 (version: 2.479.3.1)
+```
+
+## Bonus Exercise #6: all in one
+
+The `audit.sh` has a special feature which, given an operation center URL, will:
+
+- find all ONLINE controllers
+- perform an audit on each
+- perform a final audit on the operation center
+
+```sh
+bundle-user@b7df010ce271:/opt/bundleutils/work/audits$ ../examples/tutorials/auditing/audit.sh cjoc-and-online-controllers
+...
+...
+AUDITING: Auditing online controllers and then the OC:
+https://ci.acme.org/audited-1/
+https://ci.acme.org/audited-2/
+...
+...
+INFO:root:Read YAML from url: https://ci.acme.org/audited-1//core-casc-export
+...
+...
+INFO:root:Read YAML from url: https://ci.acme.org/audited-2//core-casc-export
+...
+...
+INFO:root:Read YAML from url: https://ci.acme.org/cjoc//core-casc-export
+```
+
+The resulting commits:
+
+```sh
+bundle-user@b7df010ce271:/opt/bundleutils/work/audits$ git log --oneline
+0696183 (HEAD -> main) Audit bundle cjoc (version: 2.492.2.3)
+8881562 Audit bundle audited-2 (version: 2.492.2.3)
+380be9e Audit bundle audited-1 (version: 2.492.2.3)
 ```
 
 ## Running in Production
