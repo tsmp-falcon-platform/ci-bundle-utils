@@ -2378,6 +2378,9 @@ def traverse_credentials(hash_only, hash_seed, filename, obj, traversed_paths, c
                         continue
                     logging.debug(f"2Traversing path (Y): {new_path} ({matches})")
                     traversed_paths.append(new_path)
+                    if sub_path == '/id':
+                        logging.debug(f"Skipping path (N): {new_path} - id")
+                        continue
                     id = obj['id']
                     matching_tuple = None
                     # hashing only for auditing purposes - no need to check for custom replacements
@@ -2386,6 +2389,7 @@ def traverse_credentials(hash_only, hash_seed, filename, obj, traversed_paths, c
                         for custom_replacement in custom_replacements_for_id:
                             # check if the sub_path is in the custom_replacement with or without the leading slash
                             if sub_path in custom_replacement or sub_path.lstrip('/') in custom_replacement:
+                                logging.debug(f"Custom replacement found: {custom_replacement} for sub_path {sub_path}")
                                 matching_tuple = custom_replacement
                     if matches or matching_tuple is not None:
                         logging.debug(f"2Traversing2a path (Y): {new_path}")
@@ -2402,7 +2406,7 @@ def traverse_credentials(hash_only, hash_seed, filename, obj, traversed_paths, c
                             replacement = "${" + re.sub(r'\W', '_', id + "_" + sub_path.removeprefix('/')).upper() + "}"
                         else:
                             logging.debug(f"Matching tuple found: {matching_tuple}")
-                            replacement = matching_tuple[sub_path]
+                            replacement = matching_tuple[sub_path.removeprefix('/')]
 
                         if replacement == BUNDLEUTILS_CREDENTIAL_DELETE_SIGN:
                             parent_path = re.sub(r'/[^/]*$', '', path)
