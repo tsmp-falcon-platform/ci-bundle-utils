@@ -486,6 +486,7 @@ def _check_url_and_determine_env_vars(ctx):
     if not url:
         die(f'No URL found in environment variables or command line arguments')
     instance_name = _extract_name_from_url(url)
+    ci_type = lookup_type_from_url(url, '')
 
     bundle_name = instance_name
     last_known_bundle_name = ''
@@ -511,6 +512,7 @@ def _check_url_and_determine_env_vars(ctx):
     _set_env_if_not_set('AUTOSET', BUNDLEUTILS_INSTANCE_NAME, instance_name)
     _set_env_if_not_set('AUTOSET', BUNDLEUTILS_BUNDLE_NAME, bundle_name)
     _set_env_if_not_set('AUTOSET', BUNDLEUTILS_CI_VERSION, version)
+    _set_env_if_not_set('AUTOSET', BUNDLEUTILS_CI_TYPE, ci_type)
     _set_env_if_not_set('AUTOSET', BUNDLEUTILS_FETCH_TARGET_DIR, f'target/fetched/{bundle_name}')
     _set_env_if_not_set('AUTOSET', BUNDLEUTILS_TRANSFORM_SOURCE_DIR, os.environ.get(BUNDLEUTILS_FETCH_TARGET_DIR))
     _set_env_if_not_set('AUTOSET', BUNDLEUTILS_TRANSFORM_TARGET_DIR, bundle_target_dir)
@@ -583,6 +585,43 @@ def compare_func(x, y, level=None):
         return x['id'] == y['id']
     except Exception:
         raise CannotCompare() from None
+
+def lookup_type_from_url(url, ci_type, default_ci_type = ''):
+    ci_type = null_check(ci_type, CI_TYPE_ARG, BUNDLEUTILS_CI_TYPE, False, default_ci_type)
+    if not ci_type:
+        logging.debug(f'No type found in environment variables or command line arguments. Using whoami to determine the type')
+        whoami_url = f'{url}/whoAmI'
+        try:
+            response = requests.get(whoami_url, timeout=5)
+            if response.status_code == 200:
+                # grep -oE "CloudBees CI (Managed Controller|Client Controller|Cloud Operations Center|Operations Center) [0-9.-]+-rolling"
+                response_text = response.text
+                # find the first match
+                match = re.search(r'CloudBees CI (Managed Controller|Client Controller|Cloud Operations Center|Operations Center) [0-9.-]+-rolling', response_text)
+                if match:
+                    ci_type = match.group(1)
+                    # case switch the ci_type
+                    if ci_type == 'Managed Controller':
+                        ci_type = 'mm'
+                    elif ci_type == 'Client Controller':
+                        ci_type = 'cm'
+                    elif ci_type == 'Cloud Operations Center':
+                        ci_type = 'oc'
+                    elif ci_type == 'Operations Center':
+                        ci_type = 'oc-traditional'
+                    else:
+                        die(f'Unknown CI type: {ci_type}')
+                    logging.debug(f"Type: {ci_type} (taken from remote)")
+                else:
+                    die(f'Could not determine CI type from URL {url} - no match found')
+            else:
+                die(f"Trying to get type from URL {url} - returned a non-OK status code: {response.status_code}")
+        except requests.exceptions.RequestException as e:
+            die(f"Trying to get CI type from URL {url} - not reachable. Reason: {e}")
+    else:
+        logging.debug(f"Type: {ci_type} (taken from command line or env)")
+    return ci_type
+
 
 def lookup_url_and_version(url, ci_version, default_url = '', default_ci_version = ''):
     url = lookup_url(url, default_url)
@@ -1843,9 +1882,10 @@ def _analyze_server_plugins(ctx, plugins_from_json, plugins_json_list_strategy, 
             logging.info(f"{BUNDLEUTILS_FETCH_USE_CAP_ENVELOPE} option detected. Removing CAP plugin dependencies...")
             expected_plugins_copy = expected_plugins.copy()
             url, ci_version = lookup_url_and_version(url, '')
+            ci_type = lookup_type_from_url(url, '')
             if not url:
                 die("No URL provided for CAP plugin removal")
-            ci_version, ci_type, ci_server_home = server_options_null_check(ci_version, '', '')
+            ci_version, ci_type, ci_server_home = server_options_null_check(ci_version, ci_type, '')
             jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
             envelope_json = jenkins_manager.get_envelope_json_from_war()
             envelope_json = json.loads(envelope_json)

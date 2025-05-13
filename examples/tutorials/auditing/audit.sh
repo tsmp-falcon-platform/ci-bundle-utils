@@ -32,8 +32,31 @@ source_env
 if [[ "${1:-}" == "help" ]]; then
   echo -e "$usage_message"
   exit 0
-elif [[ "${1:-}" == http* ]]; then
-  export JENKINS_URL="${1:-}"
+elif [[ "${1:-}" == "cjoc-and-online-controllers" ]]; then
+  # List all controllers
+  CONTROLLERS_JSON=$(curl --fail -u "$BUNDLEUTILS_USERNAME:$BUNDLEUTILS_PASSWORD" "${JENKINS_URL}/api/json?pretty&tree=jobs\[name,online,state,endpoint\]")
+  ONLINE_CONTROLLERS=$(echo "$CONTROLLERS_JSON" | jq -r '.jobs[]|select(.online == true).endpoint')
+  if [[ -z "$ONLINE_CONTROLLERS" ]]; then
+    echo "AUDITING: No online controllers found."
+    exit 0
+  else
+    echo
+    echo
+    echo "AUDITING: Auditing the following ONLINE controllers and then the OC:"
+    echo "$ONLINE_CONTROLLERS"
+    echo
+    echo
+    sleep 5
+  fi
+  for CONTROLLER in $ONLINE_CONTROLLERS; do
+    echo "AUDITING: Found online controller: $CONTROLLER"
+    # Fetch the bundle from the controller
+    if BUNDLEUTILS_JENKINS_URL="$CONTROLLER" $0; then
+      echo "AUDITING: Bundle fetched from $CONTROLLER"
+    else
+      echo "AUDITING: Failed to fetch bundle from $CONTROLLER"
+    fi
+  done
 elif [[ "${1:-}" == "setup" ]]; then
   if [[ ! -t 0 ]]; then
     echo "AUDITING: Error: Setup requires a terminal to run."

@@ -1,17 +1,19 @@
 # 5 Minute Challenge: Auditing
 
-This tutorial will explain have your controller audited in 5 mins.
+This tutorial will explain how to have your controller audited in 5 mins.
 
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 
 - [Prerequisites](#prerequisites)
+  - [Minimum Required Permissions](#minimum-required-permissions)
 - [3, 2, 1...Go](#3-2-1go)
 - [Bonus Exercise #1: using `BUNDLEUTILS_CREDENTIAL_HASH`](#bonus-exercise-1-using-bundleutils_credential_hash)
 - [Bonus Exercise #2: using a custom `normalize.yaml`](#bonus-exercise-2-using-a-custom-normalizeyaml)
 - [Bonus Exercise #3: avoid downloading expensive `items.yaml`](#bonus-exercise-3-avoid-downloading-expensive-itemsyaml)
 - [Bonus Exercise #4: version based bundles](#bonus-exercise-4-version-based-bundles)
 - [Bonus Exercise #5: version based bundles (and preserving git history)](#bonus-exercise-5-version-based-bundles-and-preserving-git-history)
+- [Bonus Exercise #6: all in one](#bonus-exercise-6-all-in-one)
 - [Running in Production](#running-in-production)
   - [Pipeline Job](#pipeline-job)
   - [Operation Center](#operation-center)
@@ -21,7 +23,48 @@ This tutorial will explain have your controller audited in 5 mins.
 ## Prerequisites
 
 - One or more target URL's (controller or operations center)
-- A valid username and corresponding API token
+- A valid username and corresponding API token, referenced below as:
+  - `BUNDLEUTILS_USERNAME`
+  - `BUNDLEUTILS_PASSWORD`
+
+### Minimum Required Permissions
+
+The minimum set of permissions needed for the user are as follows:
+
+```mono
+CloudBees CasC Permissions/Administer
+CloudBees CasC Permissions/Checkout
+CloudBees CasC Permissions/Item
+CloudBees CasC Permissions/Read
+CloudBees CasC Permissions/ReadCheckout
+Agent/ExtendedRead
+Overall/Read
+Overall/SystemRead
+Job/ExtendedRead
+View/Read
+```
+
+In RBAC, this would look like (please ignore the ordering - it came out this way):
+
+```yaml
+removeStrategy:
+  rbac: SYNC
+roles:
+- permissions:
+  - hudson.model.Hudson.Read
+  - com.cloudbees.jenkins.plugins.casc.permissions.CascPermission.Item
+  - hudson.model.View.Read
+  - hudson.model.Hudson.SystemRead
+  - hudson.model.Computer.ExtendedRead
+  - hudson.model.Item.ExtendedRead
+  - com.cloudbees.jenkins.plugins.casc.permissions.CascPermission.Administer
+  name: validate-casc
+```
+
+> [!NOTE]
+> System properties can used to enable the [Overall/SystemRead](https://www.jenkins.io/doc/book/managing/system-properties/#jenkins-security-systemreadpermission) and [Computer/ExtendedRead and Item/ExtendedRead](https://www.jenkins.io/doc/book/managing/system-properties/#hudson-security-extendedreadpermission) permissions.
+>
+> If you do not have the SystemRead available, `hudson.model.Hudson.Administer` will be needed.
 
 ## 3, 2, 1...Go
 
@@ -82,7 +125,7 @@ git show --stat
 > [!NOTE]
 > 4 minutes...
 
-Make a change to your target controller the `audit.sh` after making a change:
+Make a change to your target controller and run the `audit.sh` again:
 
 ```sh
 ../examples/tutorials/auditing/audit.sh
@@ -130,7 +173,15 @@ Original:
 
 This is useful for noticing when the encrypted value changes without actually knowing the encrypted value.
 
-If this is not wanted, setting `BUNDLEUTILS_CREDENTIAL_HASH=false` will use a env var like representation instead.
+> [!WARNING]
+> If a credential object is updated, the encrypted value on disk is changed and thus the hash value with it.
+>
+> Credentials are re-encrypted when:
+>
+> - the credentials are changed in the UI (even it the change does not include the credential value, e.g. changing the description)
+> - reloading a CasC bundle which includes credentials (in this case, the credentials are recreated and thus re-encrypted)
+
+If false positives such as those above are not wanted, setting `BUNDLEUTILS_CREDENTIAL_HASH=false` will use a env var like representation instead.
 
 **Using...** `export BUNDLEUTILS_CREDENTIAL_HASH=false`
 
@@ -152,6 +203,16 @@ Auditing will, by default, use the [default `normalize.yaml`](../bundleutilspkg/
 If you wish to use a custom `normalize.yaml`, simply place the file in the root directory and make the appropriate changes.
 
 Example: copy and alter the file (removing the patch which deletes the labelAtoms):
+
+```sh
+cp ../../.app/bundleutilspkg/src/bundleutilspkg/data/configs/normalize.yaml .
+```
+
+```sh
+vi normalize.yaml
+```
+
+Example Output:
 
 ```sh
 bundle-user@82b69d6e24b9:/opt/bundleutils/work/audits$ cp ../../.app/bundleutilspkg/src/bundleutilspkg/data/configs/normalize.yaml .
@@ -433,6 +494,41 @@ bundle-user@66df4d9bcd27:/opt/bundleutils/work/audits$ git log --oneline team-mo
 40ee945 Renaming team-mobility-2.479.3.0 to team-mobility-2.479.3.1 to preserve the git history
 380be9e We are just pretending this is an earlier version
 fda2da8 Audit bundle team-mobility-2.479.3.1 (version: 2.479.3.1)
+```
+
+## Bonus Exercise #6: all in one
+
+The `audit.sh` has a special feature which, given an operation center URL, will:
+
+- find all ONLINE controllers
+- perform an audit on each
+- perform a final audit on the operation center
+
+```sh
+bundle-user@b7df010ce271:/opt/bundleutils/work/audits$ ../examples/tutorials/auditing/audit.sh cjoc-and-online-controllers
+...
+...
+AUDITING: Auditing online controllers and then the OC:
+https://ci.acme.org/audited-1/
+https://ci.acme.org/audited-2/
+...
+...
+INFO:root:Read YAML from url: https://ci.acme.org/audited-1//core-casc-export
+...
+...
+INFO:root:Read YAML from url: https://ci.acme.org/audited-2//core-casc-export
+...
+...
+INFO:root:Read YAML from url: https://ci.acme.org/cjoc//core-casc-export
+```
+
+The resulting commits:
+
+```sh
+bundle-user@b7df010ce271:/opt/bundleutils/work/audits$ git log --oneline
+0696183 (HEAD -> main) Audit bundle cjoc (version: 2.492.2.3)
+8881562 Audit bundle audited-2 (version: 2.492.2.3)
+380be9e Audit bundle audited-1 (version: 2.492.2.3)
 ```
 
 ## Running in Production
