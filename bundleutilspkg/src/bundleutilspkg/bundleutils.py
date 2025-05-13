@@ -662,7 +662,7 @@ def delete(ctx, source_dir, source_base, url, ci_version):
     """
     Delete a bundle source dir and the corresponding entry in bundle-profiles.yaml
     """
-    _check_for_env_file(ctx)
+    _check_for_env_file()
     # no bundle_profiles found, no need to check
     if not ctx.obj.get(BUNDLE_PROFILES, ''):
         logging.debug('No bundle profiles found. Nothing to add the bundle to.')
@@ -716,7 +716,7 @@ def bootstrap(ctx, source_dir, source_base, profile, update, url, ci_version):
     """
     Bootstrap a bundle.
     """
-    _check_for_env_file(ctx)
+    _check_for_env_file()
     # no bundle_profiles found, no need to check
     if not ctx.obj.get(BUNDLE_PROFILES, ''):
         logging.debug('No bundle profiles found. Nothing to add the bundle to.')
