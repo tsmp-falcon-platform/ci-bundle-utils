@@ -1,6 +1,6 @@
 # 5 Minute Challenge: Auditing
 
-This tutorial will explain to have your controller audited in 5 mins.
+This tutorial will explain how to have your controller audited in 5 mins.
 
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
@@ -22,7 +22,7 @@ This tutorial will explain to have your controller audited in 5 mins.
 ## Prerequisites
 
 - One or more target URL's (controller or operations center)
-- A valid username and corresponding API token, referenced below
+- A valid username and corresponding API token, referenced below as:
   - `BUNDLEUTILS_USERNAME`
   - `BUNDLEUTILS_PASSWORD`
 
@@ -30,20 +30,40 @@ This tutorial will explain to have your controller audited in 5 mins.
 
 The minimum set of permissions needed for the user are as follows:
 
+```mono
+CloudBees CasC Permissions/Administer
+CloudBees CasC Permissions/Checkout
+CloudBees CasC Permissions/Item
+CloudBees CasC Permissions/Read
+CloudBees CasC Permissions/ReadCheckout
+Agent/ExtendedRead
+Overall/Read
+Overall/SystemRead
+Job/ExtendedRead
+View/Read
+```
+
+In RBAC, this would look like (please ignore the ordering - it came out this way):
+
 ```yaml
 removeStrategy:
   rbac: SYNC
 roles:
 - permissions:
-  - hudson.model.Hudson.SystemRead
+  - hudson.model.Hudson.Read
   - com.cloudbees.jenkins.plugins.casc.permissions.CascPermission.Item
+  - hudson.model.View.Read
+  - hudson.model.Hudson.SystemRead
+  - hudson.model.Computer.ExtendedRead
+  - hudson.model.Item.ExtendedRead
   - com.cloudbees.jenkins.plugins.casc.permissions.CascPermission.Administer
   name: validate-casc
 ```
 
-Whereby the `hudson.model.Hudson.SystemRead` can be enabled using a system property, see [Enable the optional Overall/SystemRead permission](https://www.jenkins.io/doc/book/managing/system-properties/#jenkins-security-systemreadpermission).
-
-**NOTE:** If you do not have the SystemRead available, `hudson.model.Hudson.Administer` will be needed.
+> [!NOTE]
+> System properties can used to enable the [Overall/SystemRead](https://www.jenkins.io/doc/book/managing/system-properties/#jenkins-security-systemreadpermission) and [Computer/ExtendedRead and Item/ExtendedRead](https://www.jenkins.io/doc/book/managing/system-properties/#hudson-security-extendedreadpermission) permissions.
+>
+> If you do not have the SystemRead available, `hudson.model.Hudson.Administer` will be needed.
 
 ## 3, 2, 1...Go
 
@@ -152,7 +172,15 @@ Original:
 
 This is useful for noticing when the encrypted value changes without actually knowing the encrypted value.
 
-If this is not wanted, setting `BUNDLEUTILS_CREDENTIAL_HASH=false` will use a env var like representation instead.
+> [!WARNING]
+> If a credential object is updated, the encrypted value on disk is changed and thus the hash value with it.
+>
+> Credentials are re-encrypted when:
+>
+> - the credentials are changed in the UI (even it the change does not include the credential value, e.g. changing the description)
+> - reloading a CasC bundle which includes credentials (in this case, the credentials are recreated and thus re-encrypted)
+
+If false positives such as those above are not wanted, setting `BUNDLEUTILS_CREDENTIAL_HASH=false` will use a env var like representation instead.
 
 **Using...** `export BUNDLEUTILS_CREDENTIAL_HASH=false`
 
@@ -174,6 +202,16 @@ Auditing will, by default, use the [default `normalize.yaml`](../bundleutilspkg/
 If you wish to use a custom `normalize.yaml`, simply place the file in the root directory and make the appropriate changes.
 
 Example: copy and alter the file (removing the patch which deletes the labelAtoms):
+
+```sh
+cp ../../.app/bundleutilspkg/src/bundleutilspkg/data/configs/normalize.yaml .
+```
+
+```sh
+vi normalize.yaml
+```
+
+Example Output:
 
 ```sh
 bundle-user@82b69d6e24b9:/opt/bundleutils/work/audits$ cp ../../.app/bundleutilspkg/src/bundleutilspkg/data/configs/normalize.yaml .
