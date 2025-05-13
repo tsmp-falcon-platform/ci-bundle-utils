@@ -1553,7 +1553,7 @@ def _validate(url, username, password, source_dir, ignore_warnings, external_rba
             subprocess.run(['cp', external_rbac, temp_dir], check=True)
             _update_bundle(temp_dir)
         # zip and post the YAML to the URL
-        with zipfile.ZipFile('bundle.zip', 'w', encoding='utf-8') as zip_ref:
+        with zipfile.ZipFile('bundle.zip', 'w') as zip_ref:
             for filename in os.listdir(temp_dir):
                 zip_ref.write(os.path.join(temp_dir, filename), filename)
         with open('bundle.zip', 'rb') as f:
@@ -2204,7 +2204,7 @@ def fetch_yaml_docs(ctx):
         # if the path points to a zip file, extract the YAML from the zip file
         if path.endswith('.zip'):
             logging.info(f'Extracting YAML from ZIP file: {path}')
-            with zipfile.ZipFile(path, 'r', encoding='utf-8') as zip_ref:
+            with zipfile.ZipFile(path, 'r') as zip_ref:
                 # list the files in the zip file
                 for filename in zip_ref.namelist():
                     # read the YAML from the file
