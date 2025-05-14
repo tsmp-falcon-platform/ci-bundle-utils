@@ -22,8 +22,12 @@ This tutorial will explain how to have your controller audited in 5 mins.
 
 ## Prerequisites
 
-- One or more target URL's (controller or operations center)
-- A valid username and corresponding API token, referenced below as:
+- **TARGET URL:** One or more target URL's (controller or operations center)
+- **PLUGINS:** The following plugins are installed:
+  - On both: `cloudbees-casc-client`
+  - On operations center: `cloudbees-casc-items-server`
+  - On controller: `cloudbees-casc-items-controller`
+- **CREDENTIALS:** A valid username and corresponding API token, referenced below as:
   - `BUNDLEUTILS_USERNAME`
   - `BUNDLEUTILS_PASSWORD`
 
