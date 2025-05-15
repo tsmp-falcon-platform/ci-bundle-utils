@@ -5,6 +5,7 @@ from copy import deepcopy
 # Cache the original environment once
 _original_env = None
 
+
 @pytest.fixture(autouse=True)
 def reset_env(monkeypatch):
     global _original_env

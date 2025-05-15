@@ -1,4 +1,20 @@
+exclude: |
+  (?x)^(
+      .*\{\{.*\}\}.*|     # Exclude any files with cookiecutter variables
+      docs/site/.*|       # Exclude mkdocs compiled files
+      \.history/.*|       # Exclude history files
+      .*cache.*/.*|       # Exclude cache directories
+      .*venv.*/.*|        # Exclude virtual environment directories
+  )$
+fail_fast: true
+default_language_version:
+  python: python3.12
+default_install_hook_types:
+  - pre-commit
+  - commit-msg
+
 repos:
+# ------------------------------- Documentation Tools ------------------------------- #
 - repo: https://github.com/thlorenz/doctoc
   rev: v2.2.0
   hooks:
@@ -19,3 +35,49 @@ repos:
       language: script
       files: bundleutilspkg/.*\.py$
       require_serial: true
+
+# ------------------------------- Python Tools ------------------------------- #
+- repo: https://github.com/astral-sh/ruff-pre-commit
+  rev: v0.11.9
+  hooks:
+  - id: ruff-format
+    name: "Python · Format with Ruff"
+
+- repo: https://github.com/abravalheri/validate-pyproject
+  rev: v0.24.1
+  hooks:
+  - id: validate-pyproject
+    name: "Python · Validate pyproject.toml"
+    additional_dependencies: ["validate-pyproject-schema-store[all]"]
+
+# ------------------------------- Security ------------------------------- #
+- repo: https://github.com/gitleaks/gitleaks
+  rev: v8.26.0
+  hooks:
+  - id: gitleaks
+    name: "Security · Detect hardcoded secrets"
+
+- repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: v5.0.0
+  hooks:
+  # ------------------------------- File System ------------------------------- #
+  - id: check-executables-have-shebangs
+    name: "Filesystem exec · Verify shebang presence"
+  - id: check-shebang-scripts-are-executable
+    name: "Filesystem exec · Verify script permissions"
+  - id: check-case-conflict
+    name: "Filesystem names · Check case sensitivity"
+  - id: check-illegal-windows-names
+    name: "Filesystem names · Validate Windows filenames"
+  - id: check-symlinks
+    name: "Filesystem symlink · Check symlink validity"
+  - id: destroyed-symlinks
+    name: "Filesystem symlink · Detect broken symlinks"
+  # ------------------------------- Git Tools ------------------------------- #
+  - id: check-merge-conflict
+    name: "Git · Detect conflict markers"
+  - id: forbid-new-submodules
+    name: "Git · Prevent submodule creation"
+  - id: check-added-large-files
+    name: "Git · Block large file commits"
+    args: ["--maxkb=5000"]
