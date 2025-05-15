@@ -1798,7 +1798,7 @@ def ci_stop(ctx, ci_version, ci_type, ci_server_home):
 @click.pass_context
 def diff(ctx, sources):
     """Diff two YAML directories or files."""
-    set_logging(ctx, False)
+    set_logging(False)
     diff_detected = False
     # if src1 is a directory, ensure src2 is also directory
     if sources and len(sources) == 2:
@@ -1850,7 +1850,7 @@ def maybe_temp_dir():
 @click.pass_context
 def diff_merged(ctx, config, sources, api_version):
     """Diff two bundle directories by temporarily merging both before the diff."""
-    set_logging(ctx, False)
+    set_logging(False)
     diff_detected = False
     # if src1 is a directory, ensure src2 is also directory
     if sources and len(sources) == 2:
