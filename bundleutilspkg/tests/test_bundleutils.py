@@ -33,6 +33,34 @@ def test_completion_missing_argument(runner):
     assert "Missing option '-s'" in result.output
 
 
+def _test_diff(runner, src1, src2, exit_code, text=None):
+    testdir = os.path.dirname(__file__)
+    basedir = os.path.join(testdir, "resources", "merge-bundles")
+    src1 = os.path.join(basedir, src1)
+    src2 = os.path.join(basedir, src2)
+    result = runner.invoke(bundleutils, ["diff", "-s", src1, "-s", src2])
+    _traceback(result)
+    assert result.exit_code == exit_code
+    if exit_code != 0:
+        assert text in result.output
+
+
+def test_diff_file(runner):
+    _test_diff(runner, "base/jenkins.yaml", "base/jenkins.yaml", 0)
+    _test_diff(
+        runner,
+        "base/bundle.yaml",
+        "base-expected/bundle.yaml",
+        1,
+        "Differences detected",
+    )
+
+
+def test_diff_directory(runner):
+    _test_diff(runner, "base", "base", 0)
+    _test_diff(runner, "base", "base-expected", 1, "Differences detected")
+
+
 def _test_audit(testdir, test_name, runner, command_args, expected_dir):
     outdir = os.path.join(testdir, "resources", "target", test_name)
     assert outdir.endswith(f"tests/resources/target/{test_name}")
