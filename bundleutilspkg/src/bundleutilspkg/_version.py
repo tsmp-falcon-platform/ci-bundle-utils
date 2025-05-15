@@ -2,6 +2,7 @@ import os
 import subprocess
 import re
 
+
 def get_version():
     """Determine the application version."""
     release_version = os.getenv("BUNDLEUTILS_RELEASE_VERSION")
@@ -10,8 +11,12 @@ def get_version():
     if not (release_version and release_hash):
         try:
             # do not print any stderr output
-            release_version = subprocess.check_output(["git", "describe", "--tags"], text=True, stderr=subprocess.DEVNULL).strip()
-            release_hash = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True, stderr=subprocess.DEVNULL).strip()
+            release_version = subprocess.check_output(
+                ["git", "describe", "--tags"], text=True, stderr=subprocess.DEVNULL
+            ).strip()
+            release_hash = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], text=True, stderr=subprocess.DEVNULL
+            ).strip()
         except Exception:
             release_version = "0.0.0"
             release_hash = "unknown"
@@ -22,6 +27,7 @@ def get_version():
         release_version = f"{match.group(1)}.dev{match.group(2)}+{match.group(3)}"
 
     return release_version, release_hash
+
 
 release_version, release_hash = get_version()
 __version__ = release_version

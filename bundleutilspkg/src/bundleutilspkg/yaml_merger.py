@@ -22,13 +22,15 @@ default_merge_configs = {
     },
     "do_not_append": {
         "jenkins.globalNodeProperties": ["envVars"],
-    }
+    },
 }
+
 
 def printYaml(obj):
     stream = io.StringIO()
     yaml.dump(obj, stream)
     return stream.getvalue()
+
 
 class YAMLMerger:
     def __init__(self, merge_configs=None):
@@ -48,9 +50,11 @@ class YAMLMerger:
         Checks if a custom key is defined for the given key and path.
         """
         custom_key = None
-        for custom_key_pattern, custom_key_value  in self.dict_custom_keys.items():
+        for custom_key_pattern, custom_key_value in self.dict_custom_keys.items():
             path_and_key = f"{path}.{key}"
-            logging.debug(f"Checking custom key pattern: {custom_key_pattern} against path: {path} and key: {key}")
+            logging.debug(
+                f"Checking custom key pattern: {custom_key_pattern} against path: {path} and key: {key}"
+            )
             count_star = custom_key_pattern.count("*")
             if count_star == 0:
                 if path_and_key == custom_key_pattern:
@@ -60,13 +64,21 @@ class YAMLMerger:
                 if path_and_key.startswith(start) and path_and_key.endswith(end):
                     custom_key = custom_key_value
             else:
-                raise ValueError(f"Custom key pattern {custom_key_pattern} contains more than one '*' character {count_star}")
+                raise ValueError(
+                    f"Custom key pattern {custom_key_pattern} contains more than one '*' character {count_star}"
+                )
             if custom_key:
-                logging.debug(f"Found custom key: '{custom_key}' for path: '{path}' and key: '{key}'")
+                logging.debug(
+                    f"Found custom key: '{custom_key}' for path: '{path}' and key: '{key}'"
+                )
                 if key in do_not_append:
-                    raise ValueError(f"Cannot combine do_not_append logic with custom key. Use list_strategy_config with merge_key instead.")
+                    raise ValueError(
+                        f"Cannot combine do_not_append logic with custom key. Use list_strategy_config with merge_key instead."
+                    )
                 if custom_key not in item[key]:
-                    raise ValueError(f"Custom key: '{custom_key}' not found in dict at path: {path_and_key}")
+                    raise ValueError(
+                        f"Custom key: '{custom_key}' not found in dict at path: {path_and_key}"
+                    )
                 key = f"{key}[{item[key][custom_key]}]"
                 break
         return key
@@ -76,8 +88,10 @@ class YAMLMerger:
         Checks if a custom key is defined for the given key and path.
         """
         custom_strategy = None
-        logging.debug(f"Checking custom strategy pattern for path: '{path}' and default: '{default}'")
-        for custom_pattern, custom_value  in strategy_config.items():
+        logging.debug(
+            f"Checking custom strategy pattern for path: '{path}' and default: '{default}'"
+        )
+        for custom_pattern, custom_value in strategy_config.items():
             count_star = custom_pattern.count("*")
             if count_star == 0:
                 if path == custom_pattern:
@@ -87,9 +101,13 @@ class YAMLMerger:
                 if path.startswith(start) and path.endswith(end):
                     custom_strategy = custom_value
             else:
-                raise ValueError(f"Custom key pattern {custom_pattern} contains more than one '*' character {count_star}")
+                raise ValueError(
+                    f"Custom key pattern {custom_pattern} contains more than one '*' character {count_star}"
+                )
             if custom_strategy:
-                logging.debug(f"Found custom strategy: '{custom_strategy}' for path: '{path}'")
+                logging.debug(
+                    f"Found custom strategy: '{custom_strategy}' for path: '{path}'"
+                )
                 break
         return custom_strategy if custom_strategy else default
 
@@ -122,13 +140,17 @@ class YAMLMerger:
                 merge_path = path if key in do_not_append else f"{path}.{key}"
                 if key in merged_dicts:
                     logging.debug(f"List 2 - Merging dict path: {merge_path}")
-                    merged_dicts[key] = self.deep_merge(merged_dicts[key], item, merge_path)
+                    merged_dicts[key] = self.deep_merge(
+                        merged_dicts[key], item, merge_path
+                    )
                 else:
                     logging.debug(f"List 2 - Adding dict path: {merge_path}")
                     merged_dicts[key] = item
             else:
                 if item not in merged_list:
-                    logging.debug(f"List 2 - Adding non-dict value path: {path} ({item})")
+                    logging.debug(
+                        f"List 2 - Adding non-dict value path: {path} ({item})"
+                    )
                     merged_list.append(item)  # Avoid duplicates for non-dict values
 
         return merged_list + list(merged_dicts.values())
@@ -137,15 +159,21 @@ class YAMLMerger:
         """Recursively merges child into parent, handling lists based on specified strategies and exclusions."""
         logging.info(f"Deep merging path: {path}")
         if isinstance(parent, dict) and isinstance(child, dict):
-            strategy = self._check_custom_strategy(self.dict_strategy_config, path, "n/a")
+            strategy = self._check_custom_strategy(
+                self.dict_strategy_config, path, "n/a"
+            )
             if strategy == "replace":
                 logging.debug(f"Replacing entire dict at path: {path}")
                 return child
             for key, value in child.items():
                 new_path = f"{path}.{key}" if path else key
                 logging.debug(f"Handling dict key: {key} at path: {new_path}")
-                strategy = self._check_custom_strategy(self.dict_strategy_config, path, "merge")
-                logging.debug(f"Handling dict at path: {new_path} with strategy: {strategy}")
+                strategy = self._check_custom_strategy(
+                    self.dict_strategy_config, path, "merge"
+                )
+                logging.debug(
+                    f"Handling dict at path: {new_path} with strategy: {strategy}"
+                )
                 if key not in parent or strategy == "replace":
                     logging.debug(f"Adding dict at path: {new_path} with key: {key}")
                     parent[key] = value
@@ -153,18 +181,26 @@ class YAMLMerger:
                     logging.debug(f"Merging path: {new_path} with key: {key}")
                     parent[key] = self.deep_merge(parent[key], value, new_path)
         elif isinstance(parent, list) and isinstance(child, list):
-            strategy = self._check_custom_strategy(self.list_strategy_config, path, "replace")
+            strategy = self._check_custom_strategy(
+                self.list_strategy_config, path, "replace"
+            )
             # strategy = self.list_strategy_config.get(path, "replace")
             logging.debug(f"Handling list at path: {path} with strategy: {strategy}")
             if strategy == "append":
                 return self._merge_dict_lists(parent, child, path)
             elif strategy.startswith("merge_key:"):
                 key = strategy.split(":")[1]
-                merged = {item[key]: item for item in parent if isinstance(item, dict) and key in item}
+                merged = {
+                    item[key]: item
+                    for item in parent
+                    if isinstance(item, dict) and key in item
+                }
 
                 for item in child:
                     if isinstance(item, dict) and key in item:
-                        merged[item[key]] = self.deep_merge(merged.get(item[key], {}), item, f"{path}[{item[key]}]")
+                        merged[item[key]] = self.deep_merge(
+                            merged.get(item[key], {}), item, f"{path}[{item[key]}]"
+                        )
                     else:
                         if item not in parent:
                             parent.append(item)
@@ -198,10 +234,11 @@ class YAMLMerger:
                 parent = None
         return output
 
-
     def merge_yaml_individual_files(self, parent_file, child_file, parent_object=None):
         """Loads, merges, and returns merged YAML data while considering exclusion rules."""
-        logging.info(f"Merging parent file: {parent_file} with child file: {child_file}")
+        logging.info(
+            f"Merging parent file: {parent_file} with child file: {child_file}"
+        )
         if parent_object:
             parent_data = parent_object
         else:

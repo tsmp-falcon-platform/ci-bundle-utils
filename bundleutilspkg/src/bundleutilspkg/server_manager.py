@@ -13,44 +13,52 @@ from packaging import version
 
 import importlib.resources as pkg_resources
 
-class JenkinsServerManager:
 
+class JenkinsServerManager:
     def die(self, msg):
         logging.error(f"{msg}\n")
         sys.exit(1)
 
     def __init__(self, ci_type, ci_version, target_dir):
         """Initializes the Jenkins server manager with the specified ci_type, ci_version, and target directory."""
-        if ci_type not in ['oc', 'oc-traditional', 'mm', 'cm']:
-            self.die("Invalid type. Must be one of 'oc', 'oc-traditional', 'mm', or 'cm'")
-        if not re.match(r'\d+\.\d+\.\d+\.\d+', ci_version):
+        if ci_type not in ["oc", "oc-traditional", "mm", "cm"]:
+            self.die(
+                "Invalid type. Must be one of 'oc', 'oc-traditional', 'mm', or 'cm'"
+            )
+        if not re.match(r"\d+\.\d+\.\d+\.\d+", ci_version):
             self.die("Invalid version. Must match the format 'W.X.Y.Z'")
         # user can specify a cache directory to store the downloaded WAR files by setting the environment variable BUNDLEUTILS_CACHE_DIR
         # defaults to the users home directory if not set
-        if 'BUNDLEUTILS_CACHE_DIR' in os.environ:
-            self.cache_dir = os.environ['BUNDLEUTILS_CACHE_DIR']
+        if "BUNDLEUTILS_CACHE_DIR" in os.environ:
+            self.cache_dir = os.environ["BUNDLEUTILS_CACHE_DIR"]
         else:
-            self.cache_dir = os.path.join(os.path.expanduser("~"), ".bundleutils", "cache")
+            self.cache_dir = os.path.join(
+                os.path.expanduser("~"), ".bundleutils", "cache"
+            )
         self.war_cache_dir = os.path.join(self.cache_dir, "war", ci_type, ci_version)
         self.tar_cache_dir = os.path.join(self.cache_dir, "tar", ci_type, ci_version)
         self.tar_cache_file = os.path.join(self.tar_cache_dir, "jenkins.war")
-        self.whoami_url = '/whoAmI/api/json?tree=authenticated'
-        self.target_base_dir = '/tmp/ci_server_home'
+        self.whoami_url = "/whoAmI/api/json?tree=authenticated"
+        self.target_base_dir = "/tmp/ci_server_home"
         if not target_dir:
             target_dir = os.path.join(self.target_base_dir, ci_type, ci_version)
         self.ci_type = ci_type
         self.ci_version = ci_version
         self.target_dir = target_dir
-        self.pid_file = os.path.join(target_dir, 'jenkins.pid')
-        self.url_file = os.path.join(target_dir, 'jenkins.url')
-        self.target_jenkins_home = os.path.join(target_dir, 'jenkins-home')
-        self.target_jenkins_home_init_scripts = os.path.join(self.target_jenkins_home, 'init.groovy.d')
-        self.target_jenkins_home_casc_startup_bundle = os.path.join(self.target_jenkins_home, 'casc-startup-bundle')
-        self.target_jenkins_webroot = os.path.join(target_dir, 'jenkins-webroot')
-        self.target_jenkins_log = os.path.join(target_dir, 'jenkins.log')
-        self.war_path = os.path.join(self.target_jenkins_home, 'jenkins.war')
-        self.war_cache_file = os.path.join(self.war_cache_dir, 'jenkins.war')
-        self.war_cache_envelope_file = os.path.join(self.war_cache_dir, 'envelope.json')
+        self.pid_file = os.path.join(target_dir, "jenkins.pid")
+        self.url_file = os.path.join(target_dir, "jenkins.url")
+        self.target_jenkins_home = os.path.join(target_dir, "jenkins-home")
+        self.target_jenkins_home_init_scripts = os.path.join(
+            self.target_jenkins_home, "init.groovy.d"
+        )
+        self.target_jenkins_home_casc_startup_bundle = os.path.join(
+            self.target_jenkins_home, "casc-startup-bundle"
+        )
+        self.target_jenkins_webroot = os.path.join(target_dir, "jenkins-webroot")
+        self.target_jenkins_log = os.path.join(target_dir, "jenkins.log")
+        self.war_path = os.path.join(self.target_jenkins_home, "jenkins.war")
+        self.war_cache_file = os.path.join(self.war_cache_dir, "jenkins.war")
+        self.war_cache_envelope_file = os.path.join(self.war_cache_dir, "envelope.json")
         self.cb_docker_image, self.cb_war_download_url = self.set_cloudbees_variables()
         if not os.path.exists(self.target_jenkins_home_init_scripts):
             os.makedirs(self.target_jenkins_home_init_scripts)
@@ -81,27 +89,41 @@ class JenkinsServerManager:
         elif self.ci_type == "oc-traditional":
             cb_war_download_url = f"{cb_downloads_url}/operations-center/rolling/war/{self.ci_version}/cloudbees-core-oc.war"
         else:
-            self.die(f"BUNDLEUTILS_CI_TYPE '{self.ci_type}' not recognised", file=sys.stderr)
+            self.die(
+                f"BUNDLEUTILS_CI_TYPE '{self.ci_type}' not recognised", file=sys.stderr
+            )
 
         # check the environment variables:
-        cb_docker_image_env=f'BUNDLEUTILS_CB_DOCKER_IMAGE_{self.ci_type.upper()}'
-        cb_war_download_url_env=f'BUNDLEUTILS_CB_WAR_DOWNLOAD_URL_{self.ci_type.upper()}'
+        cb_docker_image_env = f"BUNDLEUTILS_CB_DOCKER_IMAGE_{self.ci_type.upper()}"
+        cb_war_download_url_env = (
+            f"BUNDLEUTILS_CB_WAR_DOWNLOAD_URL_{self.ci_type.upper()}"
+        )
         if cb_docker_image_env in os.environ:
             logging.info(f"Overwriting with environment variable {cb_docker_image_env}")
             cb_docker_image = os.environ[cb_docker_image_env]
-            cb_docker_image = cb_docker_image.replace('BUNDLEUTILS_CI_VERSION', self.ci_version)
+            cb_docker_image = cb_docker_image.replace(
+                "BUNDLEUTILS_CI_VERSION", self.ci_version
+            )
             # if the image does not include the pattern "[:@][^/:]+$ ]", append the ci_version
-            if not re.search(r'[:@][^/:]+$', cb_docker_image):
+            if not re.search(r"[:@][^/:]+$", cb_docker_image):
                 logging.info(f"Appending the ci_version {self.ci_version} to the image")
                 cb_docker_image = f"{cb_docker_image}:{self.ci_version}"
         else:
-            logging.info(f"Using default cloudbees image. Overwrite with environment variable {cb_war_download_url_env}")
+            logging.info(
+                f"Using default cloudbees image. Overwrite with environment variable {cb_war_download_url_env}"
+            )
         if cb_war_download_url_env in os.environ:
-            logging.info(f"Overwriting with environment variable {cb_war_download_url_env}")
+            logging.info(
+                f"Overwriting with environment variable {cb_war_download_url_env}"
+            )
             cb_war_download_url = os.environ[cb_war_download_url_env]
-            cb_war_download_url = cb_war_download_url.replace('BUNDLEUTILS_CI_VERSION', self.ci_version)
+            cb_war_download_url = cb_war_download_url.replace(
+                "BUNDLEUTILS_CI_VERSION", self.ci_version
+            )
         else:
-            logging.info(f"Using default cloudbees download URL. Overwrite with environment variable {cb_war_download_url_env}")
+            logging.info(
+                f"Using default cloudbees download URL. Overwrite with environment variable {cb_war_download_url_env}"
+            )
 
         return cb_docker_image, cb_war_download_url
 
@@ -114,32 +136,58 @@ class JenkinsServerManager:
         if force and os.path.exists(self.tar_cache_dir):
             logging.info(f"Removing {self.tar_cache_dir}")
             shutil.rmtree(self.tar_cache_dir)
-        logging.info(f"Using skopeo to copy the WAR file from the Docker image {self.cb_docker_image}")
+        logging.info(
+            f"Using skopeo to copy the WAR file from the Docker image {self.cb_docker_image}"
+        )
         if not os.path.exists(self.tar_cache_dir):
             os.makedirs(self.tar_cache_dir)
             # Copy image using skopeo
-            skopeo_cmd = ['skopeo', 'copy']
-            if 'BUNDLEUTILS_SKOPEO_COPY_OPTS' in os.environ:
-                logging.info("Using skopeo copy options from environment variable BUNDLEUTILS_SKOPEO_COPY_OPTS")
-                skopeo_cmd.extend(os.environ['BUNDLEUTILS_SKOPEO_COPY_OPTS'].split())
+            skopeo_cmd = ["skopeo", "copy"]
+            if "BUNDLEUTILS_SKOPEO_COPY_OPTS" in os.environ:
+                logging.info(
+                    "Using skopeo copy options from environment variable BUNDLEUTILS_SKOPEO_COPY_OPTS"
+                )
+                skopeo_cmd.extend(os.environ["BUNDLEUTILS_SKOPEO_COPY_OPTS"].split())
             else:
-                logging.info("Skopeo copy options such as '--src-creds USR:PWD' with environment variable BUNDLEUTILS_SKOPEO_COPY_OPTS")
-            skopeo_cmd.extend([f'docker://{self.cb_docker_image}', f'dir:{self.tar_cache_dir}'])
+                logging.info(
+                    "Skopeo copy options such as '--src-creds USR:PWD' with environment variable BUNDLEUTILS_SKOPEO_COPY_OPTS"
+                )
+            skopeo_cmd.extend(
+                [f"docker://{self.cb_docker_image}", f"dir:{self.tar_cache_dir}"]
+            )
             try:
                 subprocess.run(skopeo_cmd, check=True)
             except subprocess.CalledProcessError:
-                self.die(f"Failed to copy the Docker image {self.cb_docker_image} to {self.tar_cache_dir}")
+                self.die(
+                    f"Failed to copy the Docker image {self.cb_docker_image} to {self.tar_cache_dir}"
+                )
         else:
             logging.info(f"Found image in {self.tar_cache_dir}")
 
         if not os.path.exists(self.tar_cache_file):
             # Find and extract jenkins.war
             jenkins_war_found = False
-            for f in sorted(Path(self.tar_cache_dir).glob('*'), key=os.path.getsize, reverse=True):
+            for f in sorted(
+                Path(self.tar_cache_dir).glob("*"), key=os.path.getsize, reverse=True
+            ):
                 try:
                     # run process in self.tar_cache_dir to avoid extracting the whole image
-                    subprocess.run(['tar', '-C', self.tar_cache_dir, '--strip-components=3', '-xf', str(f), 'usr/share/jenkins/jenkins.war'], stderr=subprocess.DEVNULL, check=True)
-                    logging.info(f"Found jenkins.war in {f}. Copying to war cache directory.")
+                    subprocess.run(
+                        [
+                            "tar",
+                            "-C",
+                            self.tar_cache_dir,
+                            "--strip-components=3",
+                            "-xf",
+                            str(f),
+                            "usr/share/jenkins/jenkins.war",
+                        ],
+                        stderr=subprocess.DEVNULL,
+                        check=True,
+                    )
+                    logging.info(
+                        f"Found jenkins.war in {f}. Copying to war cache directory."
+                    )
                     shutil.copy(self.tar_cache_file, self.war_cache_file)
                     jenkins_war_found = True
                     break
@@ -153,24 +201,40 @@ class JenkinsServerManager:
         """Copy the Jenkins WAR file from the Docker container to the target directory."""
         try:
             # Pull the Docker image
-            logging.info(f"Using docker to copy the WAR file from the Docker image {self.cb_docker_image}")
-            subprocess.run(['docker', 'pull', f'{self.cb_docker_image}'], check=True)
+            logging.info(
+                f"Using docker to copy the WAR file from the Docker image {self.cb_docker_image}"
+            )
+            subprocess.run(["docker", "pull", f"{self.cb_docker_image}"], check=True)
         except subprocess.CalledProcessError:
             self.die(f"Failed to pull the Docker image {self.cb_docker_image}")
 
         try:
             # Create a container without starting it
-            container_id = subprocess.check_output(['docker', 'create', f'{self.cb_docker_image}']).decode().strip()
+            container_id = (
+                subprocess.check_output(["docker", "create", f"{self.cb_docker_image}"])
+                .decode()
+                .strip()
+            )
 
             # Copy the Jenkins WAR file from the created container
-            subprocess.run(['docker', 'cp', f'{container_id}:/usr/share/jenkins/jenkins.war', self.war_cache_file], check=True)
+            subprocess.run(
+                [
+                    "docker",
+                    "cp",
+                    f"{container_id}:/usr/share/jenkins/jenkins.war",
+                    self.war_cache_file,
+                ],
+                check=True,
+            )
         except subprocess.CalledProcessError:
-            self.die(f"Failed to copy the Jenkins WAR file from the Docker image {self.cb_docker_image}")
+            self.die(
+                f"Failed to copy the Jenkins WAR file from the Docker image {self.cb_docker_image}"
+            )
         finally:
             if container_id:
                 try:
                     # Remove the created container
-                    subprocess.run(['docker', 'rm', '-f', container_id], check=True)
+                    subprocess.run(["docker", "rm", "-f", container_id], check=True)
                 except subprocess.CalledProcessError:
                     self.die(f"Failed to remove the Docker container {container_id}")
         logging.info(f"Copied WAR file to {self.war_cache_file}")
@@ -185,12 +249,17 @@ class JenkinsServerManager:
                 os.makedirs(self.war_cache_dir)
             if self.cb_docker_image:
                 # if docker on path or BUNDLEUTILS_USE_SKOPEO=1, use docker to copy the war file
-                if shutil.which('docker') and os.getenv('BUNDLEUTILS_USE_SKOPEO') != '1':
+                if (
+                    shutil.which("docker")
+                    and os.getenv("BUNDLEUTILS_USE_SKOPEO") != "1"
+                ):
                     self.copy_war_from_docker(force)
-                elif shutil.which('skopeo'):
+                elif shutil.which("skopeo"):
                     self.copy_war_from_skopeo(force)
                 else:
-                    self.die("Docker or Skopeo not found in path. No way of getting the WAR file from the docker image")
+                    self.die(
+                        "Docker or Skopeo not found in path. No way of getting the WAR file from the docker image"
+                    )
             elif self.cb_war_download_url:
                 self.download_war()
             else:
@@ -200,30 +269,34 @@ class JenkinsServerManager:
         # recreate the jenkins-home directory
         logging.info(f"Recreating {self.target_jenkins_home}")
         if os.path.exists(self.target_jenkins_home):
-            subprocess.run(['rm', '-r', self.target_jenkins_home], check=True)
+            subprocess.run(["rm", "-r", self.target_jenkins_home], check=True)
         os.makedirs(self.target_jenkins_home)
         # copy the WAR file to the target directory
         logging.info(f"Copying WAR file to {self.war_path}")
-        subprocess.run(['cp', self.war_cache_file, self.war_path], check=True)
+        subprocess.run(["cp", self.war_cache_file, self.war_path], check=True)
 
     def download_war(self):
         """Download the Jenkins WAR file for the specified type and version."""
         response = requests.get(self.cb_war_download_url)
         if response.status_code == 200:
-            with open(self.war_cache_file, 'wb') as file:
+            with open(self.war_cache_file, "wb") as file:
                 file.write(response.content)
-            logging.info(f"Downloaded WAR version {self.ci_version} to {self.war_cache_file}")
+            logging.info(
+                f"Downloaded WAR version {self.ci_version} to {self.war_cache_file}"
+            )
         else:
-            self.die(f"Failed to download WAR file from {self.cb_war_download_url}. Status code: {response.status_code}")
+            self.die(
+                f"Failed to download WAR file from {self.cb_war_download_url}. Status code: {response.status_code}"
+            )
 
     def test_java_specification_version(self, version):
         try:
             # Run the `java` command to print the `java.specification.version` property
             result = subprocess.run(
-                ['java', '-XshowSettings:properties', '-version'],
+                ["java", "-XshowSettings:properties", "-version"],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                text=True
+                text=True,
             )
 
             # The properties usually come in stderr, not stdout
@@ -232,13 +305,15 @@ class JenkinsServerManager:
             # Look for the `java.specification.version` property in the output
             for line in output.splitlines():
                 if "java.specification.version" in line:
-                    version_str = line.split('=')[1].strip()
+                    version_str = line.split("=")[1].strip()
 
                     # The `java.specification.version` is already the major version
                     return version_str == version
 
             # If version information wasn't found, return None or raise an error
-            self.die("Java version could not be found. Check the output of 'java -XshowSettings:properties -version'")
+            self.die(
+                "Java version could not be found. Check the output of 'java -XshowSettings:properties -version'"
+            )
 
         except FileNotFoundError:
             self.die("Java is not installed or not found in PATH.")
@@ -251,30 +326,44 @@ class JenkinsServerManager:
         # the validation template is a directory containing the configuration files to be used
         if not validation_template or os.path.exists(validation_template):
             # check if the validation-template directory exists in the current directory
-            if os.path.exists('validation-template'):
-                logging.info('Using validation-template in the current directory')
-                validation_template = 'validation-template'
+            if os.path.exists("validation-template"):
+                logging.info("Using validation-template in the current directory")
+                validation_template = "validation-template"
             else:
                 # check if the validation-template directory exists in the defaults.configs package
-                logging.info('Using validation-template from the defaults.configs package')
-                validation_template = get_config_file('validation-template')
+                logging.info(
+                    "Using validation-template from the defaults.configs package"
+                )
+                validation_template = get_config_file("validation-template")
         logging.info(f"Using validation template '{validation_template}'")
         # recreate the  target_jenkins_home_casc_startup_bundle directory
         if os.path.exists(self.target_jenkins_home_casc_startup_bundle):
-            subprocess.run(['rm', '-r', self.target_jenkins_home_casc_startup_bundle], check=True)
+            subprocess.run(
+                ["rm", "-r", self.target_jenkins_home_casc_startup_bundle], check=True
+            )
         os.makedirs(self.target_jenkins_home_casc_startup_bundle)
         # copy the files in the validation template directory to the target_jenkins_home_casc_startup_bundle directory
         for root, dirs, files in os.walk(validation_template):
             for file in files:
                 src_file = os.path.join(root, file)
-                dest_file = os.path.join(self.target_jenkins_home_casc_startup_bundle, os.path.relpath(src_file, validation_template))
+                dest_file = os.path.join(
+                    self.target_jenkins_home_casc_startup_bundle,
+                    os.path.relpath(src_file, validation_template),
+                )
                 os.makedirs(os.path.dirname(dest_file), exist_ok=True)
                 logging.debug(f"Copying file {src_file} to {dest_file}")
-                subprocess.run(['cp', src_file, dest_file], check=True)
+                subprocess.run(["cp", src_file, dest_file], check=True)
         for plugin_file in plugin_files:
-            logging.debug(f"Copying plugin file {plugin_file} to {self.target_jenkins_home_casc_startup_bundle}")
-            subprocess.run(['cp', plugin_file, self.target_jenkins_home_casc_startup_bundle], check=True)
-        logging.info(f"Created startup bundle in {self.target_jenkins_home_casc_startup_bundle}")
+            logging.debug(
+                f"Copying plugin file {plugin_file} to {self.target_jenkins_home_casc_startup_bundle}"
+            )
+            subprocess.run(
+                ["cp", plugin_file, self.target_jenkins_home_casc_startup_bundle],
+                check=True,
+            )
+        logging.info(
+            f"Created startup bundle in {self.target_jenkins_home_casc_startup_bundle}"
+        )
 
     def start_server(self, ci_max_start_time):
         """Start the Jenkins server using the downloaded WAR file."""
@@ -284,31 +373,37 @@ class JenkinsServerManager:
 
         # if the ci_version is lower than 2.440.1.3, check for a JAVA_HOME_11 variable, and set it
         # https://docs.cloudbees.com/docs/release-notes/latest/cloudbees-ci/modern-cloud-platforms/2.440.1.3
-        required_java_version = '17'
-        if version.parse(self.ci_version) < version.parse('2.440.1.3'):
-            required_java_version = '11'
-            if 'JAVA_HOME_11' in os.environ:
+        required_java_version = "17"
+        if version.parse(self.ci_version) < version.parse("2.440.1.3"):
+            required_java_version = "11"
+            if "JAVA_HOME_11" in os.environ:
                 logging.info(f"Setting JAVA_HOME to {os.environ['JAVA_HOME_11']}")
-                self.jvm_cache_dir = os.environ['JAVA_HOME_11']
-                os.environ['JAVA_HOME'] = self.jvm_cache_dir
-                os.environ['PATH'] = f"{os.environ['JAVA_HOME']}/bin:{os.environ['PATH']}"
+                self.jvm_cache_dir = os.environ["JAVA_HOME_11"]
+                os.environ["JAVA_HOME"] = self.jvm_cache_dir
+                os.environ["PATH"] = (
+                    f"{os.environ['JAVA_HOME']}/bin:{os.environ['PATH']}"
+                )
             else:
-                logging.info("Java 11 required but JAVA_HOME_11 not set. Defaulting to JAVA_HOME...")
+                logging.info(
+                    "Java 11 required but JAVA_HOME_11 not set. Defaulting to JAVA_HOME..."
+                )
 
         # check for JAVA_HOME and use it if set
-        if 'JAVA_HOME' in os.environ:
+        if "JAVA_HOME" in os.environ:
             logging.info(f"JAVA_HOME is set to {os.environ['JAVA_HOME']}")
-            java = os.path.join(os.environ['JAVA_HOME'], 'bin', 'java')
+            java = os.path.join(os.environ["JAVA_HOME"], "bin", "java")
             if not os.path.exists(java):
-                self.die(f"JAVA_HOME is set to {os.environ['JAVA_HOME']} but {java} does not exist.")
+                self.die(
+                    f"JAVA_HOME is set to {os.environ['JAVA_HOME']} but {java} does not exist."
+                )
         else:
-            java = shutil.which('java')
+            java = shutil.which("java")
 
         self.test_java_specification_version(required_java_version)
         # print the java -version output
-        subprocess.run([java, '-version'], check=True)
+        subprocess.run([java, "-version"], check=True)
 
-        token_script="""
+        token_script = """
         import hudson.model.User
         import jenkins.security.ApiTokenProperty
         def jenkinsTokenName = 'token-for-test'
@@ -324,44 +419,75 @@ class JenkinsServerManager:
         # Account for the case where the license is base64 encoded
         if os.environ.get("CASC_VALIDATION_LICENSE_KEY_B64"):
             logging.info("Decoding the license key and cert...")
-            casc_validation_license_key_b64 = os.environ["CASC_VALIDATION_LICENSE_KEY_B64"]
-            casc_validation_license_cert_b64 = os.environ.get("CASC_VALIDATION_LICENSE_CERT_B64", "")
-            os.environ["CASC_VALIDATION_LICENSE_KEY"] = base64.b64decode(casc_validation_license_key_b64).decode('utf-8')
-            os.environ["CASC_VALIDATION_LICENSE_CERT"] = base64.b64decode(casc_validation_license_cert_b64).decode('utf-8')
+            casc_validation_license_key_b64 = os.environ[
+                "CASC_VALIDATION_LICENSE_KEY_B64"
+            ]
+            casc_validation_license_cert_b64 = os.environ.get(
+                "CASC_VALIDATION_LICENSE_CERT_B64", ""
+            )
+            os.environ["CASC_VALIDATION_LICENSE_KEY"] = base64.b64decode(
+                casc_validation_license_key_b64
+            ).decode("utf-8")
+            os.environ["CASC_VALIDATION_LICENSE_CERT"] = base64.b64decode(
+                casc_validation_license_cert_b64
+            ).decode("utf-8")
 
         # Fail if either CASC_VALIDATION_LICENSE_KEY or CASC_VALIDATION_LICENSE_CERT are not set
-        if not os.environ.get("CASC_VALIDATION_LICENSE_KEY") and not os.environ.get("IGNORE_LICENSE"):
+        if not os.environ.get("CASC_VALIDATION_LICENSE_KEY") and not os.environ.get(
+            "IGNORE_LICENSE"
+        ):
             self.die("CASC_VALIDATION_LICENSE_KEY is not set.")
-        if not os.environ.get("CASC_VALIDATION_LICENSE_CERT") and not os.environ.get("IGNORE_LICENSE"):
+        if not os.environ.get("CASC_VALIDATION_LICENSE_CERT") and not os.environ.get(
+            "IGNORE_LICENSE"
+        ):
             self.die("CASC_VALIDATION_LICENSE_CERT is not set.")
 
         # if CASC_VALIDATION_LICENSE_KEY contains a literal newline, replace it with a newline character
-        os.environ["CASC_VALIDATION_LICENSE_KEY"] = os.getenv('CASC_VALIDATION_LICENSE_KEY','').replace("\\n", "\n")
-        os.environ["CASC_VALIDATION_LICENSE_CERT"] = os.getenv('CASC_VALIDATION_LICENSE_CERT','').replace("\\n", "\n")
+        os.environ["CASC_VALIDATION_LICENSE_KEY"] = os.getenv(
+            "CASC_VALIDATION_LICENSE_KEY", ""
+        ).replace("\\n", "\n")
+        os.environ["CASC_VALIDATION_LICENSE_CERT"] = os.getenv(
+            "CASC_VALIDATION_LICENSE_CERT", ""
+        ).replace("\\n", "\n")
 
         # Add token script to init.groovy.d
-        with open(os.path.join(self.target_jenkins_home_init_scripts, "init_02_admin_token.groovy"), 'w', encoding='utf-8') as file:
+        with open(
+            os.path.join(
+                self.target_jenkins_home_init_scripts, "init_02_admin_token.groovy"
+            ),
+            "w",
+            encoding="utf-8",
+        ) as file:
             file.write(token_script)
 
-        java_opts = os.getenv('BUNDLEUTILS_CI_JAVA_OPTS', '')
-        http_port = os.getenv('BUNDLEUTILS_HTTP_PORT', '8080')
+        java_opts = os.getenv("BUNDLEUTILS_CI_JAVA_OPTS", "")
+        http_port = os.getenv("BUNDLEUTILS_HTTP_PORT", "8080")
         # if port is already in use, fail
         try:
             response = requests.get(f"http://localhost:{http_port}{self.whoami_url}")
             if response.status_code == 200:
-                self.die(f"Port {http_port} is already in use. Please specify a different port using the BUNDLEUTILS_HTTP_PORT environment variable.")
+                self.die(
+                    f"Port {http_port} is already in use. Please specify a different port using the BUNDLEUTILS_HTTP_PORT environment variable."
+                )
         except requests.ConnectionError:
             pass
         # write the server URL to the jenkins_url file
-        with open(self.url_file, 'w', encoding='utf-8') as file:
+        with open(self.url_file, "w", encoding="utf-8") as file:
             file.write(f"http://localhost:{http_port}")
-        jenkins_opts = os.getenv('BUNDLEUTILS_JENKINS_OPTS', '')
+        jenkins_opts = os.getenv("BUNDLEUTILS_JENKINS_OPTS", "")
         # if BUNDLEUTILS_JENKINS_OPTS contains -Dcore.casc.config.bundle, fail
-        if "core.casc.config.bundle" in jenkins_opts or "core.casc.config.bundle" in java_opts:
-            self.die("BUNDLEUTILS_JENKINS_OPTS or BUNDLEUTILS_CI_JAVA_OPTS contains core.casc.config.bundle. This is not allowed.")
+        if (
+            "core.casc.config.bundle" in jenkins_opts
+            or "core.casc.config.bundle" in java_opts
+        ):
+            self.die(
+                "BUNDLEUTILS_JENKINS_OPTS or BUNDLEUTILS_CI_JAVA_OPTS contains core.casc.config.bundle. This is not allowed."
+            )
         # if self.target_jenkins_home_casc_startup_bundle doesn't exist, fail
         if not os.path.exists(self.target_jenkins_home_casc_startup_bundle):
-            self.die(f"Startup bundle {self.target_jenkins_home_casc_startup_bundle} does not exist.")
+            self.die(
+                f"Startup bundle {self.target_jenkins_home_casc_startup_bundle} does not exist."
+            )
         # if java_opts not empty, add ' -Dcore.casc.config.bundle=/tmp/validation-bundle', else set it
         if java_opts:
             java_opts += f" -Dcore.casc.config.bundle={self.target_jenkins_home_casc_startup_bundle}"
@@ -370,74 +496,99 @@ class JenkinsServerManager:
         # create the command to start the Jenkins server by joining the elements in the list
         command = [java]
         command.extend(java_opts.split())
-        command.extend(['-jar', self.war_path, f"--httpPort={http_port}", f"--webroot={self.target_jenkins_webroot}"])
+        command.extend(
+            [
+                "-jar",
+                self.war_path,
+                f"--httpPort={http_port}",
+                f"--webroot={self.target_jenkins_webroot}",
+            ]
+        )
         command.extend(jenkins_opts.split())
-        command = [element.strip() for element in command if element and element.strip()]
+        command = [
+            element.strip() for element in command if element and element.strip()
+        ]
         env = os.environ.copy()
-        env['JENKINS_HOME'] = self.target_jenkins_home
+        env["JENKINS_HOME"] = self.target_jenkins_home
         # if ADMIN_PASSWORD env var not set, create a random password
-        if 'ADMIN_PASSWORD' not in os.environ:
+        if "ADMIN_PASSWORD" not in os.environ:
             logging.info("ADMIN_PASSWORD not set. Creating a random password...")
             admin_password = os.urandom(16).hex()
-            env['ADMIN_PASSWORD'] = admin_password
+            env["ADMIN_PASSWORD"] = admin_password
             logging.info(f"Temporary ADMIN_PASSWORD set to: {admin_password}")
         logging.info(f"Starting Jenkins server with command: {' '.join(command)}")
-        with open(self.target_jenkins_log, 'w', encoding='utf-8') as log_file:
-            process = subprocess.Popen(command, env=env, stdout=log_file, stderr=subprocess.STDOUT)
-        with open(self.pid_file, 'w', encoding='utf-8') as file:
+        with open(self.target_jenkins_log, "w", encoding="utf-8") as log_file:
+            process = subprocess.Popen(
+                command, env=env, stdout=log_file, stderr=subprocess.STDOUT
+            )
+        with open(self.pid_file, "w", encoding="utf-8") as file:
             file.write(str(process.pid))
         logging.info(f"Jenkins server starting with PID {process.pid}")
         logging.info(f"Jenkins server logging to {self.target_jenkins_log}")
         self.wait_for_server(ci_max_start_time, process.pid)
         self.check_auth_token()
         # look for any WARN or ERROR messages in the log, and print the log line if found
-        logging.info("Jenkins server - Checking for WARN or ERROR messages in the Jenkins log...")
-        with open(self.target_jenkins_log, 'r', encoding='utf-8') as log_file:
+        logging.info(
+            "Jenkins server - Checking for WARN or ERROR messages in the Jenkins log..."
+        )
+        with open(self.target_jenkins_log, "r", encoding="utf-8") as log_file:
             for line in log_file:
-                if 'WARN' in line or 'ERROR' in line:
+                if "WARN" in line or "ERROR" in line:
                     logging.warning(line)
         logging.info("Jenkins server - Finished checking the Jenkins log")
 
     def get_envelope_json_from_war(self):
         if os.path.exists(self.war_cache_envelope_file):
             logging.info(f"Reading envelope.json from {self.war_cache_envelope_file}")
-            with open(self.war_cache_envelope_file, 'r', encoding='utf-8') as file:
+            with open(self.war_cache_envelope_file, "r", encoding="utf-8") as file:
                 envelope_json = file.read()
             return envelope_json
         # read the envelope.json from self. /WEB-INF/plugins/envelope.json
         self.get_war()
         # extract the /WEB-INF/plugins/envelope.json from the WAR file
-        with subprocess.Popen(['unzip', '-p', self.war_path, 'WEB-INF/plugins/envelope.json'], stdout=subprocess.PIPE, stderr=subprocess.PIPE) as process:
+        with subprocess.Popen(
+            ["unzip", "-p", self.war_path, "WEB-INF/plugins/envelope.json"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        ) as process:
             envelope_json, _ = process.communicate()
-            envelope_json = envelope_json.decode('utf-8')
+            envelope_json = envelope_json.decode("utf-8")
         if not envelope_json:
-            self.die(f"WEB-INF/plugins/envelope.json not found in {self.war_cache_file}")
-        with open(self.war_cache_envelope_file, 'wb') as file:
-            file.write(envelope_json.encode('utf-8'))
+            self.die(
+                f"WEB-INF/plugins/envelope.json not found in {self.war_cache_file}"
+            )
+        with open(self.war_cache_envelope_file, "wb") as file:
+            file.write(envelope_json.encode("utf-8"))
         return envelope_json
 
     def get_envelope_json(self):
         # read the envelope.json from self.target_jenkins_webroot /WEB-INF/plugins/envelope.json
-        envelope_json = os.path.join(self.target_jenkins_webroot, 'WEB-INF', 'plugins', 'envelope.json')
+        envelope_json = os.path.join(
+            self.target_jenkins_webroot, "WEB-INF", "plugins", "envelope.json"
+        )
         if not os.path.exists(envelope_json):
             self.die(f"envelope.json not found in {envelope_json}")
-        with open(envelope_json, 'r', encoding='utf-8') as file:
+        with open(envelope_json, "r", encoding="utf-8") as file:
             # read as json
             envelope_json = file.read()
         return envelope_json
 
     def get_server_url(self):
         # Get the Jenkins server url, username, and password (from self.target_jenkins_home/secrets/initialAdminToken)
-        with open(self.url_file, 'r', encoding='utf-8') as file:
+        with open(self.url_file, "r", encoding="utf-8") as file:
             server_url = file.read().strip()
         return server_url
 
     def get_server_details(self):
         # Get the Jenkins server url, username, and password (from self.target_jenkins_home/secrets/initialAdminToken)
-        with open(os.path.join(self.target_jenkins_home, 'secrets', 'initialAdminToken'), 'r', encoding='utf-8') as file:
+        with open(
+            os.path.join(self.target_jenkins_home, "secrets", "initialAdminToken"),
+            "r",
+            encoding="utf-8",
+        ) as file:
             initial_admin_token = file.read().strip()
         server_url = self.get_server_url()
-        return server_url, 'admin', initial_admin_token
+        return server_url, "admin", initial_admin_token
 
     def check_auth_token(self):
         logging.info("Checking authentication token...")
@@ -445,15 +596,19 @@ class JenkinsServerManager:
         server_url, username, password = self.get_server_details()
         url = f"{server_url}{self.whoami_url}"
         if username and password:
-            headers['Authorization'] = 'Basic ' + base64.b64encode(f'{username}:{password}'.encode('utf-8')).decode('utf-8')
+            headers["Authorization"] = "Basic " + base64.b64encode(
+                f"{username}:{password}".encode("utf-8")
+            ).decode("utf-8")
         # zip and post the YAML to the URL
         response = requests.get(url, headers=headers)
         response.raise_for_status()
         # ensure the response is valid JSON and the authorities key contains a list with at least one element called authenticated
         response_json = response.json()
-        if 'authenticated' not in response_json:
+        if "authenticated" not in response_json:
             logging.error(f"Response: {response_json}")
-            self.die("ERROR: Authentication failed. Please check the username and password.")
+            self.die(
+                "ERROR: Authentication failed. Please check the username and password."
+            )
         else:
             # print the response
             logging.info(f"Authentication successful. Response: {response_json}")
@@ -491,21 +646,29 @@ class JenkinsServerManager:
                 logging.info("Waiting for server to start...")
                 # check if the server is running
                 if self.is_strictly_alive(pid):
-                    logging.info(f"Process {pid} is running. Server may not be started yet.")
+                    logging.info(
+                        f"Process {pid} is running. Server may not be started yet."
+                    )
                 else:
-                    self.die(f"Process {pid} not found. Server may not be running. Stopping server just in case.")
+                    self.die(
+                        f"Process {pid} not found. Server may not be running. Stopping server just in case."
+                    )
                     self.stop_server()
         if not server_started:
-            logging.warning("ERROR: Server not started in time. Printing the Jenkins log....")
-            with open(self.target_jenkins_log, "r", encoding='utf-8') as log_file:
+            logging.warning(
+                "ERROR: Server not started in time. Printing the Jenkins log...."
+            )
+            with open(self.target_jenkins_log, "r", encoding="utf-8") as log_file:
                 logging.info(log_file.read())
             self.stop_server()
-            self.die("ERROR: Server not started in time. Please check the Jenkins log for more information.")
+            self.die(
+                "ERROR: Server not started in time. Please check the Jenkins log for more information."
+            )
 
     def stop_server(self):
         """Stop the Jenkins server using the PID file."""
         if os.path.exists(self.pid_file):
-            with open(self.pid_file, 'r', encoding='utf-8') as file:
+            with open(self.pid_file, "r", encoding="utf-8") as file:
                 pidstr = file.read().strip()
                 os.remove(self.pid_file)
                 if os.path.exists(self.url_file):
@@ -523,11 +686,12 @@ class JenkinsServerManager:
                             os.kill(pid, 15)  # SIGTERM
                             logging.info(f"Stopped Jenkins server with PID {pid}")
                         except ProcessLookupError:
-                            logging.info("Process not found. It may have already been stopped.")
+                            logging.info(
+                                "Process not found. It may have already been stopped."
+                            )
         else:
             logging.info("PID file not found. Is the server running?")
             # glob for files matching "target_base_dir/.*/.*/jenkins.pid"
-            pid_files = Path(self.target_base_dir).glob('**/jenkins.pid')
+            pid_files = Path(self.target_base_dir).glob("**/jenkins.pid")
             for pid_file in pid_files:
                 logging.info(f"Perhaps this one -> {pid_file}")
-
