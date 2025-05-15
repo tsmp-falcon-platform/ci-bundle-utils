@@ -3400,6 +3400,14 @@ def find_paths_of_values_matching_pattern(obj, pattern, path=""):
     return paths
 
 
+def hash_me(hash_seed, val):
+    """
+    Hash the string using SHA256 and return the hex digest.
+    """
+    # max length of hex should be 24
+    return "bu-hash-" + hashlib.sha256((hash_seed + val).encode()).hexdigest()[:24]
+
+
 def traverse_credentials(
     hash_only,
     hash_seed,
@@ -3462,9 +3470,7 @@ def traverse_credentials(
                         logging.debug(f"2Traversing2a path (Y): {new_path}")
                         if hash_only:
                             # create a hash of the hash_seed + v
-                            replacement = hashlib.sha256(
-                                (hash_seed + val).encode()
-                            ).hexdigest()
+                            replacement = hash_me(hash_seed, val)
                         elif matching_tuple is None:
                             logging.debug(
                                 f"Matching tuple NOT found. Creating replacement for {id} and {sub_path}"
@@ -3537,7 +3543,7 @@ def traverse_credentials(
             )
             if hash_only:
                 # create a hash of the hash_seed + v
-                replacement = hashlib.sha256((hash_seed + obj).encode()).hexdigest()
+                replacement = hash_me(hash_seed, obj)
             else:
                 # the replacement string should be in the format ${ID_KEY}
                 replacement = (

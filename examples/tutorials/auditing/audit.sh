@@ -18,6 +18,7 @@ usage_message="Usage: ./audit.sh [setup|help|<jenkins-url>]
     GIT_COMMITTER_EMAIL    - The email to use for git commits.
     GIT_ACTION             - The git action to perform (do-nothing, add-only, commit-only, push).
 "
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 ###############################
 #### ENVIRONMENT VARIABLES ####
@@ -211,6 +212,43 @@ fi
 ####       GIT LOGIC       ####
 ###############################
 
+# gitleaks check
+gitleaks_check() {
+  if [[ -n "${GITLEAKS_CHECK:-}" ]]; then
+    echo "AUDITING: Running gitleaks check with gitleaks version $(gitleaks version)"
+    # Get config
+    if [[ -n "${GITLEAKS_CONFIG:-}" ]]; then
+      echo "AUDITING: Using GITLEAKS_CONFIG=$GITLEAKS_CONFIG"
+    else
+      echo "AUDITING: No GITLEAKS_CONFIG found in env."
+      if [[ "${GITLEAKS_USE_EMBEDDED_CONFIG:-true}" == "true" ]]; then
+        export GITLEAKS_CONFIG="${SCRIPT_DIR}/.gitleaks.toml"
+        echo "AUDITING: GITLEAKS_USE_EMBEDDED_CONFIG=true. Using embedded config: $GITLEAKS_CONFIG"
+      fi
+    fi
+    # Check runs
+    case "${GITLEAKS_CHECK}" in
+      all)
+        echo "AUDITING: Running gitleaks check on all files..."
+        if ! gitleaks git --verbose --redact --log-opts "$BUNDLE_DIR"; then
+          echo "AUDITING: Gitleaks found leaks. Please check the output."
+          exit 1
+        fi
+        ;&
+      *)
+        if [[ "${GITLEAKS_CHECK}" != "staged" ]]; then
+          echo "AUDITING: GITLEAKS_CHECK is set to '$GITLEAKS_CHECK', not [all|staged]. Defaulting to staged."
+        fi
+        echo "AUDITING: Running gitleaks check on staged files..."
+        if ! gitleaks git --staged --verbose --redact --log-opts "$BUNDLE_DIR"; then
+          echo "AUDITING: Gitleaks found leaks. Please check the output."
+          exit 1
+        fi
+        ;;
+    esac
+  fi
+}
+
 # Git actions
 GIT_ORIGIN="${GIT_ORIGIN:-"origin"}"
 GIT_MAIN="${GIT_MAIN:-"main"}"
@@ -226,7 +264,8 @@ echo "AUDITING: GIT_AUTHOR_EMAIL=$GIT_AUTHOR_EMAIL"
 if [ -d "$BUNDLE_DIR" ]; then
   if [[ "$GIT_ACTION_ADD" == "true" ]]; then
     git add "$BUNDLE_DIR"
-    if git diff --cached --exit-code "$BUNDLE_DIR"; then
+    gitleaks_check
+    if git diff --cached --stat --exit-code "$BUNDLE_DIR"; then
       echo "AUDITING: No changes to commit for $BUNDLE_DIR."
     else
       if [[ "$GIT_ACTION_COMMIT" == "true" ]]; then

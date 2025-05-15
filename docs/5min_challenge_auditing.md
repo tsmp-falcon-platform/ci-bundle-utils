@@ -6,14 +6,15 @@ This tutorial will explain how to have your controller audited in 5 mins.
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 
 - [Prerequisites](#prerequisites)
-  - [Minimum Required Permissions](#minimum-required-permissions)
+- [Minimum Required Permissions](#minimum-required-permissions)
 - [3, 2, 1...Go](#3-2-1go)
-- [Bonus Exercise #1: using `BUNDLEUTILS_CREDENTIAL_HASH`](#bonus-exercise-1-using-bundleutils_credential_hash)
-- [Bonus Exercise #2: using a custom `normalize.yaml`](#bonus-exercise-2-using-a-custom-normalizeyaml)
-- [Bonus Exercise #3: avoid downloading expensive `items.yaml`](#bonus-exercise-3-avoid-downloading-expensive-itemsyaml)
-- [Bonus Exercise #4: version based bundles](#bonus-exercise-4-version-based-bundles)
-- [Bonus Exercise #5: version based bundles (and preserving git history)](#bonus-exercise-5-version-based-bundles-and-preserving-git-history)
-- [Bonus Exercise #6: all in one](#bonus-exercise-6-all-in-one)
+- [Bonus Exercise: using `BUNDLEUTILS_CREDENTIAL_HASH`](#bonus-exercise-using-bundleutils_credential_hash)
+- [Bonus Exercise: add a `gitleaks` check](#bonus-exercise-add-a-gitleaks-check)
+- [Bonus Exercise: using a custom `normalize.yaml`](#bonus-exercise-using-a-custom-normalizeyaml)
+- [Bonus Exercise: avoid downloading expensive `items.yaml`](#bonus-exercise-avoid-downloading-expensive-itemsyaml)
+- [Bonus Exercise: version based bundles](#bonus-exercise-version-based-bundles)
+- [Bonus Exercise: version based bundles (and preserving git history)](#bonus-exercise-version-based-bundles-and-preserving-git-history)
+- [Bonus Exercise: all in one](#bonus-exercise-all-in-one)
 - [Running in Production](#running-in-production)
   - [Pipeline Job](#pipeline-job)
   - [Operation Center](#operation-center)
@@ -31,7 +32,7 @@ This tutorial will explain how to have your controller audited in 5 mins.
   - `BUNDLEUTILS_USERNAME`
   - `BUNDLEUTILS_PASSWORD`
 
-### Minimum Required Permissions
+## Minimum Required Permissions
 
 The minimum set of permissions needed for the user are as follows:
 
@@ -147,7 +148,7 @@ Make a change to your target controller and run the `audit.sh` again:
 > [!NOTE]
 > 5 minutes...and stop!
 
-## Bonus Exercise #1: using `BUNDLEUTILS_CREDENTIAL_HASH`
+## Bonus Exercise: using `BUNDLEUTILS_CREDENTIAL_HASH`
 
 Auditing will, by default, hash any encrypted values it finds, so that...
 
@@ -170,7 +171,7 @@ Original:
            description: |-
              My secret thing
            id: my-secret-thing
-           password: 0292890669736921577497db2ea2f22cadb9778dcb0241456750a2dc2a23c941
+           password: bu-hash-0292890669736921577497db
            scope: GLOBAL
            username: bob
 ```
@@ -194,13 +195,96 @@ If false positives such as those above are not wanted, setting `BUNDLEUTILS_CRED
            description: |-
              My secret thing
            id: my-secret-thing
--          password: a9740aca387854a95ffc0272491d872781f48d178ddc4d410064ea927046e5ab
+-          password: bu-hash-a9740aca387854a95ffc0272
 +          password: ${MY_SECRET_THING_PASSWORD}
            scope: GLOBAL
            username: bob
 ```
 
-## Bonus Exercise #2: using a custom `normalize.yaml`
+## Bonus Exercise: add a `gitleaks` check
+
+The docker image comes with a version of [gitleaks](https://github.com/gitleaks/gitleaks), currently 8.26.0 at the time of writing.
+
+Gitleaks can check your repository for secrets and prevent you from checking in sensitive data.
+
+This is a useful check in a export since people could hardcode secrets into job scripts, etc.
+
+> [!WARNING]
+> The `audit.sh` will **only check staged files** before a commit.
+> Please create an issue, contribute a PR, or use your own script if you need something else.
+
+The gitleaks run is determined by setting `export GITLEAKS_CHECK=...`:
+
+- `<EMPTY>` - do not run checks
+- `all`     - run the check on the staged files and all previous commits within the directory
+- `staged`  - run the check on the staged files
+
+The gitleaks config  Setting `export GITLEAKS_CONFIG=...` is set, this is used.
+
+- If not set, the config file packaged with this image is used
+  - The file used is here: [.gitleaks.toml](../examples/tutorials/auditing/.gitleaks.toml)
+  - This config extends the default gitleaks rules with:
+    - an extra rule to detect Jenkins apiTokens
+    - an allowlist regex to skip the `bu-hash-.*` values
+- Use `export GITLEAKS_USE_EMBEDDED_CONFIG=false` if you do not want to use the packaged config file
+  - e.g. you have your own `.gitleaks.toml` in the repository root
+
+Let us see how it works, shall we?
+
+```sh
+# this will scan all commits in the BUNDLE_DIR, before scanning the staged files, if any.
+export GITLEAKS_CHECK=all
+```
+
+Run the audit:
+
+```sh
+../examples/tutorials/auditing/audit.sh
+```
+
+Depending on how good you've been, you may see something like this:
+
+```sh
+AUDITING: Running gitleaks check with gitleaks version 8.26.0
+AUDITING: Using gitleaks config: /opt/bundleutils/work/examples/tutorials/auditing/.gitleaks.toml
+AUDITING: Running gitleaks check on all files...
+
+    ○
+    │╲
+    │ ○
+    ○ ░
+    ░    gitleaks
+
+Finding:     accessKey: REDACTED
+Secret:      REDACTED
+RuleID:      aws-access-token
+Entropy:     3.684184
+File:        cjoc/jenkins.yaml
+Line:        66
+Commit:      af1b8d2a24f605fcc1990e9197eae172017da8d4
+Author:      bundleutils-bot
+Email:       bundleutils-bot@example.org
+Date:        2025-05-15T13:07:52Z
+Fingerprint: af1b8d2a24f605fcc1990e9197eae172017da8d4:cjoc/jenkins.yaml:aws-access-token:66
+
+3:01PM INF 2 commits scanned.
+3:01PM INF scanned ~28931 bytes (28.93 KB) in 118ms
+3:01PM WRN leaks found: 1
+AUDITING: Gitleaks found leaks. Please check the output.
+```
+
+Make the changes, or disable the checks `¯\_(ツ)_/¯`.
+
+Let's remove the checks before continuing:
+
+```sh
+{
+  export GITLEAKS_CHECK=all
+  ../examples/tutorials/auditing/audit.sh
+}
+```
+
+## Bonus Exercise: using a custom `normalize.yaml`
 
 Auditing will, by default, use the [default `normalize.yaml`](../bundleutilspkg/src/bundleutilspkg/data/configs/normalize.yaml) to transform the fetched bundle.
 
@@ -272,7 +356,7 @@ Revert by removing the custom file:
 }
 ```
 
-## Bonus Exercise #3: avoid downloading expensive `items.yaml`
+## Bonus Exercise: avoid downloading expensive `items.yaml`
 
 Sometimes it is not required to include the items in the bundle, e.g.
 
@@ -340,7 +424,7 @@ target/docs/bundle.yaml
 target/docs/jenkins.yaml
 ```
 
-## Bonus Exercise #4: version based bundles
+## Bonus Exercise: version based bundles
 
 It might be useful to track the CI versions on bundles when performing audits.
 
@@ -403,9 +487,9 @@ team-mobility/jenkins.yaml
 team-mobility/plugins.yaml
 ```
 
-## Bonus Exercise #5: version based bundles (and preserving git history)
+## Bonus Exercise: version based bundles (and preserving git history)
 
-**NOTE:** you must have completed [Bonus Exercise #4: version based bundles](#bonus-exercise-4-version-based-bundles) before doing this exercise.
+**NOTE:** you must have completed [Bonus Exercise: version based bundles](#bonus-exercise-version-based-bundles) before doing this exercise.
 
 Following on from the version based bundles example, you may want to:
 
@@ -500,7 +584,7 @@ bundle-user@66df4d9bcd27:/opt/bundleutils/work/audits$ git log --oneline team-mo
 fda2da8 Audit bundle team-mobility-2.479.3.1 (version: 2.479.3.1)
 ```
 
-## Bonus Exercise #6: all in one
+## Bonus Exercise: all in one
 
 The `audit.sh` has a special feature which, given an operation center URL, will:
 

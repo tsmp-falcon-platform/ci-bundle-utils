@@ -1,0 +1,15 @@
+[extend]
+useDefault = true
+
+[[rules]]
+id = "jenkins-api-token"
+description = "Jenkins API Token"
+regex = '''\b11[a-f0-9]{32}\b'''
+tags = ["jenkins", "token", "apikey"]
+
+[[allowlists]]
+description = "global allow list"
+regexTarget = "match"
+regexes = [
+  '''\bbu\-hash\-[a-f0-9]\b''',
+]
