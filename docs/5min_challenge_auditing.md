@@ -224,7 +224,7 @@ This is a useful check in a export since people could hardcode secrets into job 
 
 The gitleaks run is determined by setting `export GITLEAKS_CHECK=...`:
 
-- `<EMPTY>` - do not run checks
+- `none`    - do not run checks
 - `all`     - run the check on the staged files and all previous commits within the directory
 - `staged`  - run the check on the staged files
 - `<OTHER>` - defaults to staged
@@ -290,7 +290,7 @@ Let's remove the checks before continuing:
 
 ```sh
 {
-  export GITLEAKS_CHECK=
+  export GITLEAKS_CHECK=none
   ../examples/tutorials/auditing/audit.sh
 }
 ```

@@ -214,7 +214,10 @@ fi
 
 # gitleaks check
 gitleaks_check() {
-  if [[ -n "${GITLEAKS_CHECK:-staged}" ]]; then
+  GITLEAKS_CHECK="${GITLEAKS_CHECK:-staged}"
+  if [[ "${GITLEAKS_CHECK}" == "none" ]]; then
+    echo "AUDITING: Skipping gitleaks check due to GITLEAKS_CHECK=none."
+  else
     echo "AUDITING: Running gitleaks check with gitleaks version $(gitleaks version)"
     # Get config
     if [[ -n "${GITLEAKS_CONFIG:-}" ]]; then
