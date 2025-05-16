@@ -214,7 +214,7 @@ fi
 
 # gitleaks check
 gitleaks_check() {
-  if [[ -n "${GITLEAKS_CHECK:-}" ]]; then
+  if [[ -n "${GITLEAKS_CHECK:-staged}" ]]; then
     echo "AUDITING: Running gitleaks check with gitleaks version $(gitleaks version)"
     # Get config
     if [[ -n "${GITLEAKS_CONFIG:-}" ]]; then

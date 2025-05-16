@@ -3433,7 +3433,9 @@ def traverse_credentials(
                 logging.debug(f"1Traversing path (Y): {new_path}")
                 traversed_paths.append(new_path)
             else:
-                sub_paths = find_paths_of_values_matching_pattern(obj, r"{.*}", "")
+                sub_paths = find_paths_of_values_matching_pattern(
+                    obj, r"{AQAAABAAAA[a-zA-Z0-9+/=]{8,}}", ""
+                )
                 for sub_path, matchesValueDict in sub_paths.items():
                     matches = matchesValueDict["matches"]
                     val = matchesValueDict["value"]

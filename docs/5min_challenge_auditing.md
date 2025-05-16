@@ -9,7 +9,7 @@ This tutorial will explain how to have your controller audited in 5 mins.
 - [Minimum Required Permissions](#minimum-required-permissions)
 - [3, 2, 1...Go](#3-2-1go)
 - [Bonus Exercise: using `BUNDLEUTILS_CREDENTIAL_HASH`](#bonus-exercise-using-bundleutils_credential_hash)
-- [Bonus Exercise: add a `gitleaks` check](#bonus-exercise-add-a-gitleaks-check)
+- [Bonus Exercise: using the `gitleaks` check](#bonus-exercise-using-the-gitleaks-check)
 - [Bonus Exercise: using a custom `normalize.yaml`](#bonus-exercise-using-a-custom-normalizeyaml)
 - [Bonus Exercise: avoid downloading expensive `items.yaml`](#bonus-exercise-avoid-downloading-expensive-itemsyaml)
 - [Bonus Exercise: version based bundles](#bonus-exercise-version-based-bundles)
@@ -110,6 +110,15 @@ Create a test repo with a default main branch and the `.gitignore` file:
 
 Run the `audit.sh` with `setup` mode to set the appropriate environment variables.
 
+> [!WARNING]
+> Gitleaks enabled by default! This script may fail!
+>
+> Following the principle of being [secure by design](https://en.wikipedia.org/wiki/Secure_by_design):
+>
+> - the `audit.sh` script has a `gitleaks` check enabled for all staged files.
+> - as a result, the check may fail if it finds sensitive data in your export.
+> - see [the gitleaks exercise](#bonus-exercise-using-the-gitleaks-check) for more information.
+
 I've predefined some git variables - change if you wish:
 
 ```sh
@@ -201,7 +210,7 @@ If false positives such as those above are not wanted, setting `BUNDLEUTILS_CRED
            username: bob
 ```
 
-## Bonus Exercise: add a `gitleaks` check
+## Bonus Exercise: using the `gitleaks` check
 
 The docker image comes with a version of [gitleaks](https://github.com/gitleaks/gitleaks), currently 8.26.0 at the time of writing.
 
@@ -218,13 +227,15 @@ The gitleaks run is determined by setting `export GITLEAKS_CHECK=...`:
 - `<EMPTY>` - do not run checks
 - `all`     - run the check on the staged files and all previous commits within the directory
 - `staged`  - run the check on the staged files
+- `<OTHER>` - defaults to staged
 
 The gitleaks config  Setting `export GITLEAKS_CONFIG=...` is set, this is used.
 
 - If not set, the config file packaged with this image is used
   - The file used is here: [.gitleaks.toml](../examples/tutorials/auditing/.gitleaks.toml)
   - This config extends the default gitleaks rules with:
-    - an extra rule to detect Jenkins apiTokens
+    - a rule to detect Jenkins apiTokens
+    - a rule to detect Jenkins encrypted values (`{AQAAABAAAA....`)
     - an allowlist regex to skip the `bu-hash-.*` values
 - Use `export GITLEAKS_USE_EMBEDDED_CONFIG=false` if you do not want to use the packaged config file
   - e.g. you have your own `.gitleaks.toml` in the repository root
@@ -279,7 +290,7 @@ Let's remove the checks before continuing:
 
 ```sh
 {
-  export GITLEAKS_CHECK=all
+  export GITLEAKS_CHECK=
   ../examples/tutorials/auditing/audit.sh
 }
 ```
