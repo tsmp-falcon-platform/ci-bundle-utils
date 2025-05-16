@@ -8,6 +8,20 @@ ARG BUNDLEUTILS_RELEASE_HASH
 # TODO: make multi-stage build
 # COPY --from=builder /opt/venv /opt/venv
 
+# Install Java 11 from Adoptium
+# Needed for CloudBees CI version 2.426.3.3 and earlier
+RUN wget -q -O /tmp/temurin-11.tar.gz https://github.com/adoptium/temurin11-binaries/releases/download/jdk-11.0.20.1+1/OpenJDK11U-jdk_x64_linux_hotspot_11.0.20.1_1.tar.gz \
+    && mkdir -p /usr/lib/jvm/temurin-11-jdk-amd64 \
+    && tar -xf /tmp/temurin-11.tar.gz -C /usr/lib/jvm/temurin-11-jdk-amd64 --strip-components=1 \
+    && rm /tmp/temurin-11.tar.gz
+
+# Set environment variables to use Java 11 by default
+ENV JAVA_HOME_11=/usr/lib/jvm/temurin-11-jdk-amd64
+
+# Example to make Java 11 the default Java version
+# ENV JAVA_HOME=$JAVA_HOME_11
+# ENV PATH=$JAVA_HOME/bin:$PATH
+
 # Install any needed packages specified in setup.py
 RUN apt-get update && apt-get install -y --no-install-recommends \
     less \
@@ -25,19 +39,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && mkdir -p /opt/bundleutils/.cache /opt/bundleutils/.app /opt/bundleutils/work /workspace \
     && chmod -R 777 /opt/bundleutils/.cache /opt/bundleutils/work /workspace
 
-# Install Java 11 from Adoptium
-# Needed for CloudBees CI version 2.426.3.3 and earlier
-RUN wget -q -O /tmp/temurin-11.tar.gz https://github.com/adoptium/temurin11-binaries/releases/download/jdk-11.0.20.1+1/OpenJDK11U-jdk_x64_linux_hotspot_11.0.20.1_1.tar.gz \
-    && mkdir -p /usr/lib/jvm/temurin-11-jdk-amd64 \
-    && tar -xf /tmp/temurin-11.tar.gz -C /usr/lib/jvm/temurin-11-jdk-amd64 --strip-components=1 \
-    && rm /tmp/temurin-11.tar.gz
-
-# Set environment variables to use Java 11 by default
-ENV JAVA_HOME_11=/usr/lib/jvm/temurin-11-jdk-amd64
-
-# Example to make Java 11 the default Java version
-# ENV JAVA_HOME=$JAVA_HOME_11
-# ENV PATH=$JAVA_HOME/bin:$PATH
+# Install Gitleaks
+ENV GITLEAKS_VERSION="8.26.0"
+RUN wget https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_checksums.txt && \
+    wget https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz && \
+    grep gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz gitleaks_${GITLEAKS_VERSION}_checksums.txt | sha256sum -c && \
+    tar xf gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz && cp gitleaks /usr/bin/
 
 # Create a virtual environment
 RUN python3 -m venv /opt/bundleutils/.venv
