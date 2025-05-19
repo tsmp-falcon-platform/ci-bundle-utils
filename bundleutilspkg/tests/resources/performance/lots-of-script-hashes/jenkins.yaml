@@ -1,3 +1,462 @@
+credentials:
+  system:
+    domainCredentials:
+    - credentials:
+      - basicSSHUserPrivateKey:
+          description: |-
+            jenkins-centos7-static-agent
+          id: jenkins-centos7-static-agent
+          privateKeySource:
+            directEntry:
+              privateKey: '{AQAAABAAAAblablabla}'
+          scope: GLOBAL
+          username: jenkins
+      - basicSSHUserPrivateKey:
+          description: |-
+            windows2012
+          id: windows2012
+          privateKeySource:
+            directEntry:
+              privateKey: '{AQAAABAAAAblablabla}'
+          scope: GLOBAL
+          username: misterman
+      - basicSSHUserPrivateKey:
+          description: |-
+            github-sshkey-misterman1
+          id: github-sshkey-misterman1
+          privateKeySource:
+            directEntry:
+              privateKey: '{AQAAABAAAAblablabla}'
+          scope: GLOBAL
+          username: misterman1
+      - usernamePassword:
+          description: |-
+            misterman1-githubaccount-accesstoken-api
+          id: misterman1-githubaccount-accesstoken-api
+          password: '{AQAAABAAAAblablabla}'
+          scope: GLOBAL
+          username: misterman1
+      - string:
+          description: |-
+            Webhook secret for https://github.com/apps/cloudbees-ci-misterman1-casc
+          id: 00428b3c-7e38-4fcd-a520-ddaaa2bd4c17
+          scope: SYSTEM
+          secret: '{AQAAABAAAAblablabla}'
+      - string:
+          description: |-
+            Webhook secret for https://github.com/apps/cloudbees-ci-misterman1-practice
+          id: 11dc6f8e-d68a-4fde-93de-d264a0c019a9
+          scope: SYSTEM
+          secret: '{AQAAABAAAAblablabla}'
+      - string:
+          description: |-
+            gh_pat_secrettest
+          id: gh_pat_secrettest
+          scope: GLOBAL
+          secret: '{AQAAABAAAAblablabla}'
+      - string:
+          description: |-
+            mistermanbb
+          id: mistermanbb
+          scope: GLOBAL
+          secret: '{AQAAABAAAAblablabla}'
+      - usernamePassword:
+          description: |-
+            bbactoken
+          id: bbactoken
+          password: '{AQAAABAAAAblablabla}'
+          scope: GLOBAL
+          username: misterman@cloudbees.com
+      - string:
+          description: |-
+            jmrepokey
+          id: jmrepokey
+          scope: GLOBAL
+          secret: '{AQAAABAAAAblablabla}'
+      - usernamePassword:
+          description: |-
+            cloudbees-api-token
+          id: cloudbees-api-token
+          password: '{AQAAABAAAAblablabla}'
+          scope: GLOBAL
+          username: misterman
+      - string:
+          description: |-
+            zach_ken_admin
+          id: zach_ken_admin
+          scope: GLOBAL
+          secret: '{AQAAABAAAAblablabla}'
+      - file:
+          description: |-
+            values-dev-deleteme
+          fileName: values-dev.yaml
+          id: values-dev-deleteme
+          scope: GLOBAL
+          secretBytes: '{AQAAABAAAAblablabla}'
+      - basicSSHUserPrivateKey:
+          description: |-
+            jenkins-centos7-static-agent
+          id: a1jenkins-centos7-static-agent
+          privateKeySource:
+            directEntry:
+              privateKey: '{AQAAABAAAAblablabla}'
+          scope: GLOBAL
+          username: jenkins
+      - basicSSHUserPrivateKey:
+          description: |-
+            windows2012
+          id: a1windows2012
+          privateKeySource:
+            directEntry:
+              privateKey: '{AQAAABAAAAblablabla}'
+          scope: GLOBAL
+          username: misterman
+      - basicSSHUserPrivateKey:
+          description: |-
+            github-sshkey-misterman1
+          id: a1github-sshkey-misterman1
+          privateKeySource:
+            directEntry:
+              privateKey: '{AQAAABAAAAblablabla}'
+          scope: GLOBAL
+          username: misterman1
+      - usernamePassword:
+          description: |-
+            misterman1-githubaccount-accesstoken-api
+          id: a1misterman1-githubaccount-accesstoken-api
+          password: '{AQAAABAAAAblablabla}'
+          scope: GLOBAL
+          username: misterman1
+      - string:
+          description: |-
+            Webhook secret for https://github.com/apps/cloudbees-ci-misterman1-casc
+          id: a100428b3c-7e38-4fcd-a520-ddaaa2bd4c17
+          scope: SYSTEM
+          secret: '{AQAAABAAAAblablabla}'
+      - string:
+          description: |-
+            Webhook secret for https://github.com/apps/cloudbees-ci-misterman1-practice
+          id: a111dc6f8e-d68a-4fde-93de-d264a0c019a9
+          scope: SYSTEM
+          secret: '{AQAAABAAAAblablabla}'
+      - string:
+          description: |-
+            gh_pat_secrettest
+          id: a1gh_pat_secrettest
+          scope: GLOBAL
+          secret: '{AQAAABAAAAblablabla}'
+      - string:
+          description: |-
+            mistermanbb
+          id: a1mistermanbb
+          scope: GLOBAL
+          secret: '{AQAAABAAAAblablabla}'
+      - usernamePassword:
+          description: |-
+            bbactoken
+          id: a1bbactoken
+          password: '{AQAAABAAAAblablabla}'
+          scope: GLOBAL
+          username: misterman@cloudbees.com
+      - string:
+          description: |-
+            jmrepokey
+          id: a1jmrepokey
+          scope: GLOBAL
+          secret: '{AQAAABAAAAblablabla}'
+      - usernamePassword:
+          description: |-
+            cloudbees-api-token
+          id: a1cloudbees-api-token
+          password: '{AQAAABAAAAblablabla}'
+          scope: GLOBAL
+          username: misterman
+      - string:
+          description: |-
+            zach_ken_admin
+          id: a1zach_ken_admin
+          scope: GLOBAL
+          secret: '{AQAAABAAAAblablabla}'
+      - file:
+          description: |-
+            values-dev-deleteme
+          fileName: values-dev.yaml
+          id: a1values-dev-deleteme
+          scope: GLOBAL
+          secretBytes: '{AQAAABAAAAblablabla}'
+      - basicSSHUserPrivateKey:
+          description: |-
+            jenkins-centos7-static-agent
+          id: a2jenkins-centos7-static-agent
+          privateKeySource:
+            directEntry:
+              privateKey: '{AQAAABAAAAblablabla}'
+          scope: GLOBAL
+          username: jenkins
+      - basicSSHUserPrivateKey:
+          description: |-
+            windows2012
+          id: a2windows2012
+          privateKeySource:
+            directEntry:
+              privateKey: '{AQAAABAAAAblablabla}'
+          scope: GLOBAL
+          username: misterman
+      - basicSSHUserPrivateKey:
+          description: |-
+            github-sshkey-misterman1
+          id: a2github-sshkey-misterman1
+          privateKeySource:
+            directEntry:
+              privateKey: '{AQAAABAAAAblablabla}'
+          scope: GLOBAL
+          username: misterman1
+      - usernamePassword:
+          description: |-
+            misterman1-githubaccount-accesstoken-api
+          id: a2misterman1-githubaccount-accesstoken-api
+          password: '{AQAAABAAAAblablabla}'
+          scope: GLOBAL
+          username: misterman1
+      - string:
+          description: |-
+            Webhook secret for https://github.com/apps/cloudbees-ci-misterman1-casc
+          id: a200428b3c-7e38-4fcd-a520-ddaaa2bd4c17
+          scope: SYSTEM
+          secret: '{AQAAABAAAAblablabla}'
+      - string:
+          description: |-
+            Webhook secret for https://github.com/apps/cloudbees-ci-misterman1-practice
+          id: a211dc6f8e-d68a-4fde-93de-d264a0c019a9
+          scope: SYSTEM
+          secret: '{AQAAABAAAAblablabla}'
+      - string:
+          description: |-
+            gh_pat_secrettest
+          id: a2gh_pat_secrettest
+          scope: GLOBAL
+          secret: '{AQAAABAAAAblablabla}'
+      - string:
+          description: |-
+            mistermanbb
+          id: a2mistermanbb
+          scope: GLOBAL
+          secret: '{AQAAABAAAAblablabla}'
+      - usernamePassword:
+          description: |-
+            bbactoken
+          id: a2bbactoken
+          password: '{AQAAABAAAAblablabla}'
+          scope: GLOBAL
+          username: misterman@cloudbees.com
+      - string:
+          description: |-
+            jmrepokey
+          id: a2jmrepokey
+          scope: GLOBAL
+          secret: '{AQAAABAAAAblablabla}'
+      - usernamePassword:
+          description: |-
+            cloudbees-api-token
+          id: a2cloudbees-api-token
+          password: '{AQAAABAAAAblablabla}'
+          scope: GLOBAL
+          username: misterman
+      - string:
+          description: |-
+            zach_ken_admin
+          id: a2zach_ken_admin
+          scope: GLOBAL
+          secret: '{AQAAABAAAAblablabla}'
+      - file:
+          description: |-
+            values-dev-deleteme
+          fileName: values-dev.yaml
+          id: a2values-dev-deleteme
+          scope: GLOBAL
+          secretBytes: '{AQAAABAAAAblablabla}'
+      - basicSSHUserPrivateKey:
+          description: |-
+            jenkins-centos7-static-agent
+          id: a3jenkins-centos7-static-agent
+          privateKeySource:
+            directEntry:
+              privateKey: '{AQAAABAAAAblablabla}'
+          scope: GLOBAL
+          username: jenkins
+      - basicSSHUserPrivateKey:
+          description: |-
+            windows2012
+          id: a3windows2012
+          privateKeySource:
+            directEntry:
+              privateKey: '{AQAAABAAAAblablabla}'
+          scope: GLOBAL
+          username: misterman
+      - basicSSHUserPrivateKey:
+          description: |-
+            github-sshkey-misterman1
+          id: a3github-sshkey-misterman1
+          privateKeySource:
+            directEntry:
+              privateKey: '{AQAAABAAAAblablabla}'
+          scope: GLOBAL
+          username: misterman1
+      - usernamePassword:
+          description: |-
+            misterman1-githubaccount-accesstoken-api
+          id: a3misterman1-githubaccount-accesstoken-api
+          password: '{AQAAABAAAAblablabla}'
+          scope: GLOBAL
+          username: misterman1
+      - string:
+          description: |-
+            Webhook secret for https://github.com/apps/cloudbees-ci-misterman1-casc
+          id: a300428b3c-7e38-4fcd-a520-ddaaa2bd4c17
+          scope: SYSTEM
+          secret: '{AQAAABAAAAblablabla}'
+      - string:
+          description: |-
+            Webhook secret for https://github.com/apps/cloudbees-ci-misterman1-practice
+          id: a311dc6f8e-d68a-4fde-93de-d264a0c019a9
+          scope: SYSTEM
+          secret: '{AQAAABAAAAblablabla}'
+      - string:
+          description: |-
+            gh_pat_secrettest
+          id: a3gh_pat_secrettest
+          scope: GLOBAL
+          secret: '{AQAAABAAAAblablabla}'
+      - string:
+          description: |-
+            mistermanbb
+          id: a3mistermanbb
+          scope: GLOBAL
+          secret: '{AQAAABAAAAblablabla}'
+      - usernamePassword:
+          description: |-
+            bbactoken
+          id: a3bbactoken
+          password: '{AQAAABAAAAblablabla}'
+          scope: GLOBAL
+          username: misterman@cloudbees.com
+      - string:
+          description: |-
+            jmrepokey
+          id: a3jmrepokey
+          scope: GLOBAL
+          secret: '{AQAAABAAAAblablabla}'
+      - usernamePassword:
+          description: |-
+            cloudbees-api-token
+          id: a3cloudbees-api-token
+          password: '{AQAAABAAAAblablabla}'
+          scope: GLOBAL
+          username: misterman
+      - string:
+          description: |-
+            zach_ken_admin
+          id: a3zach_ken_admin
+          scope: GLOBAL
+          secret: '{AQAAABAAAAblablabla}'
+      - file:
+          description: |-
+            values-dev-deleteme
+          fileName: values-dev.yaml
+          id: a3values-dev-deleteme
+          scope: GLOBAL
+          secretBytes: '{AQAAABAAAAblablabla}'
+      - basicSSHUserPrivateKey:
+          description: |-
+            jenkins-centos7-static-agent
+          id: a4jenkins-centos7-static-agent
+          privateKeySource:
+            directEntry:
+              privateKey: '{AQAAABAAAAblablabla}'
+          scope: GLOBAL
+          username: jenkins
+      - basicSSHUserPrivateKey:
+          description: |-
+            windows2012
+          id: a4windows2012
+          privateKeySource:
+            directEntry:
+              privateKey: '{AQAAABAAAAblablabla}'
+          scope: GLOBAL
+          username: misterman
+      - basicSSHUserPrivateKey:
+          description: |-
+            github-sshkey-misterman1
+          id: a4github-sshkey-misterman1
+          privateKeySource:
+            directEntry:
+              privateKey: '{AQAAABAAAAblablabla}'
+          scope: GLOBAL
+          username: misterman1
+      - usernamePassword:
+          description: |-
+            misterman1-githubaccount-accesstoken-api
+          id: a4misterman1-githubaccount-accesstoken-api
+          password: '{AQAAABAAAAblablabla}'
+          scope: GLOBAL
+          username: misterman1
+      - string:
+          description: |-
+            Webhook secret for https://github.com/apps/cloudbees-ci-misterman1-casc
+          id: a400428b3c-7e38-4fcd-a520-ddaaa2bd4c17
+          scope: SYSTEM
+          secret: '{AQAAABAAAAblablabla}'
+      - string:
+          description: |-
+            Webhook secret for https://github.com/apps/cloudbees-ci-misterman1-practice
+          id: a411dc6f8e-d68a-4fde-93de-d264a0c019a9
+          scope: SYSTEM
+          secret: '{AQAAABAAAAblablabla}'
+      - string:
+          description: |-
+            gh_pat_secrettest
+          id: a4gh_pat_secrettest
+          scope: GLOBAL
+          secret: '{AQAAABAAAAblablabla}'
+      - string:
+          description: |-
+            mistermanbb
+          id: a4mistermanbb
+          scope: GLOBAL
+          secret: '{AQAAABAAAAblablabla}'
+      - usernamePassword:
+          description: |-
+            bbactoken
+          id: a4bbactoken
+          password: '{AQAAABAAAAblablabla}'
+          scope: GLOBAL
+          username: misterman@cloudbees.com
+      - string:
+          description: |-
+            jmrepokey
+          id: a4jmrepokey
+          scope: GLOBAL
+          secret: '{AQAAABAAAAblablabla}'
+      - usernamePassword:
+          description: |-
+            cloudbees-api-token
+          id: a4cloudbees-api-token
+          password: '{AQAAABAAAAblablabla}'
+          scope: GLOBAL
+          username: misterman
+      - string:
+          description: |-
+            zach_ken_admin
+          id: a4zach_ken_admin
+          scope: GLOBAL
+          secret: '{AQAAABAAAAblablabla}'
+      - file:
+          description: |-
+            values-dev-deleteme
+          fileName: values-dev.yaml
+          id: a4values-dev-deleteme
+          scope: GLOBAL
+          secretBytes: '{AQAAABAAAAblablabla}'
 jenkins:
   clouds:
   - operationsCenterAgentProvisioningService
