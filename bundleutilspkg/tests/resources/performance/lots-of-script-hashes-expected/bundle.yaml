@@ -1,0 +1,8 @@
+apiVersion: 2
+id: lots-of-script-hashes-expected
+description: Bundle for lots-of-script-hashes-expected
+version: AUDITED_BUNDLE_DO_NOT_USE
+jcasc:
+- jenkins.yaml
+items:
+- items.yaml

@@ -3630,6 +3630,7 @@ def apply_patch(filename, patch_list):
     if obj is None:
         logging.error(f"Failed to load YAML object from file {filename}")
         return
+    obj = _convert_to_dict(obj)
 
     # Expand wildcard/selector paths before applying
     expanded_patches = expand_patch_paths(obj, patch_list)

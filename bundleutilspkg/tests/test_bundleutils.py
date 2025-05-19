@@ -87,6 +87,15 @@ def _test_audit(testdir, test_name, runner, command_args, expected_dir):
             assert outdata == expected_data
 
 
+def _test_diff_19000(runner, command_args):
+    # print out command and args for debugging
+    print(f"Running command: bundleutils {' '.join(command_args)}")
+    result = runner.invoke(bundleutils, command_args)
+    _traceback(result)
+    assert result.exit_code != 0
+    assert '"new_value": "AUDITED_BUNDLE_DO_NOT_USE"' in result.output
+
+
 def test_audit(request, runner):
     testdir = os.path.dirname(__file__)
     test_name = request.node.name
@@ -100,6 +109,38 @@ def test_audit(request, runner):
         outdir,
     ]
     _test_audit(testdir, test_name, runner, command_args, expected_dir)
+
+
+def test_performance_19000(request, runner):
+    testdir = os.path.dirname(__file__)
+    test_name = request.node.name
+    outdir = os.path.join(testdir, "resources", "target", test_name)
+    expected_dir = "resources/performance/lots-of-script-hashes-expected"
+    command_args = [
+        "audit",
+        "-s",
+        f"{testdir}/resources/performance/lots-of-script-hashes",
+        "-t",
+        outdir,
+    ]
+    _test_audit(testdir, test_name, runner, command_args, expected_dir)
+
+
+def test_performance_diff_19000(request, runner):
+    testdir = os.path.dirname(__file__)
+    test_name = request.node.name
+    expected_dir1 = os.path.join(testdir, "resources/performance/lots-of-script-hashes")
+    expected_dir2 = os.path.join(
+        testdir, "resources/performance/lots-of-script-hashes-expected"
+    )
+    command_args = [
+        "diff",
+        "-s",
+        expected_dir1,
+        "-s",
+        expected_dir2,
+    ]
+    _test_diff_19000(runner, command_args)
 
 
 def test_audit_no_hash(request, runner):
