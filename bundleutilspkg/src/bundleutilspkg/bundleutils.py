@@ -3412,6 +3412,7 @@ def traverse_credentials(
     hash_only,
     hash_seed,
     filename,
+    fileobj,
     obj,
     traversed_paths,
     custom_replacements={},
@@ -3502,7 +3503,7 @@ def traverse_credentials(
                             )
                             # print the JSON Patch operation for the deletion of the parent object
                             patch = {"op": "remove", "path": f"{parent_path}"}
-                            apply_patch(filename, [patch])
+                            fileobj = apply_patch_obj(filename, fileobj, [patch])
                             break
                         else:
                             # print the JSON Patch operation for the replacement
@@ -3511,12 +3512,13 @@ def traverse_credentials(
                                 "path": f"{new_path}",
                                 "value": f"{replacement}",
                             }
-                            apply_patch(filename, [patch])
+                            fileobj = apply_patch_obj(filename, fileobj, [patch])
                 continue
-            traverse_credentials(
+            fileobj = traverse_credentials(
                 hash_only,
                 hash_seed,
                 filename,
+                fileobj,
                 v,
                 traversed_paths,
                 custom_replacements,
@@ -3528,10 +3530,11 @@ def traverse_credentials(
             # Calculate the original index by subtracting the reversed index from the length of the list minus 1
             original_index = len(obj) - 1 - i
             new_path = f"{path}/{original_index}"
-            traverse_credentials(
+            fileobj = traverse_credentials(
                 hash_only,
                 hash_seed,
                 filename,
+                fileobj,
                 v,
                 traversed_paths,
                 custom_replacements,
@@ -3553,7 +3556,8 @@ def traverse_credentials(
                 )
             # print the JSON Patch operation for the replacement
             patch = {"op": "replace", "path": f"{path}", "value": f"{replacement}"}
-            apply_patch(filename, [patch])
+            fileobj = apply_patch_obj(filename, fileobj, [patch])
+    return fileobj
 
 
 def parse_selector(selector_str):
@@ -3623,15 +3627,7 @@ def expand_patch_paths(obj, patch_list):
     return expanded
 
 
-def apply_patch(filename, patch_list):
-    with open(filename, "r", encoding="utf-8") as inp:
-        obj = yaml.load(inp)
-
-    if obj is None:
-        logging.error(f"Failed to load YAML object from file {filename}")
-        return
-    obj = _convert_to_dict(obj)
-
+def apply_patch_obj(filename, obj, patch_list):
     # Expand wildcard/selector paths before applying
     expanded_patches = expand_patch_paths(obj, patch_list)
     logging.debug(f"Expanded patches:\n{printYaml(expanded_patches)}")
@@ -3648,7 +3644,7 @@ def apply_patch(filename, patch_list):
             except jsonpointer.JsonPointerException:
                 # If the path does not exist, skip the patch
                 logging.debug(
-                    f"Ignoring non-existent path {patch['path']} in {filename}"
+                    f"Ignoring non-existent path {patch['path']} in {filename}."
                 )
                 continue
         # Apply the patch
@@ -3660,6 +3656,20 @@ def apply_patch(filename, patch_list):
         except jsonpatch.JsonPatchConflict:
             logging.error("Failed to apply JSON patch")
             return
+    return obj
+
+
+def apply_patch_file(filename, patch_list):
+    with open(filename, "r", encoding="utf-8") as inp:
+        obj = yaml.load(inp)
+
+    if obj is None:
+        logging.error(f"Failed to load YAML object from file {filename}")
+        return
+    obj = _convert_to_dict(obj)
+    # logging.info(f"Transform: start applying patches to {filename}. The file is:\n{printYaml(obj, convert=True)}")
+    obj = apply_patch_obj(filename, obj, patch_list)
+    # logging.info(f"Transform: stopped applying patches to {filename}. The file is now:\n{printYaml(obj, convert=True)}")
 
     # save the patched object back to the file
     with open(filename, "w", encoding="utf-8") as out:
@@ -3678,7 +3688,7 @@ def handle_patches(patches, target_dir):
             logging.info(f"File {filename} does not exist. Skipping patching.")
             continue
         logging.info(f"Transform: applying JSON patches to {filename}")
-        apply_patch(filename, patch)
+        apply_patch_file(filename, patch)
 
 
 @click.pass_context
@@ -3695,9 +3705,16 @@ def apply_replacements(ctx, filename, custom_replacements):
                 logging.info(f"Hashing encrypted data without seed")
             else:
                 logging.info(f"Hashing encrypted data with seed")
-        traverse_credentials(
-            hash_only, hash_seed, filename, obj, [], custom_replacements
+        fileobj = _convert_to_dict(obj)
+        # logging.info(f"Transform: start applying replacements to {filename}")
+        fileobj = traverse_credentials(
+            hash_only, hash_seed, filename, fileobj, obj, [], custom_replacements
         )
+        # logging.info(f"Transform: stopped applying replacements to {filename}. The file is now:\n{printYaml(fileobj, convert=True)}")
+        # save the patched object back to the file
+        with open(filename, "w", encoding="utf-8") as out:
+            yaml.dump(fileobj, out)
+            logging.info(f"Wrote {filename}")
 
 
 def handle_credentials(credentials, target_dir):
