@@ -231,6 +231,9 @@ gitleaks_check() {
     fi
     # Check runs
     case "${GITLEAKS_CHECK}" in
+      none)
+        echo "AUDITING: Skipping gitleaks check..."
+        ;;
       all)
         echo "AUDITING: Running gitleaks check on all files..."
         if ! gitleaks git --verbose --redact --log-opts "$BUNDLE_DIR"; then
