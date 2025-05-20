@@ -236,7 +236,7 @@ gitleaks_check() {
         ;;
       all)
         echo "AUDITING: Running gitleaks check on all files..."
-        if ! gitleaks git --verbose --redact --log-opts "$BUNDLE_DIR"; then
+        if ! gitleaks git --no-color --verbose --redact --log-opts "$BUNDLE_DIR"; then
           echo "AUDITING: Gitleaks found leaks. Please check the output."
           exit 1
         fi
@@ -246,7 +246,7 @@ gitleaks_check() {
           echo "AUDITING: GITLEAKS_CHECK is set to '$GITLEAKS_CHECK', not [all|staged]. Defaulting to staged."
         fi
         echo "AUDITING: Running gitleaks check on staged files..."
-        if ! gitleaks git --staged --verbose --redact --log-opts "$BUNDLE_DIR"; then
+        if ! gitleaks git --no-color --staged --verbose --redact --log-opts "$BUNDLE_DIR"; then
           echo "AUDITING: Gitleaks found leaks. Please check the output."
           exit 1
         fi
