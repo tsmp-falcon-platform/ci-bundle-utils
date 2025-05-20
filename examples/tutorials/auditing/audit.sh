@@ -3,6 +3,10 @@
 
 set -euo pipefail
 
+if [[ "${DEBUG_SCRIPT:-}" == "true" ]]; then
+  set -x
+fi
+
 GIT_ACTION="${GIT_ACTION:-commit-only}"
 mandatory_envs="BUNDLEUTILS_USERNAME BUNDLEUTILS_PASSWORD JENKINS_URL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL GIT_ACTION"
 usage_message="Usage: ./audit.sh [setup|help|<jenkins-url>]
@@ -49,13 +53,14 @@ elif [[ "${1:-}" == "cjoc-and-online-controllers" ]]; then
     echo
     sleep 5
   fi
+  mkdir -p target
   for CONTROLLER in $ONLINE_CONTROLLERS; do
     echo "AUDITING: Found online controller: $CONTROLLER"
     # Fetch the bundle from the controller
     if BUNDLEUTILS_JENKINS_URL="$CONTROLLER" $0; then
-      echo "AUDITING: Bundle fetched from $CONTROLLER"
+      echo "AUDITING: Bundle fetched from $CONTROLLER" | tee -a target/audit.log
     else
-      echo "AUDITING: Failed to fetch bundle from $CONTROLLER"
+      echo "AUDITING: Failed to fetch bundle from $CONTROLLER" | tee -a target/audit.log
       ERRORS_FOUND_ON_CONTROLLERS=1
     fi
   done
@@ -239,7 +244,7 @@ gitleaks_check() {
       all)
         echo "AUDITING: Running gitleaks check on all files..."
         if ! gitleaks git --no-color --verbose --redact --log-opts "$BUNDLE_DIR"; then
-          echo "AUDITING: Gitleaks found leaks. Please check the output."
+          echo "AUDITING: Gitleaks found leaks in $BUNDLE_DIR. Please check the output." | tee -a target/audit.log
           exit 1
         fi
         ;&
@@ -249,10 +254,10 @@ gitleaks_check() {
         fi
         echo "AUDITING: Running gitleaks check on staged files..."
         if ! gitleaks git --no-color --staged --verbose --redact --log-opts "$BUNDLE_DIR"; then
-          echo "AUDITING: Gitleaks found leaks. Please check the output."
+          echo "AUDITING: Gitleaks found leaks in staged $BUNDLE_DIR. Please check the output." | tee -a target/audit.log
           echo "AUDITING: Unstaging files in $BUNDLE_DIR..."
-          git restore --staged "$BUNDLE_DIR"
-          git restore "$BUNDLE_DIR"
+          git ls-files "$BUNDLE_DIR" | xargs -r -- git restore --staged --
+          git ls-files "$BUNDLE_DIR" | xargs -r -- git restore --
           exit 1
         fi
         ;;
@@ -294,9 +299,18 @@ if [ -d "$BUNDLE_DIR" ]; then
 else
   echo "AUDITING: Bundle $BUNDLE_DIR not found. No changes to commit or push."
 fi
-echo "AUDITING: Bundle audit complete."
+echo "AUDITING: Bundle audit complete. Showing last commits if any..."
+git --no-pager log -n 20 --pretty=format:"%h %ad - %s" --stat 2> /dev/null || true
+
+# Summary of the audit
+if [[ -f "target/audit.log" ]]; then
+  echo "######################################"
+  echo "AUDITING: Summary of the audit so far:"
+  cat "target/audit.log"
+  echo "######################################"
+fi
 # check for ERROR_FOUND=1
-if [[ "$ERRORS_FOUND_ON_CONTROLLERS" == "1" ]]; then
+if [[ "${1:-}" == "cjoc-and-online-controllers" ]] && [[ "$ERRORS_FOUND_ON_CONTROLLERS" == "1" ]]; then
   echo "AUDITING: Errors found during audit. Please check the output."
   exit 1
 fi
