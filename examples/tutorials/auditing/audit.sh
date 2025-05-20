@@ -248,6 +248,9 @@ gitleaks_check() {
         echo "AUDITING: Running gitleaks check on staged files..."
         if ! gitleaks git --no-color --staged --verbose --redact --log-opts "$BUNDLE_DIR"; then
           echo "AUDITING: Gitleaks found leaks. Please check the output."
+          echo "AUDITING: Unstaging files in $BUNDLE_DIR..."
+          git restore --staged "$BUNDLE_DIR"
+          git restore "$BUNDLE_DIR"
           exit 1
         fi
         ;;
