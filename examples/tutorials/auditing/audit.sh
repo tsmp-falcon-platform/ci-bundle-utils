@@ -34,6 +34,7 @@ if [[ "${1:-}" == "help" ]]; then
   echo -e "$usage_message"
   exit 0
 elif [[ "${1:-}" == "cjoc-and-online-controllers" ]]; then
+  ERRORS_FOUND_ON_CONTROLLERS=0
   # List all controllers
   CONTROLLERS_JSON=$(curl --fail -u "$BUNDLEUTILS_USERNAME:$BUNDLEUTILS_PASSWORD" "${JENKINS_URL}/api/json?pretty&tree=jobs\[name,online,state,endpoint\]")
   ONLINE_CONTROLLERS=$(echo "$CONTROLLERS_JSON" | jq -r '.jobs[]|select(.online == true).endpoint')
@@ -55,6 +56,7 @@ elif [[ "${1:-}" == "cjoc-and-online-controllers" ]]; then
       echo "AUDITING: Bundle fetched from $CONTROLLER"
     else
       echo "AUDITING: Failed to fetch bundle from $CONTROLLER"
+      ERRORS_FOUND_ON_CONTROLLERS=1
     fi
   done
 elif [[ "${1:-}" == "setup" ]]; then
@@ -293,3 +295,8 @@ else
   echo "AUDITING: Bundle $BUNDLE_DIR not found. No changes to commit or push."
 fi
 echo "AUDITING: Bundle audit complete."
+# check for ERROR_FOUND=1
+if [[ "$ERRORS_FOUND_ON_CONTROLLERS" == "1" ]]; then
+  echo "AUDITING: Errors found during audit. Please check the output."
+  exit 1
+fi
