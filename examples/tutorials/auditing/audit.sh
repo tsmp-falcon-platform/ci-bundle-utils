@@ -7,6 +7,27 @@ if [[ "${DEBUG_SCRIPT:-}" == "true" ]]; then
   set -x
 fi
 
+function summary() {
+  echo "AUDITING: Bundle audit complete. Showing last commits if any..."
+  git --no-pager log -n 20 --pretty=format:"%h %ad - %s" --stat 2> /dev/null || true
+
+  # Summary of the audit
+  if [[ -f "target/audit.log" ]]; then
+    echo "######################################"
+    echo "AUDITING: Summary of the audit so far:"
+    echo "######################################"
+    cat "target/audit.log"
+    echo "######################################"
+  fi
+  # check for ERROR_FOUND=1
+  if [[ "${1:-}" == "cjoc-and-online-controllers" ]] && [[ "$ERRORS_FOUND_ON_CONTROLLERS" == "1" ]]; then
+    echo "AUDITING: Errors found during audit. Please check the output."
+    exit 1
+  fi
+}
+
+trap summary EXIT
+
 GIT_ACTION="${GIT_ACTION:-commit-only}"
 mandatory_envs="BUNDLEUTILS_USERNAME BUNDLEUTILS_PASSWORD JENKINS_URL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL GIT_ACTION"
 usage_message="Usage: ./audit.sh [setup|help|<jenkins-url>]
@@ -40,8 +61,7 @@ if [[ "${1:-}" == "help" ]]; then
 elif [[ "${1:-}" == "cjoc-and-online-controllers" ]]; then
   ERRORS_FOUND_ON_CONTROLLERS=0
   # List all controllers
-  CONTROLLERS_JSON=$(curl --fail -u "$BUNDLEUTILS_USERNAME:$BUNDLEUTILS_PASSWORD" "${JENKINS_URL}/api/json?pretty&tree=jobs\[name,online,state,endpoint\]")
-  ONLINE_CONTROLLERS=$(echo "$CONTROLLERS_JSON" | jq -r '.jobs[]|select(.online == true).endpoint')
+  ONLINE_CONTROLLERS=$(bundleutils controllers)
   if [[ -z "$ONLINE_CONTROLLERS" ]]; then
     echo "AUDITING: No online controllers found."
   else
@@ -54,13 +74,22 @@ elif [[ "${1:-}" == "cjoc-and-online-controllers" ]]; then
     sleep 5
   fi
   mkdir -p target
+  echo > target/audit.log
   for CONTROLLER in $ONLINE_CONTROLLERS; do
+    CONTROLLER_NAME=$(BUNDLEUTILS_JENKINS_URL="$CONTROLLER" bundleutils extract-name-from-url)
     echo "AUDITING: Found online controller: $CONTROLLER"
     # Fetch the bundle from the controller
-    if BUNDLEUTILS_JENKINS_URL="$CONTROLLER" $0; then
-      echo "AUDITING: Bundle fetched from $CONTROLLER" | tee -a target/audit.log
+    if BUNDLEUTILS_JENKINS_URL="$CONTROLLER" bundleutils preflight; then
+      echo "AUDITING: $CONTROLLER_NAME - Preflight checks PASSED." | tee -a target/audit.log
     else
-      echo "AUDITING: Failed to fetch bundle from $CONTROLLER" | tee -a target/audit.log
+      echo "AUDITING: $CONTROLLER_NAME - Preflight checks FAILED." | tee -a target/audit.log
+      continue
+    fi
+    # Fetch the bundle from the controller
+    if BUNDLEUTILS_JENKINS_URL="$CONTROLLER" $0; then
+      echo "AUDITING: $CONTROLLER_NAME - Bundle fetch PASSED." | tee -a target/audit.log
+    else
+      echo "AUDITING: $CONTROLLER_NAME - Bundle fetch FAILED." | tee -a target/audit.log
       ERRORS_FOUND_ON_CONTROLLERS=1
     fi
   done
@@ -243,8 +272,10 @@ gitleaks_check() {
         ;;
       all)
         echo "AUDITING: Running gitleaks check on all files..."
-        if ! gitleaks git --no-color --verbose --redact --log-opts "$BUNDLE_DIR"; then
-          echo "AUDITING: Gitleaks found leaks in $BUNDLE_DIR. Please check the output." | tee -a target/audit.log
+        if gitleaks git --no-color --verbose --redact --log-opts "$BUNDLE_DIR"; then
+          echo "AUDITING: $BUNDLE_DIR - Gitleaks check PASSED." | tee -a target/audit.log
+        else
+          echo "AUDITING: $BUNDLE_DIR - Gitleaks check FAILED. Please check the output." | tee -a target/audit.log
           exit 1
         fi
         ;&
@@ -253,8 +284,10 @@ gitleaks_check() {
           echo "AUDITING: GITLEAKS_CHECK is set to '$GITLEAKS_CHECK', not [all|staged]. Defaulting to staged."
         fi
         echo "AUDITING: Running gitleaks check on staged files..."
-        if ! gitleaks git --no-color --staged --verbose --redact --log-opts "$BUNDLE_DIR"; then
-          echo "AUDITING: Gitleaks found leaks in staged $BUNDLE_DIR. Please check the output." | tee -a target/audit.log
+        if gitleaks git --no-color --staged --verbose --redact --log-opts "$BUNDLE_DIR"; then
+          echo "AUDITING: $BUNDLE_DIR - Gitleaks check PASSED (staged files)." | tee -a target/audit.log
+        else
+          echo "AUDITING: $BUNDLE_DIR - Gitleaks check FAILED (staged files)" | tee -a target/audit.log
           echo "AUDITING: Unstaging files in $BUNDLE_DIR..."
           git ls-files "$BUNDLE_DIR" | xargs -r -- git restore --staged --
           git ls-files "$BUNDLE_DIR" | xargs -r -- git restore --
@@ -282,14 +315,15 @@ if [ -d "$BUNDLE_DIR" ]; then
     git add "$BUNDLE_DIR"
     gitleaks_check
     if git diff --cached --stat --exit-code "$BUNDLE_DIR"; then
-      echo "AUDITING: No changes to commit for $BUNDLE_DIR."
+      echo "AUDITING: $BUNDLE_DIR - Git check. No changes to commit." | tee -a target/audit.log
     else
       if [[ "$GIT_ACTION_COMMIT" == "true" ]]; then
-        echo "AUDITING: Committing changes to $BUNDLE_DIR"
+        echo "AUDITING: $BUNDLE_DIR - Git check. Committed changes." | tee -a target/audit.log
         git commit -m "Audit bundle $BUNDLE_DIR (version: $BUNDLEUTILS_CI_VERSION)" "$BUNDLE_DIR"
         echo "AUDITING: Commit: $(git --no-pager log -n1 --pretty=format:"YOUR_GIT_REPO/commit/%h %s")"
 
         if [[ "$GIT_ACTION_PUSH" == "true" ]]; then
+          echo "AUDITING: $BUNDLE_DIR - Git check. Pushed changes." | tee -a target/audit.log
           git push "${GIT_ORIGIN}" "${GIT_CURRENT_BRANCH}"
           echo "AUDITING: Pushed to YOUR_GIT_REPO/tree/$GIT_CURRENT_BRANCH"
         fi
@@ -298,19 +332,4 @@ if [ -d "$BUNDLE_DIR" ]; then
   fi
 else
   echo "AUDITING: Bundle $BUNDLE_DIR not found. No changes to commit or push."
-fi
-echo "AUDITING: Bundle audit complete. Showing last commits if any..."
-git --no-pager log -n 20 --pretty=format:"%h %ad - %s" --stat 2> /dev/null || true
-
-# Summary of the audit
-if [[ -f "target/audit.log" ]]; then
-  echo "######################################"
-  echo "AUDITING: Summary of the audit so far:"
-  cat "target/audit.log"
-  echo "######################################"
-fi
-# check for ERROR_FOUND=1
-if [[ "${1:-}" == "cjoc-and-online-controllers" ]] && [[ "$ERRORS_FOUND_ON_CONTROLLERS" == "1" ]]; then
-  echo "AUDITING: Errors found during audit. Please check the output."
-  exit 1
 fi
