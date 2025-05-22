@@ -47,7 +47,7 @@ script_name_upper = script_name.upper()
 plugin_json_url_path = (
     "/manage/pluginManager/api/json?pretty&depth=1&tree=plugins[*[*]]"
 )
-fetch_url_path = "/core-casc-export"
+controllers_url_path = "/api/json?depth=1&pretty&pretty&tree=jobs[url,online,state,endpoint,jobs[url,online,state,endpoint,jobs[url,online,state,endpoint,jobs[url,online,state,endpoint]]]]"
 validate_url_path = "/casc-bundle-mgnt/casc-bundle-validate"
 empty_bundle_strategies = ["fail", "delete", "noop"]
 default_target = "target/docs"
@@ -169,6 +169,9 @@ PASSWORD_ARG = "password"
 MERGE_CONFIG_ARG = "config"
 BUNDLES_ARG = "bundles"
 OUTDIR_ARG = "outdir"
+
+# internal cache
+internal_cache = {}
 
 
 def die(msg):
@@ -350,6 +353,26 @@ def server_options(func):
     return func
 
 
+def url_username_password_options(func):
+    func = click.option(
+        "-U",
+        "--url",
+        "url",
+        help=f"The URL to fetch YAML from ({BUNDLEUTILS_JENKINS_URL}).",
+    )(func)
+    func = click.option(
+        "-u",
+        "--username",
+        help=f"Username for basic authentication ({BUNDLEUTILS_USERNAME}).",
+    )(func)
+    func = click.option(
+        "-p",
+        "--password",
+        help=f"Password for basic authentication ({BUNDLEUTILS_PASSWORD}).",
+    )(func)
+    return func
+
+
 def fetch_options(func):
     func = click.option(
         "-M",
@@ -376,22 +399,6 @@ def fetch_options(func):
         default=False,
         is_flag=True,
         help=f"Do not fetch the computationally expensive items.yaml ({BUNDLEUTILS_FETCH_IGNORE_ITEMS}).",
-    )(func)
-    func = click.option(
-        "-U",
-        "--url",
-        "url",
-        help=f"The URL to fetch YAML from ({BUNDLEUTILS_JENKINS_URL}).",
-    )(func)
-    func = click.option(
-        "-u",
-        "--username",
-        help=f"Username for basic authentication ({BUNDLEUTILS_USERNAME}).",
-    )(func)
-    func = click.option(
-        "-p",
-        "--password",
-        help=f"Password for basic authentication ({BUNDLEUTILS_PASSWORD}).",
     )(func)
     func = click.option(
         "-t",
@@ -482,7 +489,7 @@ def transform_options(func):
 
 def _set_env_if_not_set(prefix, env_var, value):
     if not os.environ.get(env_var, ""):
-        logging.info(f"{prefix} environment variable: {env_var}={value}")
+        logging.debug(f"{prefix} environment variable: {env_var}={value}")
         os.environ[env_var] = str(value)
 
 
@@ -1639,6 +1646,12 @@ def ci_validate(
     )
 
 
+def _get_plugins_from_server(server_url, username, password):
+    plugin_json_url = server_url + plugin_json_url_path
+    response_text = call_jenkins_api(plugin_json_url, username, password)
+    return response_text
+
+
 @bundleutils.command()
 @server_options
 @click.option(
@@ -1689,8 +1702,7 @@ def ci_sanitize_plugins(
     envelope_json = jenkins_manager.get_envelope_json()
     envelope_json = json.loads(envelope_json)
 
-    plugin_json_url = server_url + plugin_json_url_path
-    response_text = call_jenkins_api(plugin_json_url, username, password)
+    response_text = _get_plugins_from_server(server_url, username, password)
     data = json.loads(response_text)
 
     installed_plugins = {}
@@ -1905,6 +1917,117 @@ def diff2(file1, file2):
     else:
         logging.info(f"No diff between {file1} and {file2}")
         return False
+
+
+def _preflight(url, username, password):
+    preflight_checks = {}
+    # check if the URL is valid
+    url = lookup_url(url)
+    username, password = _lookup_username_password(url, username, password)
+    try:
+        _get_plugins_from_server(url, username, password)
+        preflight_checks["plugins-export"] = "OK"
+    except Exception as e:
+        preflight_checks["plugins-export"] = str(e)
+
+    try:
+        _read_core_casc_export_file(url, username, password)
+        preflight_checks["casc-export"] = "OK"
+    except Exception as e:
+        if str(e).startswith("404"):
+            preflight_checks["casc-plugins-installed"] = (
+                "NOK? Received a 404 when accessing the casc page?"
+            )
+        preflight_checks["casc-export"] = str(e)
+    for value in preflight_checks.values():
+        if value != "OK":
+            click.echo(json.dumps(preflight_checks, indent=2))
+            die(f"Preflight checks failed.")
+    else:
+        logging.debug("Preflight checks OK.")
+    return url, username, password
+
+
+@bundleutils.command()
+@url_username_password_options
+@click.pass_context
+def preflight(ctx, url, username, password):
+    """Preconditions for fetching the CasC export."""
+    set_logging()
+    _preflight(url, username, password)
+
+
+def find_controllers(obj):
+    """
+    Recursively find all dicts that contain the 'state' key.
+    :param obj: The JSON structure (dict or list).
+    :return: A list of dicts that contain the 'state' key.
+    """
+    result = []
+
+    if isinstance(obj, dict):
+        if "state" in obj:
+            result.append(obj)
+        for value in obj.values():
+            result.extend(find_controllers(value))
+
+    elif isinstance(obj, list):
+        for item in obj:
+            result.extend(find_controllers(item))
+
+    return result
+
+
+@bundleutils.command()
+@url_username_password_options
+@click.option(
+    "-P", "--path", type=click.STRING, help=f"Path to the API endpoint to call."
+)
+@click.pass_context
+def api(ctx, url, username, password, path):
+    """
+    Utility for calling the Jenkins API.
+    \b
+    e.g. bundleutils api -P /whoAmI/api/json
+    """
+    set_logging()
+    url, username, password = _preflight(url, username, password)
+    url_path = url
+    if path:
+        url_path = url.rstrip("/") + "/" + path.lstrip("/")
+    response_text = call_jenkins_api(url_path, username, password)
+    click.echo(response_text)
+
+
+@bundleutils.command()
+@url_username_password_options
+@click.pass_context
+def controllers(ctx, url, username, password):
+    """Return all online controllers from an operation center."""
+    set_logging()
+    url, username, password = _preflight(url, username, password)
+    ci_type = lookup_type_from_url(url, "")
+    if not ci_type or not ci_type in ["oc", "oc-traditional"]:
+        die(f"The url must be an operation center url.")
+    controllers_api_url = url + controllers_url_path
+    response_text = call_jenkins_api(controllers_api_url, username, password)
+    controllers = json.loads(response_text)
+    controllers = find_controllers(controllers)
+    lines = []
+    for controller in controllers:
+        controller_endpoint = controller.get("endpoint")
+        controller_url = controller.get("url")
+        if not controller_endpoint:
+            logging.debug(f"Controller endpoint not found for {controller_url}")
+            continue
+        controller_online = controller.get("online")
+        if is_truthy(controller_online):
+            logging.debug(f"Controller '{controller_endpoint}' is online.")
+            lines.append(controller_endpoint)
+        else:
+            logging.debug(f"Controller '{controller_endpoint}' is not online.")
+    if lines:
+        click.echo("\n".join(lines))
 
 
 @bundleutils.command()
@@ -2185,7 +2308,7 @@ def null_check(ctx, obj, obj_name, obj_env_var=None, mandatory=True, default="")
         obj_str = "*******"
     logging.debug(f"Setting ctx - > {obj_name}: {obj_str}")
     # if the object_name already exists in the context and if different, warn the user
-    if obj_name in ctx.obj and ctx.obj[obj_name] != obj:
+    if obj_name in ctx.obj and ctx.obj[obj_name] and ctx.obj[obj_name] != obj:
         logging.warning(f"Overriding {obj_name} from {ctx.obj[obj_name]} to {obj_str}")
     ctx.obj[obj_name] = obj
     return obj
@@ -2372,6 +2495,13 @@ def update_plugins_options_null_check(
             """)
 
 
+def _lookup_username_password(url, username, password):
+    creds_needed = url is not None and url != ""
+    username = null_check(username, USERNAME_ARG, BUNDLEUTILS_USERNAME, creds_needed)
+    password = null_check(password, PASSWORD_ARG, BUNDLEUTILS_PASSWORD, creds_needed)
+    return username, password
+
+
 @click.pass_context
 def fetch_options_null_check(
     ctx,
@@ -2386,14 +2516,12 @@ def fetch_options_null_check(
     ignore_items,
 ):
     # creds boolean True if URL set and not empty
-    creds_needed = url is not None and url != ""
     ignore_items = null_check(
         ignore_items, "ignore_items", BUNDLEUTILS_FETCH_IGNORE_ITEMS, False, ""
     )
     offline = null_check(offline, "offline", BUNDLEUTILS_FETCH_OFFLINE, False, "")
     url = lookup_url(url, "", False)
-    username = null_check(username, USERNAME_ARG, BUNDLEUTILS_USERNAME, creds_needed)
-    password = null_check(password, PASSWORD_ARG, BUNDLEUTILS_PASSWORD, creds_needed)
+    username, password = _lookup_username_password(url, username, password)
     path = null_check(path, PATH_ARG, BUNDLEUTILS_PATH, False)
     plugin_json_path = null_check(
         plugin_json_path, PLUGIN_JSON_PATH_ARG, BUNDLEUTILS_PLUGINS_JSON_PATH, False
@@ -2429,6 +2557,7 @@ def fetch_options_null_check(
 
 @bundleutils.command()
 @update_plugins_options
+@url_username_password_options
 @fetch_options
 @click.pass_context
 def fetch(
@@ -2861,6 +2990,7 @@ def find_plugin_by_id(plugins, plugin_id):
 
 @bundleutils.command()
 @update_plugins_options
+@url_username_password_options
 @fetch_options
 @click.pass_context
 def update_plugins(
@@ -3011,6 +3141,7 @@ def _update_plugins(ctx):
         with open(plugin_json_path, "r", encoding="utf-8") as f:
             plugin_json_str = f.read()
     elif url:
+        _preflight(url, username, password)
         plugin_json_url = url + plugin_json_url_path
         logging.debug(f"Loading plugin JSON from URL: {plugin_json_url}")
         plugin_json_str = call_jenkins_api(plugin_json_url, username, password)
@@ -3202,6 +3333,13 @@ def remove_files_from_dir(dir):
             os.remove(filename)
 
 
+def _read_core_casc_export_file(url, username, password, filename="bundle.yaml"):
+    # read the file from the core-casc-export directory
+    url = f"{url}/core-casc-export/{filename}"
+    response_text = call_jenkins_api(url, username, password)
+    return response_text
+
+
 @click.pass_context
 def fetch_yaml_docs(ctx):
     ignore_items = is_truthy(ctx.obj.get("ignore_items"))
@@ -3260,38 +3398,27 @@ def fetch_yaml_docs(ctx):
                 response_text = preprocess_yaml_text(response_text)
                 yaml_docs = list(yaml.load_all(response_text))
                 write_all_yaml_docs_from_comments(yaml_docs, target_dir)
-    elif ignore_items:
-        logging.info(f"Not downloading the items.yaml (computationally expensive)")
-        # read bundle.yaml from JENKINS_URL/core-casc-export/bundle.yaml
+    elif url:
+        _preflight(url, username, password)
         filename = "bundle.yaml"
-        export_url = url + f"/core-casc-export/{filename}"
-        response_text = call_jenkins_api(export_url, username, password)
+        response_text = _read_core_casc_export_file(url, username, password, filename)
         response_text = preprocess_yaml_text(response_text)
-        logging.debug(f"Read YAML from URL: {export_url}")
         doc = yaml.load(response_text)
         write_yaml_doc(doc, target_dir, filename)
         for key in bundle_yaml_keys:
-            if key != "items" and key in doc.keys():
+            if key in doc.keys():
+                if ignore_items and key == "items":
+                    logging.info(
+                        f"Not downloading the items.yaml (computationally expensive)"
+                    )
+                    continue
                 # traverse the list under the key
                 for filename in doc[key]:
-                    export_url = url + f"/core-casc-export/{filename}"
+                    export_url = url.rstrip("/") + f"/core-casc-export/{filename}"
                     response_text = call_jenkins_api(export_url, username, password)
                     response_text = preprocess_yaml_text(response_text)
                     doc2 = yaml.load(response_text)
                     write_yaml_doc(doc2, target_dir, filename)
-
-    elif url:
-        if fetch_url_path not in url:
-            url = url + fetch_url_path
-        logging.info(f"Read YAML from url: {url}")
-        response_text = call_jenkins_api(url, username, password)
-        if offline:
-            with open(export_yaml, "w", encoding="utf-8") as f:
-                f.write(response_text)
-        response_text = preprocess_yaml_text(response_text)
-        # logging.debug(f'Fetched YAML from url {url}:\n{response_text}')
-        yaml_docs = list(yaml.load_all(response_text))
-        write_all_yaml_docs_from_comments(yaml_docs, target_dir)
     else:
         die("No path or URL provided")
 
@@ -3330,6 +3457,13 @@ def preprocess_yaml_text(ctx, response_text):
 
 
 def call_jenkins_api(url, username, password):
+    """
+    Call the Jenkins API and return the response text.
+    """
+    # check the internal_cache for the URL
+    if url in internal_cache:
+        logging.debug(f"Found URL in internal cache: {url}")
+        return internal_cache[url]
     logging.debug(f"Fetching response from URL: {url}")
     logging.debug(f"Using username: {username}")
     # print last 5 characters of password
@@ -3341,6 +3475,8 @@ def call_jenkins_api(url, username, password):
         ).decode("utf-8")
     response = requests.get(url, headers=headers)
     response.raise_for_status()
+    # add the URL to the internal_cache
+    internal_cache[url] = response.text
     return response.text
 
 

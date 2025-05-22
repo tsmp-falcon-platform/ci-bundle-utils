@@ -61,6 +61,7 @@ Options:
   --help                         Show this message and exit.
 
 Commands:
+  api                             Utility for calling the Jenkins API.
   audit                           Transform using the normalize.yaml but...
   bootstrap                       Bootstrap a bundle.
   ci-sanitize-plugins             Sanitizes plugins (needs ci-start).
@@ -70,6 +71,7 @@ Commands:
   ci-validate                     Validate bundle against controller...
   completion                      Print the shell completion script
   config                          List evaluated config based on cwd and...
+  controllers                     Return all online controllers from an...
   delete                          Delete a bundle source dir and the...
   diff                            Diff two YAML directories or files.
   diff-merged                     Diff two bundle directories by...
@@ -83,6 +85,7 @@ Commands:
   merge-bundles                   Used for merging bundles.
   merge-yamls                     Used for merging YAML files of the...
   normalize                       Transform using the normalize.yaml for...
+  preflight                       Preconditions for fetching the CasC...
   transform                       Transform using a custom...
   update-bundle                   Update the bundle.yaml file in the...
   update-plugins                  Update plugins in the target directory.
@@ -90,6 +93,20 @@ Commands:
                                   Update plugins in the target directory...
   validate                        Validate bundle in source dir against...
   version                         Show the app version.
+------------------------------------------------------------------------------------------------------------------------
+Usage: bundleutils api [OPTIONS]
+
+  Utility for calling the Jenkins API.  e.g. bundleutils api -P
+  /whoAmI/api/json
+
+Options:
+  -p, --password TEXT  Password for basic authentication
+                       (BUNDLEUTILS_PASSWORD).
+  -u, --username TEXT  Username for basic authentication
+                       (BUNDLEUTILS_USERNAME).
+  -U, --url TEXT       The URL to fetch YAML from (BUNDLEUTILS_JENKINS_URL).
+  -P, --path TEXT      Path to the API endpoint to call.
+  --help               Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils audit [OPTIONS]
 
@@ -237,6 +254,18 @@ Options:
   -k, --key TEXT  Return the value of the key or an error if not found.
   --help          Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
+Usage: bundleutils controllers [OPTIONS]
+
+  Return all online controllers from an operation center.
+
+Options:
+  -p, --password TEXT  Password for basic authentication
+                       (BUNDLEUTILS_PASSWORD).
+  -u, --username TEXT  Username for basic authentication
+                       (BUNDLEUTILS_USERNAME).
+  -U, --url TEXT       The URL to fetch YAML from (BUNDLEUTILS_JENKINS_URL).
+  --help               Show this message and exit.
+------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils delete [OPTIONS]
 
   Delete a bundle source dir and the corresponding entry in bundle-
@@ -341,6 +370,12 @@ Options:
   -c, --cap                       Use the envelope.json from the war file to
                                   remove CAP plugin dependencies
                                   (BUNDLEUTILS_FETCH_USE_CAP_ENVELOPE).
+  -p, --password TEXT             Password for basic authentication
+                                  (BUNDLEUTILS_PASSWORD).
+  -u, --username TEXT             Username for basic authentication
+                                  (BUNDLEUTILS_USERNAME).
+  -U, --url TEXT                  The URL to fetch YAML from
+                                  (BUNDLEUTILS_JENKINS_URL).
   -k, --keys-to-scalars TEXT      Comma-separated list of yaml dict keys to
                                   convert to "|" type strings instead of
                                   quoted strings, defaults to
@@ -348,12 +383,6 @@ Options:
                                   (BUNDLEUTILS_KEYS_TO_CONVERT_TO_SCALARS).
   -t, --target-dir DIRECTORY      The target directory for the YAML documents
                                   (BUNDLEUTILS_FETCH_TARGET_DIR).
-  -p, --password TEXT             Password for basic authentication
-                                  (BUNDLEUTILS_PASSWORD).
-  -u, --username TEXT             Username for basic authentication
-                                  (BUNDLEUTILS_USERNAME).
-  -U, --url TEXT                  The URL to fetch YAML from
-                                  (BUNDLEUTILS_JENKINS_URL).
   -I, --ignore-items              Do not fetch the computationally expensive
                                   items.yaml (BUNDLEUTILS_FETCH_IGNORE_ITEMS).
   -O, --offline                   Save the export and plugin data to <target-
@@ -465,6 +494,18 @@ Options:
   -d, --dry-run               Print the merged transform config and exit.
   --help                      Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
+Usage: bundleutils preflight [OPTIONS]
+
+  Preconditions for fetching the CasC export.
+
+Options:
+  -p, --password TEXT  Password for basic authentication
+                       (BUNDLEUTILS_PASSWORD).
+  -u, --username TEXT  Username for basic authentication
+                       (BUNDLEUTILS_USERNAME).
+  -U, --url TEXT       The URL to fetch YAML from (BUNDLEUTILS_JENKINS_URL).
+  --help               Show this message and exit.
+------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils transform [OPTIONS]
 
   Transform using a custom transformation config.
@@ -531,6 +572,12 @@ Options:
   -c, --cap                       Use the envelope.json from the war file to
                                   remove CAP plugin dependencies
                                   (BUNDLEUTILS_FETCH_USE_CAP_ENVELOPE).
+  -p, --password TEXT             Password for basic authentication
+                                  (BUNDLEUTILS_PASSWORD).
+  -u, --username TEXT             Username for basic authentication
+                                  (BUNDLEUTILS_USERNAME).
+  -U, --url TEXT                  The URL to fetch YAML from
+                                  (BUNDLEUTILS_JENKINS_URL).
   -k, --keys-to-scalars TEXT      Comma-separated list of yaml dict keys to
                                   convert to "|" type strings instead of
                                   quoted strings, defaults to
@@ -538,12 +585,6 @@ Options:
                                   (BUNDLEUTILS_KEYS_TO_CONVERT_TO_SCALARS).
   -t, --target-dir DIRECTORY      The target directory for the YAML documents
                                   (BUNDLEUTILS_FETCH_TARGET_DIR).
-  -p, --password TEXT             Password for basic authentication
-                                  (BUNDLEUTILS_PASSWORD).
-  -u, --username TEXT             Username for basic authentication
-                                  (BUNDLEUTILS_USERNAME).
-  -U, --url TEXT                  The URL to fetch YAML from
-                                  (BUNDLEUTILS_JENKINS_URL).
   -I, --ignore-items              Do not fetch the computationally expensive
                                   items.yaml (BUNDLEUTILS_FETCH_IGNORE_ITEMS).
   -O, --offline                   Save the export and plugin data to <target-
