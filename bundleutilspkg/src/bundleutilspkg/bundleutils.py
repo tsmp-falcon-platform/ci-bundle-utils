@@ -55,9 +55,7 @@ default_auto_env_file = "bundle-profiles.yaml"
 default_bundle_api_version = "2"
 default_keys_to_scalars = ["systemMessage", "script", "description"]
 default_empty_bundle_strategy = "delete"
-default_bundle_detection_pattern = re.compile(
-    r"^main-([a-z0-9\-]+)-drift(?:__[a-zA-Z0-9\-]+)*$"
-)
+default_bundle_detection_pattern = r"^main-([a-z0-9\-]+)-drift(?:__[a-zA-Z0-9\-]+)*$"
 
 bundle_yaml_keys = {
     "jcasc": "jenkins.yaml",
@@ -508,7 +506,7 @@ def _check_for_env_file(ctx):
         # if the BUNDLEUTILS_ENV env var is set, use it
         if os.environ.get(BUNDLEUTILS_ENV, ""):
             env_file = os.environ.get(BUNDLEUTILS_ENV)
-            if not os.path.exists(env_file):
+            if env_file is not None and not os.path.exists(env_file):
                 die(f"Env var {BUNDLEUTILS_ENV} passed does not exist: {env_file}")
             logging.debug(f"Using env file from environment variable: {env_file}")
         else:
@@ -639,8 +637,8 @@ def _check_cwd_for_bundle_auto_vars(ctx, switch_dirs=True):
             env_vars.get(BUNDLEUTILS_AUDIT_TARGET_BASE_DIR, ""),
             "bundle_audit_target_base_dir",
             BUNDLEUTILS_AUDIT_TARGET_BASE_DIR,
-            "",
             False,
+            "",
         )
         # if the BUNDLEUTILS_AUDIT_TARGET_BASE_DIR is set, use it
         if bundle_audit_target_base_dir:
@@ -1041,7 +1039,7 @@ def delete(ctx, source_dir, source_base, url, ci_version):
     # Loop through the profiles and reapply anchors dynamically since they get lost when loading the file
     for key, value in bundle_profiles["profiles"].items():
         if isinstance(value, dict):
-            value.yaml_set_anchor(key, always_dump=True)
+            CommentedMap(value).yaml_set_anchor(key, always_dump=True)
     # write the updated file
     with open(ctx.obj.get(BUNDLEUTILS_ENV), "w", encoding="utf-8") as ofp:
         yaml.dump(bundle_profiles, ofp)
@@ -1148,7 +1146,7 @@ def bootstrap(ctx, source_dir, source_base, profile, update, url, ci_version):
             # Loop through the profiles and reapply anchors dynamically since they get lost when loading the file
             for key, value in data["profiles"].items():
                 if isinstance(value, dict):
-                    value.yaml_set_anchor(key, always_dump=True)
+                    CommentedMap(value).yaml_set_anchor(key, always_dump=True)
             # Create a new bundle entry
             upd = CommentedMap()
             upd.add_yaml_merge([(0, data["profiles"][bootstrap_profile])])
@@ -1399,8 +1397,12 @@ def _merge_bundles(bundles, use_parent, outdir, config, api_version=None):
             elif os.environ.get(BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK_SOURCE_DIR):
                 # get the apiVersion from the source directory
                 source_dir = os.environ.get(
-                    BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK_SOURCE_DIR
+                    BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK_SOURCE_DIR, ""
                 )
+                if not source_dir:
+                    die(
+                        f"Bundle file '{source_dir}' does not exist. Please set {BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK_SOURCE_DIR}"
+                    )
                 source_bundle_yaml = os.path.join(source_dir, "bundle.yaml")
                 if os.path.exists(source_bundle_yaml):
                     source_bundle_yaml_dict = yaml2dict(source_bundle_yaml)
@@ -1443,7 +1445,7 @@ def _merge_bundles(bundles, use_parent, outdir, config, api_version=None):
         # merge the files sequentially using the last result as the base
         output = merger.merge_yaml_files(section_files)
         # special case for plugins, sort the plugins.yaml plugins key by id
-        if section == "plugins":
+        if section == "plugins" and isinstance(output, dict):
             output["plugins"] = sorted(output["plugins"], key=lambda x: x["id"])
         if not outdir:
             print(f"# {section}.yaml")
@@ -1555,6 +1557,10 @@ def merge_bundles(
     transform = null_check(
         transform, "transform", BUNDLEUTILS_MERGE_TRANSFORM_PERFORM, False, ""
     )
+    transform_outdir = ""
+    diffcheck_source_bundle = ""
+    transform_srcdir = ""
+    transform_configs = ""
     if transform:
         logging.debug(f"Transforming detected. Looking for transform options")
         transform_outdir = null_check(
@@ -1812,6 +1818,8 @@ def diff(ctx, sources):
     """Diff two YAML directories or files."""
     set_logging(False)
     diff_detected = False
+    src1 = ""
+    src2 = ""
     # if src1 is a directory, ensure src2 is also directory
     if sources and len(sources) == 2:
         src1 = sources[0]
@@ -1865,6 +1873,8 @@ def diff_merged(ctx, config, sources, api_version):
     set_logging(False)
     diff_detected = False
     # if src1 is a directory, ensure src2 is also directory
+    src1 = ""
+    src2 = ""
     if sources and len(sources) == 2:
         src1 = sources[0]
         src2 = sources[1]
@@ -2283,13 +2293,13 @@ def completion(ctx, shell):
 
 
 @click.pass_context
-def null_check(ctx, obj, obj_name, obj_env_var=None, mandatory=True, default=""):
+def null_check(ctx, obj, obj_name, obj_env_var=None, mandatory=True, default=None):
     """Check if the object is None and set it to the env var or default if mandatory"""
     if not obj:
         if obj_env_var:
             obj = os.environ.get(obj_env_var, "")
             if not obj:
-                if default:
+                if default is not None and default != "":
                     obj = default
                 if mandatory and ctx.obj.get(INTERACTIVE_ARG):
                     if obj_env_var:
@@ -2408,6 +2418,7 @@ def _validate(url, username, password, source_dir, ignore_warnings, external_rba
     # delete the zip file
     os.remove("bundle.zip")
     # print the response as pretty JSON
+    response_json = {}
     try:
         response_json = response.json()
     except json.decoder.JSONDecodeError:
@@ -2785,9 +2796,9 @@ def _analyze_server_plugins(
             for dependency in plugin_dependencies:
                 dep_name = dependency.get("shortName")
                 if dependency.get("optional", False):
-                    dependency_graph[plugin_name]["optional"].append(dep_name)
+                    dependency_graph[plugin_name]["optional"].append(dep_name)  # type: ignore
                 else:
-                    dependency_graph[plugin_name]["non_optional"].append(dep_name)
+                    dependency_graph[plugin_name]["non_optional"].append(dep_name)  # type: ignore
                     # Add the parent plugin to the for non-optional dependencies only
                     reverse_dependencies[dep_name].append(plugin_name)
     logging.debug("Plugin Analysis - Finished building dependency graphs")
@@ -2871,6 +2882,7 @@ def _analyze_server_plugins(
     )
 
     # handle the list strategy
+    expected_plugins = []
     if plugins_json_list_strategy == PluginJsonListStrategy.ROOTS:
         expected_plugins = graphs[graph_type_minus_deleted_disabled]["roots"]
     elif plugins_json_list_strategy == PluginJsonListStrategy.ROOTS_AND_DEPS:
@@ -3016,7 +3028,7 @@ def update_plugins(
         plugins_json_list_strategy,
         plugins_json_merge_strategy,
         catalog_warnings_strategy,
-        cap,
+        cap,  # type: ignore
     )
     fetch_options_null_check(
         url,
@@ -3091,6 +3103,7 @@ def _update_plugins(ctx):
 
     target_dir_offline = target_dir + "-offline"
     # handle offline mode
+    export_json = None
     if offline:
         if plugin_json_path:
             die("Offline mode is not supported with the path option")
@@ -3145,7 +3158,7 @@ def _update_plugins(ctx):
         plugin_json_url = url + plugin_json_url_path
         logging.debug(f"Loading plugin JSON from URL: {plugin_json_url}")
         plugin_json_str = call_jenkins_api(plugin_json_url, username, password)
-        if offline:
+        if offline and export_json:
             with open(export_json, "w", encoding="utf-8") as f:
                 logging.info(f"[offline] Writing plugins.json to {export_json}")
                 f.write(plugin_json_str)
