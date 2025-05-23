@@ -6,8 +6,8 @@ import sys
 def get_config_file(filename):
     """Load a YAML config file from bundleutilspkg.data.configs."""
     if getattr(sys, "frozen", False):  # PyInstaller build
-        base_path = Path(sys._MEIPASS) / "data/configs"
+        base_path = Path(sys._MEIPASS) / "data/configs"  # type: ignore
     else:
-        base_path = importlib.resources.files("bundleutilspkg.data.configs")
+        base_path = importlib.resources.files("bundleutilspkg.data.configs")  # type: ignore
 
     return base_path / filename
