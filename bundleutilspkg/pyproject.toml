@@ -9,7 +9,6 @@ description = "Bundleutils package"
 authors = [{ name = "Steve Boardwell", email = "steve.boardwell@gmail.com" }]
 dependencies = [
     "click",
-    "glob2",
     "ruamel.yaml",
     "ruamel.yaml.clib",
     "deepdiff",

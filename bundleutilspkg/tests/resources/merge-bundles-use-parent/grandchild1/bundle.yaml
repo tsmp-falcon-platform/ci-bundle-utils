@@ -1,4 +1,4 @@
-apiVersion: '2'
+apiVersion: 2
 id: grandchild1
 parent: child1
 description: Bundle for grandchild1

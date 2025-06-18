@@ -65,7 +65,8 @@ ADD README.md /opt/bundleutils/work/README.md
 
 # Install any needed packages specified in setup.py
 RUN cd /opt/bundleutils/.app/bundleutilspkg \
-    && pip install ".[dev]" \
+    && pip install -e . \
+    && pip install -r requirements-dev.lock.txt \
     && pyinstaller --noconfirm --clean --onedir \
 	--add-data "src/bundleutilspkg/data/configs:data/configs" \
 	--copy-metadata bundleutilspkg \

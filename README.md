@@ -636,7 +636,7 @@ Initial tests:
   source .venv/bin/activate
 
   # activate the virtual env
-  make install-dev
+  make install
 
   # run the tests
   make test
@@ -670,9 +670,9 @@ Usage:
 Targets:
   setup                  Setup virtualenv (optional PYTHON_CMD=python3.xx)
   install                Install the bundleutils package
-  install-dev            Install the bundleutils package with dev dependencies
   test                   Run the pytest suite
   test/%                 Run the pytest suite tests containing 'test/<string>'
+  lock-files             Install the bundleutils package
   pyinstaller            Build the bundleutils package
   marp                   Build the Marp presentation
   compose/start-dev      Start the bundleutils container

@@ -1,7 +1,7 @@
-apiVersion: '2'
+apiVersion: 2
 id: base
 description: Bundle for base
-version: 2408b902-93f4-e6bd-58a2-390f364a8a3d
+version: 0f9d9245-f92a-39e9-76c6-899184f9fb69
 jcasc:
 - jenkins.yaml
 plugins:

@@ -15,14 +15,9 @@ setup: ## Setup virtualenv (optional PYTHON_CMD=python3.xx)
 .PHONY: install
 install: ## Install the bundleutils package
 	cd bundleutilspkg && \
-	pip install --upgrade pip && \
-	pip install "."
-
-.PHONY: install-dev
-install-dev: ## Install the bundleutils package with dev dependencies
-	cd bundleutilspkg && \
-	pip install --upgrade pip && \
-	pip install -e ".[dev]"
+	pip install --upgrade pip pip-tools && \
+	pip install -r requirements-dev.lock.txt && \
+	pip install -e "."
 
 .PHONY: test
 test: ## Run the pytest suite
@@ -33,6 +28,12 @@ test: ## Run the pytest suite
 test/%: ## Run the pytest suite tests containing 'test/<string>'
 	cd bundleutilspkg && \
 	pytest -v -k $*
+
+.PHONY: lock-files
+lock-files: ## Install the bundleutils package
+	cd bundleutilspkg && \
+	pip-compile --strip-extras --output-file=requirements.lock.txt pyproject.toml && \
+	pip-compile --extra dev pyproject.toml --strip-extras --output-file=requirements-dev.lock.txt
 
 .PHONY: pyinstaller
 pyinstaller: ## Build the bundleutils package

@@ -477,7 +477,7 @@ def ordered_yaml_dump(data):
     """Convert YAML object to a consistent ordered string."""
     yaml = YAML()
     yaml.default_flow_style = False
-    yaml.indent(mapping=2, sequence=4, offset=2)
+    yaml.width = 80
     yaml.preserve_quotes = True
 
     def recursive_sort(obj):
@@ -492,7 +492,7 @@ def ordered_yaml_dump(data):
         return obj
 
     ordered_data = recursive_sort(data)
-    return printYaml(ordered_data, True)
+    return printYaml(ordered_data, True, yaml)
 
 
 def generate_collection_uuid(target_dir, yaml_files, output_sorted=None):
@@ -3193,11 +3193,15 @@ def _convert_to_dict(obj):
     return obj
 
 
-def printYaml(obj, convert=False):
+def printYaml(obj, convert=False, custom_yaml=None):
     # needed to remove comments and '!!omap' identifiers
     obj2 = _convert_to_dict(obj) if convert else obj
     stream = io.StringIO()
-    yaml.dump(obj2, stream)
+    if custom_yaml:
+        # Use custom YAML dumper if provided
+        custom_yaml.dump(obj2, stream)
+    else:
+        yaml.dump(obj2, stream)
     return stream.getvalue()
 
 
@@ -3534,7 +3538,7 @@ def update_bundle(
                 os.path.join(output_sorted, relative_path) if output_sorted else None
             )
             _update_bundle(
-                _get_relative_path(bundle_path, target_dir),
+                bundle_path,
                 description,
                 rel_output_sorted,
                 empty_bundle_strategy,

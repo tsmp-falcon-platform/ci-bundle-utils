@@ -42,7 +42,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          make install-dev install
+          make install
 
       - name: Run tests
         run: |
