@@ -3222,17 +3222,20 @@ def uncomment(obj2):
 
 
 def recursive_merge(obj1, obj2):
-    # logging.debug(f"Obj1 ----> Key: {type(obj1)} Value: {obj1}")
-    # logging.debug(f"Obj2 ----> Key: {type(obj2)} Value: {obj2}")
+    logging.trace(f"Obj1 ----> Key: {type(obj1)} Value: {obj1}")  # type: ignore
+    logging.trace(f"Obj2 ----> Key: {type(obj2)} Value: {obj2}")  # type: ignore
 
     if isinstance(obj2, CommentedMap):
         for key, value in obj2.items():
             if key not in obj1 or obj1[key] is None:
                 if isinstance(value, CommentedMap):
                     obj1[key] = {}
+                    recursive_merge(obj1[key], uncomment(value))
                 elif isinstance(value, CommentedSeq):
                     obj1[key] = []
-            recursive_merge(obj1[key], uncomment(value))
+                    recursive_merge(obj1[key], uncomment(value))
+                else:
+                    obj1[key] = uncomment(value)
     elif isinstance(obj2, CommentedSeq):
         for value in obj2:
             if value not in obj1:
@@ -3306,6 +3309,10 @@ def audit(
 
     url = str(_get(Key.URL, url, required=False))
     config = _determine_transformation_config(url, config)
+    merged_config = _get_merged_config(config)
+    if dry_run:
+        logging.info(f"Merged config:\n" + printYaml(merged_config))
+        return
 
     source_dir = _get(Key.AUDIT_SOURCE_DIR, source_dir, required=False)
     target_dir = _get(Key.AUDIT_TARGET_DIR, target_dir, required=False)
@@ -3323,7 +3330,7 @@ def audit(
     # set the is_audit flag for the bundle update later (we want to set the version later)
     os.environ[BUNDLEUTILS_AUDIT_FIXED_VERSION] = "AUDITED_BUNDLE_DO_NOT_USE"
 
-    _transform(config, source_dir, target_dir, utilz.is_truthy(dry_run))
+    _transform(merged_config, source_dir, target_dir, utilz.is_truthy(dry_run))
 
 
 @bundleutils.command()
@@ -3352,6 +3359,10 @@ def transform(
 
     url = str(_get(Key.URL, url, required=False))
     config = _determine_transformation_config(url, config)
+    merged_config = _get_merged_config(config)
+    if dry_run:
+        logging.info(f"Merged config:\n" + printYaml(merged_config))
+        return
 
     source_dir = _get(Key.TRANSFORM_SOURCE_DIR, source_dir, required=False)
     target_dir = _get(Key.TRANSFORM_TARGET_DIR, target_dir, required=False)
@@ -3365,27 +3376,46 @@ def transform(
 
     if _print_config(config_key):
         return
-    _transform(config, source_dir, target_dir, utilz.is_truthy(dry_run))
+    _transform(merged_config, source_dir, target_dir, utilz.is_truthy(dry_run))
 
 
-def _transform(config, source_dir, target_dir, dry_run=False):
-    """Transform using a custom transformation config."""
-    # add the transformation config recursively into the merged config
-    # if the config is a string, split it by space
+def _get_merged_config(config):
+    """
+    Get the merged configuration from the config file.
+    It is assumed to be a path to a YAML file.
+    If the loaded config has an 'includes' section,
+    it will recursively include other YAML files specified in that section.
+    """
     if not config:
         die("No transformation config provided and no default config found.")
-
-    # TODO: handle multiple configs via includes section
-    merged_config = {}
-    _file_check(config, True)
+    if not os.path.exists(config):
+        die(f"Transformation config file {config} does not exist.")
+    if not os.path.isfile(config):
+        die(f"Transformation config {config} is not a file.")
+    logging.debug(f"Transformation: processing {config}")
     with open(config, "r", encoding="utf-8") as inp:
-        logging.info(f"Transformation: processing {config}")
         merged_config = yaml.load(inp)
+    if not merged_config:
+        die(f"Transformation config {config} is empty or invalid YAML.")
+    # if the config has an 'includes' section, recursively include other YAML files
+    # the entries are assumed to be relative to the config file's directory
+    if "includes" in merged_config:
+        includes = merged_config["includes"]
+        if isinstance(includes, str):
+            includes = [includes]
+        for include in includes:
+            include_path = os.path.join(os.path.dirname(config), include)
+            if not os.path.exists(include_path):
+                die(f"Included config file {include_path} does not exist.")
+            included_config = _get_merged_config(include_path)
+            merged_config = recursive_merge(merged_config, included_config)
+    # remove the 'includes' section from the merged config
+    merged_config.pop("includes", None)
+    return merged_config
 
-    if dry_run:
-        logging.info(f"Merged config:\n" + printYaml(merged_config))
-        return
 
+def _transform(merged_config, source_dir, target_dir, dry_run=False):
+    """Transform using a custom transformation config."""
     logging.debug(f"Merged config:\n" + printYaml(merged_config))
     source_dir = os.path.normpath(source_dir)
     if not target_dir:
