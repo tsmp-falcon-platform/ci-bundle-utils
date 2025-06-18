@@ -1,15 +1,25 @@
 # Transformation Process
 
-The transformation process from exported bundle to a more sanitized form is achieved through parsing a transformation file and executing the steps therein.
+The transformation from exported bundle to a more sanitized form uses transformation instructions.
 
-The transformation consists of the following phases:
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 
-The process is executed in the following order, with any included files being merged before the steps below:
+- [Includes](#includes)
+- [Patches](#patches)
+  - [Advanced patching (using selectors)](#advanced-patching-using-selectors)
+- [Credentials](#credentials)
+- [Splits](#splits)
+- [Substitutions](#substitutions)
 
-1. **Includes**: Merge additional configuration files as specified.
-2. **Patches**: Apply JSON patches to modify or remove specific configuration elements.
-3. **Credentials**: Replace or reference credentials with environment variables or explicit values.
-4. **Splits**: Split configuration files into multiple outputs based on patterns or paths.
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
+The process is executed in the following order:
+
+1. **Includes**: Merge additional configuration files as specified before continuing.
+2. **Patches**: Apply JSON patches to add, modify or remove specific configuration elements.
+3. **Credentials**: Replace credentials with environment variables or explicit values.
+4. **Splits**: Split configuration files into multiple files based on patterns or paths.
 5. **Substitutions**: Perform pattern-based replacements within the configuration files.
 
 ## Includes
@@ -19,7 +29,10 @@ This phase allows you to merge configuration from other files before applying an
 The YAML under `includes` lists files (like `base.yaml`) whose contents will be merged into your main configuration.
 This is useful for sharing common settings or base configurations across multiple environments or projects.
 
-Analogy: Think of this like importing a header file in C++ (`#include "base.h"`), but for configuration.
+Think of this like importing a header file in C++ (`#include "base.h"`), but for configuration.
+
+> [!TIP]
+> See the results of any merge by running your `audit` or `transform` command with the `--dry-run` flag.
 
 ```yaml
 # This section allows you to define other files to be merged.
@@ -30,9 +43,9 @@ includes:
 
 ## Patches
 
-After merging includes, you can modify the combined configuration using patches.
+After merging any `includes`, you can modify the combined configuration using patches.
 
-The `patches` section uses JSON Patch.
+The `patches` section uses JSON Patch (https://jsonpatch.com/).
 
 ```yaml
 # Patches based upon https://jsonpatch.com/
@@ -53,9 +66,12 @@ patches:
     path: /unclassified/operationsCenterRootAction
 ```
 
-### Patches (Using Selectors)
+### Advanced patching (using selectors)
 
-Patches also include a simple selectors feature for navigating lists, etc.
+A simple selectors feature has also been included for navigating lists, etc.
+
+> [!TIP]
+> More examples can be found under the examples section.
 
 ```yaml
   jenkins.yaml:
@@ -81,13 +97,15 @@ Patches also include a simple selectors feature for navigating lists, etc.
 
 ## Credentials
 
-We do not want to leave encrypted values in the bundle, even if they are encrypted.
-
 The `credentials` section traverses the files specified and replaces any credentials found with its env var equivalent.
+
+> [!WARN]
+> We do not want to leave encrypted values in the bundle, even if they are encrypted.
 
 This allows you to provide credentials as a volume mount or secret and have them recognised on a bundle reload.
 
-Setting values explicitly is also supported.
+> [!TIP]
+> Setting values explicitly is also supported.
 
 ```yaml
 # Replace credentials with references to variables
@@ -115,6 +133,10 @@ credentials:
 After sanitizing the bundle, you may want to split your configuration into smaller sections.
 
 The `splits` section provides a way to split both the `jenkins.yaml` and `items.yaml`
+
+> [!TIP]
+> Experiment with wildcards `paths` or `patterns` fields.
+
 
 ```yaml
 splits:
@@ -156,6 +178,7 @@ This can be used as a backdoor to replace anything that may not be covered in th
 ```yaml
 # Replace all instances of 'pattern' with 'value' in the yaml files
 substitutions: {}
-  # jenkins.yaml:
-  # - pattern: cloudbees/cloudbees-core-agent:[0-9\.]+
-  #   value: cloudbees/cloudbees-core-agent:${readFile:/var/jenkins_home/jenkins.install.InstallUtil.lastExecVersion}
+  jenkins.yaml:
+  - pattern: cloudbees/cloudbees-core-agent:[0-9\.]+
+    value: cloudbees/cloudbees-core-agent:${readFile:/var/jenkins_home/jenkins.install.InstallUtil.lastExecVersion}
+```
