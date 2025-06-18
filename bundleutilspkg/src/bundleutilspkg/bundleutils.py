@@ -1,14 +1,12 @@
 from contextlib import contextmanager
 from enum import Enum, auto
 import hashlib
-import importlib
 import json
 from pathlib import Path
 import shutil
-import subprocess
 import tempfile
 import uuid
-from bundleutilspkg.utils import get_config_file
+import bundleutilspkg.utils as utilz
 import jsonpatch
 import jsonpointer
 import zipfile
@@ -24,6 +22,7 @@ import re
 import sys
 from importlib.metadata import metadata, PackageNotFoundError
 from collections import OrderedDict, defaultdict
+from dataclasses import dataclass
 from deepdiff import DeepDiff
 from deepdiff.helper import CannotCompare
 from ruamel.yaml import YAML, scalarstring
@@ -50,12 +49,11 @@ plugin_json_url_path = (
 controllers_url_path = "/api/json?depth=1&pretty&pretty&tree=jobs[url,online,state,endpoint,jobs[url,online,state,endpoint,jobs[url,online,state,endpoint,jobs[url,online,state,endpoint]]]]"
 validate_url_path = "/casc-bundle-mgnt/casc-bundle-validate"
 empty_bundle_strategies = ["fail", "delete", "noop"]
-default_target = "target/docs"
-default_auto_env_file = "bundle-profiles.yaml"
 default_bundle_api_version = "2"
 default_keys_to_scalars = ["systemMessage", "script", "description"]
 default_empty_bundle_strategy = "delete"
 default_bundle_detection_pattern = r"^main-([a-z0-9\-]+)-drift(?:__[a-zA-Z0-9\-]+)*$"
+default_config_base = ".bundleutils"
 
 bundle_yaml_keys = {
     "jcasc": "jenkins.yaml",
@@ -66,119 +64,387 @@ bundle_yaml_keys = {
     "variables": "variables.yaml",
 }
 selector_pattern = re.compile(r"\{\{select\s+\"([^\"]+)\"\s*\}\}")
-
-# environment variables
-BUNDLEUTILS_CI_VERSION = "BUNDLEUTILS_CI_VERSION"
-BUNDLEUTILS_CI_TYPE = "BUNDLEUTILS_CI_TYPE"
-BUNDLEUTILS_CI_SERVER_HOME = "BUNDLEUTILS_CI_SERVER_HOME"
-BUNDLEUTILS_CI_MAX_START_TIME = "BUNDLEUTILS_CI_MAX_START_TIME"
-BUNDLEUTILS_LOG_LEVEL = "BUNDLEUTILS_LOG_LEVEL"
-BUNDLEUTILS_AUTO_ENV_USE_URL_ONLY = "BUNDLEUTILS_AUTO_ENV_USE_URL_ONLY"
-BUNDLEUTILS_AUTO_ENV_APPEND_VERSION = "BUNDLEUTILS_AUTO_ENV_APPEND_VERSION"
-BUNDLEUTILS_AUTO_ENV_LAST_KNOWN_VERSION = "BUNDLEUTILS_AUTO_ENV_LAST_KNOWN_VERSION"
-BUNDLEUTILS_AUTO_ENV_FILE = "BUNDLEUTILS_AUTO_ENV_FILE"
-BUNDLEUTILS_ENV = "BUNDLEUTILS_ENV"
-BUNDLEUTILS_ENV_OVERRIDE = "BUNDLEUTILS_ENV_OVERRIDE"
-BUNDLEUTILS_USE_PROFILE = "BUNDLEUTILS_USE_PROFILE"
-BUNDLEUTILS_EMPTY_BUNDLE_STRATEGY = "BUNDLEUTILS_EMPTY_BUNDLE_STRATEGY"
-BUNDLEUTILS_KEYS_TO_CONVERT_TO_SCALARS = "BUNDLEUTILS_KEYS_TO_CONVERT_TO_SCALARS"
-BUNDLEUTILS_BOOTSTRAP_SOURCE_DIR = "BUNDLEUTILS_BOOTSTRAP_SOURCE_DIR"
-BUNDLEUTILS_BOOTSTRAP_SOURCE_BASE = "BUNDLEUTILS_BOOTSTRAP_SOURCE_BASE"
-BUNDLEUTILS_BOOTSTRAP_PROFILE = "BUNDLEUTILS_BOOTSTRAP_PROFILE"
-BUNDLEUTILS_BOOTSTRAP_UPDATE = "BUNDLEUTILS_BOOTSTRAP_UPDATE"
-BUNDLEUTILS_SETUP_SOURCE_DIR = "BUNDLEUTILS_SETUP_SOURCE_DIR"
-BUNDLEUTILS_VALIDATE_EXTERNAL_RBAC = "BUNDLEUTILS_VALIDATE_EXTERNAL_RBAC"
-BUNDLEUTILS_VALIDATE_SOURCE_DIR = "BUNDLEUTILS_VALIDATE_SOURCE_DIR"
-BUNDLEUTILS_TRANSFORM_SOURCE_DIR = "BUNDLEUTILS_TRANSFORM_SOURCE_DIR"
-BUNDLEUTILS_TRANSFORM_TARGET_DIR = "BUNDLEUTILS_TRANSFORM_TARGET_DIR"
-BUNDLEUTILS_TRANSFORM_CONFIGS = "BUNDLEUTILS_TRANSFORM_CONFIGS"
-BUNDLEUTILS_AUDIT_SOURCE_DIR = "BUNDLEUTILS_AUDIT_SOURCE_DIR"
-BUNDLEUTILS_AUDIT_TARGET_DIR = "BUNDLEUTILS_AUDIT_TARGET_DIR"
-BUNDLEUTILS_AUDIT_TARGET_BASE_DIR = "BUNDLEUTILS_AUDIT_TARGET_BASE_DIR"
-BUNDLEUTILS_AUDIT_CONFIGS = "BUNDLEUTILS_AUDIT_CONFIGS"
-BUNDLEUTILS_BUNDLE_DESCRIPTION = "BUNDLEUTILS_BUNDLE_DESCRIPTION"
-BUNDLEUTILS_JENKINS_URL = "BUNDLEUTILS_JENKINS_URL"
-BUNDLEUTILS_USERNAME = "BUNDLEUTILS_USERNAME"
-BUNDLEUTILS_PASSWORD = "BUNDLEUTILS_PASSWORD"
-BUNDLEUTILS_PATH = "BUNDLEUTILS_PATH"
-BUNDLEUTILS_INSTANCE_NAME = "BUNDLEUTILS_INSTANCE_NAME"
-BUNDLEUTILS_BUNDLE_NAME = "BUNDLEUTILS_BUNDLE_NAME"
-BUNDLEUTILS_MERGE_CONFIG = "BUNDLEUTILS_MERGE_CONFIG"
-BUNDLEUTILS_MERGE_BUNDLES = "BUNDLEUTILS_MERGE_BUNDLES"
-BUNDLEUTILS_MERGE_USE_PARENT = "BUNDLEUTILS_MERGE_USE_PARENT"
-BUNDLEUTILS_MERGE_PREFER_VERSION = "BUNDLEUTILS_MERGE_PREFER_VERSION"
-BUNDLEUTILS_MERGE_OUTDIR = "BUNDLEUTILS_MERGE_OUTDIR"
-BUNDLEUTILS_MERGE_TRANSFORM_PERFORM = "BUNDLEUTILS_MERGE_TRANSFORM_PERFORM"
-BUNDLEUTILS_MERGE_TRANSFORM_SOURCE_DIR = "BUNDLEUTILS_MERGE_TRANSFORM_SOURCE_DIR"
-BUNDLEUTILS_MERGE_TRANSFORM_TARGET_DIR = "BUNDLEUTILS_MERGE_TRANSFORM_TARGET_DIR"
-BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK = "BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK"
-BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK_SOURCE_DIR = (
-    "BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK_SOURCE_DIR"
-)
-# The strategy for handling warnings when fetching the catalog.
-# These warning make the yaml purposely invalid so that people cannot simply use the output
-# without fixing the issues.
-# The options are from the PluginCatalogWarningsStrategy enum below.
-# e.g.
-# --- There are Beekeeper warnings. This makes the bundle export a "best effort".
-# --- Exported plugin catalog and plugins list might be incorrect and might need manual fixing before use.
-# --- Pipeline: Groovy Libraries (pipeline-groovy-lib). Version 740.va_2701257fe8d is currently installed but version 727.ve832a_9244dfa_ is recommended for this version of the product.
-BUNDLEUTILS_CATALOG_WARNINGS_STRATEGY = "BUNDLEUTILS_CATALOG_WARNINGS_STRATEGY"
-BUNDLEUTILS_FETCH_TARGET_DIR = "BUNDLEUTILS_FETCH_TARGET_DIR"
-BUNDLEUTILS_FETCH_OFFLINE = "BUNDLEUTILS_FETCH_OFFLINE"
-BUNDLEUTILS_FETCH_IGNORE_ITEMS = "BUNDLEUTILS_FETCH_IGNORE_ITEMS"
-BUNDLEUTILS_FETCH_USE_CAP_ENVELOPE = "BUNDLEUTILS_FETCH_USE_CAP_ENVELOPE"
-BUNDLEUTILS_PLUGINS_JSON_PATH = "BUNDLEUTILS_PLUGINS_JSON_PATH"
-BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY = "BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY"
-BUNDLEUTILS_PLUGINS_JSON_MERGE_STRATEGY = "BUNDLEUTILS_PLUGINS_JSON_MERGE_STRATEGY"
-BUNDLEUTILS_BUNDLES_DIR = "BUNDLEUTILS_BUNDLES_DIR"
-BUNDLEUTILS_BUNDLES_PATTERN = "BUNDLEUTILS_BUNDLES_PATTERN"
 BUNDLEUTILS_CREDENTIAL_DELETE_SIGN = "PLEASE_DELETE_ME"
-# used to hash the credentials instead of creating environment variables for them
-# this will be used in the new audit feature
-BUNDLEUTILS_CREDENTIAL_HASH = "BUNDLEUTILS_CREDENTIAL_HASH"
-BUNDLEUTILS_CREDENTIAL_HASH_SEED = "BUNDLEUTILS_CREDENTIAL_HASH_SEED"
 BUNDLEUTILS_AUDIT_FIXED_VERSION = "BUNDLEUTILS_AUDIT_FIXED_VERSION"
-# context object keys
-BUNDLE_PROFILES = "BUNDLE_PROFILES"
-ORIGINAL_CWD = "ORIGINAL_CWD"
 
-# click ctx object keys
-ENV_FILE_ARG = "env_file"
-KEYS_TO_CONVERT_TO_SCALARS_ARG = "keys_to_convert_to_scalars"
-INTERACTIVE_ARG = "interactive"
-BUNDLES_DIR_ARG = "bundles_dir"
-BUNDLES_PATTERN_ARG = "pattern"
-CI_VERSION_ARG = "ci_version"
-CI_TYPE_ARG = "ci_type"
-CI_SERVER_HOME_ARG = "ci_server_home"
-CI_MAX_START_TIME_ARG = "ci_max_start_time"
-SOURCE_DIR_ARG = "source_dir"
-SOURCE_BASE_ARG = "source_base"
-EXTERNAL_RBAC_ARG = "external_rbac"
-TARGET_DIR_ARG = "target_dir"
-PLUGIN_JSON_ADDITIONS_ARG = "plugin_json_additions"
-PLUGIN_JSON_URL_ARG = "plugin_json_url"
-PLUGIN_JSON_PATH_ARG = "plugin_json_path"
-PATH_ARG = "path"
-URL_ARG = "url"
-USERNAME_ARG = "username"
-PASSWORD_ARG = "password"
-MERGE_CONFIG_ARG = "config"
-BUNDLES_ARG = "bundles"
-OUTDIR_ARG = "outdir"
+
+# Adopted from https://stackoverflow.com/a/35804945/1691778
+# Adds a new logging method to the logging module
+def addLoggingLevel(levelName, levelNum, methodName=None):
+    if not methodName:
+        methodName = levelName.lower()
+
+    if hasattr(logging, levelName):
+        raise AttributeError("{} already defined in logging module".format(levelName))
+    if hasattr(logging, methodName):
+        raise AttributeError("{} already defined in logging module".format(methodName))
+    if hasattr(logging.getLoggerClass(), methodName):
+        raise AttributeError("{} already defined in logger class".format(methodName))
+
+    def logForLevel(self, message, *args, **kwargs):
+        if self.isEnabledFor(levelNum):
+            self._log(levelNum, message, args, **kwargs)
+
+    def logToRoot(message, *args, **kwargs):
+        logging.log(levelNum, message, *args, **kwargs)
+
+    logging.addLevelName(levelNum, levelName)
+    setattr(logging, levelName, levelNum)
+    setattr(logging.getLoggerClass(), methodName, logForLevel)
+    setattr(logging, methodName, logToRoot)
+
+
+# Create the TRACE level
+addLoggingLevel("TRACE", logging.DEBUG - 5)
+
+
+def to_env(key):
+    return f"BUNDLEUTILS_{key.upper()}"
+
+
+def long_opt(key):
+    """Helper function to create a click option with the key as the name."""
+    return f"--{key.lower().replace('_', '-')}"
+
+
+class Key(Enum):
+    API_PATH = ("-P", [], "Path to the API endpoint to call", 1)
+    AUDIT_SOURCE_DIR = (
+        "-s",
+        [],
+        "The source directory for the YAML documents to audit",
+        1,
+    )
+    AUDIT_TARGET_DIR = (
+        "-t",
+        [],
+        "The target directory for the audited YAML documents",
+        1,
+    )
+    AUDIT_HASH_SEED = (
+        "-H",
+        [],
+        """
+    Optional prefix for the hashing process.
+
+    NOTE: Ideally, this should be a secret value that is not shared with anyone. Changing this value will result in different hashes.""",
+        1,
+    )
+
+    AUDIT_HASH = (
+        "-n",
+        [],
+        "Replace sensitive data with its ${THIS_IS_THE_SECRET} equivalent",
+        1,
+        True,
+    )
+    PASSWORD = ("-p", [], "Password for basic authentication")
+    URL = ("-U", [to_env("JENKINS_URL"), "JENKINS_URL"], "The URL to interact with")
+    USERNAME = ("-u", [], "Username for basic authentication")
+    BUNDLE_NAME = (
+        "-N",
+        [],
+        "The bundle name based on the instance name and optionally version",
+    )
+    BUNDLES_BASE = ("-b", [], "The base directory for the bundles")
+    CI_INSTANCE_NAME = ("-n", [], "The name of the CloudBees instance")
+    CI_MAX_START_TIME = (
+        "-x",
+        [],
+        "The maximum time to wait for the CI to start (in seconds)",
+    )
+    CI_SERVER_HOME = (
+        "-H",
+        [],
+        "Defaults to /tmp/ci_server_home/<ci_type>/<ci_version>",
+    )
+    CI_SETUP_SOURCE_DIR = (
+        "-s",
+        [],
+        "The bundle to be validated - startup will use the plugins from here",
+        2,
+    )
+    CI_BUNDLE_TEMPLATE = (
+        "-T",
+        [],
+        "Path to a template bundle used to start the test server - defaults to in-built template",
+    )
+    CI_FORCE = ("-f", [], "Force download of the WAR file even if exists", 1, True)
+    CI_TYPE = ("-t", [], "The type of the CloudBees instance")
+    CI_VERSION = ("-v", [], "The version of the CloudBees instance")
+    CONFIG_KEY = (
+        "-K",
+        [],
+        "Returns value if key provided (error if not found), or k=v when used as flag",
+    )
+    CONFIG = ("-c", [], "The transformation config to use")
+    CONFIGS_BASE = ("-C", [], "The directory containing the transformation config(s)")
+    DRY_RUN = ("-d", [], "Print the merged transform config and exit", 0, True)
+    EXTRACT_BUNDLES_DIR = (
+        "-b",
+        [],
+        "Optional directory containing the bundles or PWD",
+        1,
+    )
+    EXTRACT_PATTERN = ("-p", [], "Optional pattern to match against", 1)
+    EXTRACT_STRING = (
+        "-s",
+        [],
+        "The string to test (e.g. a feature/testing-controller-a or main-controller-a-drift)",
+        1,
+    )
+    FETCH_IGNORE_ITEMS = (
+        "-I",
+        [],
+        f"Do not fetch the computationally expensive items.yaml",
+        1,
+        True,
+    )
+    FETCH_KEYS_TO_SCALARS = (
+        "-k",
+        [],
+        f"Comma-separated list of yaml dict keys to convert to \"|\" type strings instead of quoted strings, defaults to '{','.join(default_keys_to_scalars)}'",
+        1,
+    )
+    FETCH_LOCAL_OFFLINE = (
+        "-O",
+        [],
+        f"Save the export and plugin data to <target-dir>-offline",
+        2,
+    )
+    FETCH_LOCAL_PATH = ("-P", [], f"The path to fetch YAML from", 2)
+    FETCH_LOCAL_PLUGIN_JSON_PATH = (
+        "-M",
+        [],
+        f"The path to fetch JSON file from (found at {plugin_json_url_path})",
+        2,
+    )
+    FETCH_TARGET_DIR = (
+        "-t",
+        [],
+        "The target directory for the fetched YAML documents",
+        1,
+    )
+    GBL_APPEND_VERSION = (
+        "-a",
+        [],
+        "Append the current version to the bundle directory",
+        1,
+        True,
+    )
+    GBL_INTERACTIVE = ("-i", [], "Run in interactive mode", 1, True)
+    GBL_LOG_LEVEL = ("-l", [], "The log level", 1)
+    GBL_RAISE_ERRORS = ("-e", [], "Raise errors instead of printing them", 1, True)
+    LAST_KNOWN_VERSION = (
+        "-L",
+        [],
+        "The last known version of the bundle when current version is not available",
+    )
+    MERGE_API_VERSION = (
+        "-a",
+        [],
+        f"Optional apiVersion. Defaults to {default_bundle_api_version}",
+        1,
+    )
+    MERGE_BUNDLES = ("-b", [], "The bundles to be rendered", 1)
+    MERGE_CONFIG = ("-m", [], "An optional custom merge config file if needed", 1)
+    MERGE_FILES = ("-f", [], "The files to merge", 1)
+    MERGE_DIFFCHECK = ("-d", [], "Optionally perform bundleutils diff", 1)
+    MERGE_OUTDIR = ("-o", [], "The target for the merged bundle", 1)
+    MERGE_TRANSFORM = (
+        "-T",
+        [],
+        "Optionally transform using the transformation configs",
+        1,
+    )
+    MERGE_TRANSFORM_DIFFCHECK_SOURCE_DIR = (
+        "-S",
+        [],
+        "The source directory for the diff check",
+        1,
+    )
+    MERGE_TRANSFORM_SOURCE_DIR = (
+        "-s",
+        [],
+        "The source directory for the transformation",
+        1,
+    )
+    MERGE_TRANSFORM_TARGET_DIR = (
+        "-t",
+        [],
+        "The target directory for the transformed bundle",
+        1,
+    )
+    MERGE_USE_PARENT = (
+        "-p",
+        [],
+        "Optionally use the (legacy) parent key to work out which bundles to merge",
+        1,
+        True,
+    )
+    # The strategy for handling warnings when fetching the catalog.
+    # These warning make the yaml purposely invalid so that people cannot simply use the output
+    # without fixing the issues.
+    # The options are from the PluginPluginCatalogWarningsStrategy enum below.
+    # e.g.
+    # --- There are Beekeeper warnings. This makes the bundle export a "best effort".
+    # --- Exported plugin catalog and plugins list might be incorrect and might need manual fixing before use.
+    # --- Pipeline: Groovy Libraries (pipeline-groovy-lib). Version 740.va_2701257fe8d is currently installed but version 727.ve832a_9244dfa_ is recommended for this version of the product.
+    PLUGINS_CATALOG_WARNINGS_STRATEGY = (
+        "-C",
+        [],
+        f"Strategy for handling beekeeper warnings in the plugin catalog",
+        1,
+    )
+    PLUGINS_JSON_LIST_STRATEGY = (
+        "-j",
+        [],
+        f"Strategy for creating list from the plugins json",
+    )
+    PLUGINS_JSON_MERGE_STRATEGY = (
+        "-J",
+        [],
+        f"Strategy for merging plugins from list into the bundle",
+    )
+    PLUGINS_USE_CAP = (
+        "-c",
+        [],
+        f"Use the envelope.json from the war file to remove CAP plugin dependencies",
+        1,
+        True,
+    )
+
+    SANITIZE_PLUGINS_PIN_PLUGINS = (
+        "-p",
+        [],
+        "Add versions to 3rd party plugins (only available for apiVersion 2)",
+        2,
+        True,
+    )
+    SANITIZE_PLUGINS_CUSTOM_URL = (
+        "-u",
+        [],
+        "Add a custom URL, e.g. http://plugins-repo/plugins/PNAME/PVERSION/PNAME.hpi",
+        2,
+    )
+
+    SHELL = ("-s", [], "The shell to generate completion script for")
+    STRICT = (
+        "-S",
+        [],
+        "Fail when referencing non-existent files - warn otherwise",
+        0,
+        True,
+    )
+    TRANSFORM_SOURCE_DIR = (
+        "-s",
+        [],
+        "The source directory for the YAML documents to transform",
+        1,
+    )
+    TRANSFORM_TARGET_DIR = (
+        "-t",
+        [],
+        "The target directory for the transformed YAML documents",
+        1,
+    )
+    UPDATE_BUNDLE_TARGET_DIR = (
+        "-t",
+        [],
+        "The target directory to update the bundle.yaml file (defaults to CWD)",
+        2,
+    )
+    UPDATE_BUNDLE_DESCRIPTION = ("-d", [], "Optional description for the bundle", 2)
+    UPDATE_BUNDLE_OUTPUT_SORTED = (
+        "-o",
+        [],
+        "Optional place to put the sorted yaml string used to create the version",
+        2,
+    )
+    UPDATE_BUNDLE_EMPTY_BUNDLE_STRATEGY = (
+        "-e",
+        [],
+        "Optional strategy for handling empty bundles",
+        2,
+    )
+    UPDATE_BUNDLE_RECURSIVE = (
+        "-r",
+        [],
+        "Update recursively on all bundles found from target dir",
+        2,
+        True,
+    )
+    VALIDATE_EXTERNAL_RBAC = (
+        "-r",
+        [],
+        "Path to an external rbac.yaml from an operations center bundle",
+        1,
+    )
+    VALIDATE_IGNORE_WARNINGS = (
+        "-w",
+        [],
+        "Do not fail if warnings are found in validation",
+        1,
+        True,
+    )
+    VALIDATE_SOURCE_DIR = (
+        "-s",
+        [],
+        "The source directory for the YAML documents to validate",
+        1,
+    )
+
+    def __init__(
+        self,
+        short: str,
+        envvar: list[str],
+        help_text: str,
+        strip_parts: int = 0,
+        is_Flag: bool = False,
+    ):
+        parts = self.name.split("_")
+        self.short = short
+        self.arg = "_".join(parts[strip_parts:]).lower()
+        self.long = f"--{self.arg.replace('_', '-')}"
+        if is_Flag:
+            self.long = f"{self.long}/--no-{self.arg.replace('_', '-')}"
+        self.envvar = envvar or [to_env(self.name)]
+        self.help = f"{help_text} ({self.envvar[0]})"
+
+
+def option_for(key: Key, **extra_kwargs):
+    # if help is not provided, use the key's help text
+    if "help" not in extra_kwargs:
+        extra_kwargs["help"] = f"{key.help}"
+    else:
+        extra_kwargs["help"] = extra_kwargs["help"] + f" ({key.envvar[0]})"
+
+    def decorator(func):
+        return click.option(
+            key.short,
+            key.long,
+            envvar=key.envvar,
+            **extra_kwargs,
+        )(func)
+
+    return decorator
+
 
 # internal cache
 internal_cache = {}
 
 
-def die(msg):
-    sys.exit(f"ERROR: {msg}")
+def die(msg, exception=None):
+    if utilz.is_truthy(_get(Key.GBL_RAISE_ERRORS, False)):
+        logging.error(msg)
+        raise exception or RuntimeError(f"ERROR: {msg}")
+    else:
+        sys.exit(f"ERROR: {msg}")
 
 
 # - 'FAIL' - fail the command if there are warnings
 # - 'COMMENT' - add a comment to the yaml with the warnings
-class CatalogWarningsStrategy(Enum):
+class PluginCatalogWarningsStrategy(Enum):
     FAIL = auto()
     COMMENT = auto()
 
@@ -294,521 +560,136 @@ def get_name_from_enum(my_enum):
     return [x.name for x in my_enum]
 
 
-def common_options(func):
-    func = click.option(
-        "-l",
-        "--log-level",
-        default=os.environ.get(BUNDLEUTILS_LOG_LEVEL, "INFO"),
-        help=f"The log level ({BUNDLEUTILS_LOG_LEVEL}).",
-    )(func)
-    func = click.option(
-        "-e",
-        "--env-file",
-        default=os.environ.get(BUNDLEUTILS_ENV, ""),
-        type=click.Path(file_okay=True, dir_okay=False),
-        help=f"Optional bundle profiles file ({BUNDLEUTILS_ENV}).",
-    )(func)
-    func = click.option(
-        "-i",
-        "--interactive",
-        default=False,
-        is_flag=True,
-        help=f"Run in interactive mode.",
-    )(func)
-    func = click.option(
-        "-u",
-        "--auto-env-url-only",
-        default=False,
-        is_flag=True,
-        help=f"Determine env vars via URL only ({BUNDLEUTILS_AUTO_ENV_USE_URL_ONLY}).",
-    )(func)
-    func = click.option(
-        "-a",
-        "--auto-env-append-version",
-        default=False,
-        is_flag=True,
-        help=f"Append the current version to the bundle directory ({BUNDLEUTILS_AUTO_ENV_APPEND_VERSION}).",
-    )(func)
-    return func
+def _deduce_bundle_name(ci_version) -> tuple[str, str]:
+    # if bundle_name is set, expect the instance name to be set as well
+    bundle_name = _get(Key.BUNDLE_NAME, required=False, allow_interactive=False)
+    if bundle_name:
+        instance_name = _deduce_ci_instance_name()
+        if not instance_name:
+            die("No instance name provided to deduce the bundle name.")
+        return instance_name, bundle_name
 
-
-def server_options(func):
-    func = click.option(
-        "-v",
-        "--ci-version",
-        type=click.STRING,
-        help=f"The version of the CloudBees WAR file.",
-    )(func)
-    func = click.option(
-        "-t", "--ci-type", type=click.STRING, help=f"The type of the CloudBees server."
-    )(func)
-    func = click.option(
-        "-H",
-        "--ci-server-home",
-        required=False,
-        help=f"Defaults to /tmp/ci_server_home/<ci_type>/<ci_version>.",
-    )(func)
-    return func
-
-
-def url_username_password_options(func):
-    func = click.option(
-        "-U",
-        "--url",
-        "url",
-        help=f"The URL to fetch YAML from ({BUNDLEUTILS_JENKINS_URL}).",
-    )(func)
-    func = click.option(
-        "-u",
-        "--username",
-        help=f"Username for basic authentication ({BUNDLEUTILS_USERNAME}).",
-    )(func)
-    func = click.option(
-        "-p",
-        "--password",
-        help=f"Password for basic authentication ({BUNDLEUTILS_PASSWORD}).",
-    )(func)
-    return func
-
-
-def fetch_options(func):
-    func = click.option(
-        "-M",
-        "--plugin-json-path",
-        help=f"The path to fetch JSON file from (found at {plugin_json_url_path}).",
-    )(func)
-    func = click.option(
-        "-P",
-        "--path",
-        "path",
-        type=click.Path(file_okay=True, dir_okay=False),
-        help=f"The path to fetch YAML from ({BUNDLEUTILS_PATH}).",
-    )(func)
-    func = click.option(
-        "-O",
-        "--offline",
-        default=False,
-        is_flag=True,
-        help=f"Save the export and plugin data to <target-dir>-offline ({BUNDLEUTILS_FETCH_OFFLINE}).",
-    )(func)
-    func = click.option(
-        "-I",
-        "--ignore-items",
-        default=False,
-        is_flag=True,
-        help=f"Do not fetch the computationally expensive items.yaml ({BUNDLEUTILS_FETCH_IGNORE_ITEMS}).",
-    )(func)
-    func = click.option(
-        "-t",
-        "--target-dir",
-        type=click.Path(file_okay=False, dir_okay=True),
-        help=f"The target directory for the YAML documents ({BUNDLEUTILS_FETCH_TARGET_DIR}).",
-    )(func)
-    func = click.option(
-        "-k",
-        "--keys-to-scalars",
-        help=f"Comma-separated list of yaml dict keys to convert to \"|\" type strings instead of quoted strings, defaults to '{','.join(default_keys_to_scalars)}' ({BUNDLEUTILS_KEYS_TO_CONVERT_TO_SCALARS}).",
-    )(func)
-    return func
-
-
-def update_plugins_options(func):
-    func = click.option(
-        "-c",
-        "--cap",
-        default=False,
-        is_flag=True,
-        help=f"Use the envelope.json from the war file to remove CAP plugin dependencies ({BUNDLEUTILS_FETCH_USE_CAP_ENVELOPE}).",
-    )(func)
-    func = click.option(
-        "-j",
-        "--plugins-json-list-strategy",
-        help=f"Strategy for creating list from the plugins json ({BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY}).",
-    )(func)
-    func = click.option(
-        "-J",
-        "--plugins-json-merge-strategy",
-        help=f"Strategy for merging plugins from list into the bundle ({BUNDLEUTILS_PLUGINS_JSON_MERGE_STRATEGY}).",
-    )(func)
-    func = click.option(
-        "-C",
-        "--catalog-warnings-strategy",
-        help=f"Strategy for handling beekeeper warnings in the plugin catalog ({BUNDLEUTILS_CATALOG_WARNINGS_STRATEGY}).",
-    )(func)
-    return func
-
-
-def server_options_null_check(ci_version, ci_type, ci_server_home):
-    ci_version = null_check(ci_version, CI_VERSION_ARG, BUNDLEUTILS_CI_VERSION)
-    ci_type = null_check(ci_type, CI_TYPE_ARG, BUNDLEUTILS_CI_TYPE)
-    ci_server_home = null_check(
-        ci_server_home, CI_SERVER_HOME_ARG, BUNDLEUTILS_CI_SERVER_HOME, False
-    )
-    return ci_version, ci_type, ci_server_home
-
-
-def transform_options(func):
-    func = click.option(
-        "-d",
-        "--dry-run",
-        default=False,
-        is_flag=True,
-        help=f"Print the merged transform config and exit.",
-    )(func)
-    func = click.option(
-        "-S",
-        "--strict",
-        default=False,
-        is_flag=True,
-        help=f"Fail when referencing non-existent files - warn otherwise.",
-    )(func)
-    func = click.option(
-        "-c",
-        "--config",
-        "configs",
-        type=click.Path(file_okay=True, dir_okay=False),
-        multiple=True,
-        help=f"The transformation config(s).",
-    )(func)
-    func = click.option(
-        "-s",
-        "--source-dir",
-        type=click.Path(file_okay=False, dir_okay=True),
-        help=f"The source directory for the YAML documents.",
-    )(func)
-    func = click.option(
-        "-t",
-        "--target-dir",
-        type=click.Path(file_okay=False, dir_okay=True),
-        help=f"The target directory for the YAML documents. Defaults to the source directory suffixed with -transformed.",
-    )(func)
-    return func
-
-
-def _set_env_if_not_set(prefix, env_var, value):
-    if not os.environ.get(env_var, ""):
-        logging.debug(f"{prefix} environment variable: {env_var}={value}")
-        os.environ[env_var] = str(value)
-
-
-@click.pass_context
-def _check_for_env_file(ctx):
-    if ctx.obj.get(BUNDLEUTILS_ENV, ""):
-        # we have an env file, no need to check for auto vars
-        return
-
-    # try to find an env file
-    env_file = ""
-    if ctx.obj.get(ENV_FILE_ARG):
-        env_file = ctx.obj.get(ENV_FILE_ARG)
-        logging.debug(f"Using env file from the command line: {env_file}")
-    else:
-        # if the BUNDLEUTILS_ENV env var is set, use it
-        if os.environ.get(BUNDLEUTILS_ENV, ""):
-            env_file = os.environ.get(BUNDLEUTILS_ENV)
-            if env_file is not None and not os.path.exists(env_file):
-                die(f"Env var {BUNDLEUTILS_ENV} passed does not exist: {env_file}")
-            logging.debug(f"Using env file from environment variable: {env_file}")
-        else:
-            # search upwards recursively for an env file, max depth of 5
-            default_env_file = os.environ.get(
-                BUNDLEUTILS_AUTO_ENV_FILE, default_auto_env_file
-            )
-            logging.debug(
-                f"Searching for auto env file {default_env_file} in parent directories"
-            )
-            auto_env_file_path_dir = os.getcwd()
-            for i in range(5):
-                if auto_env_file_path_dir == "/":
-                    break
-                auto_env_file_path = os.path.join(
-                    auto_env_file_path_dir, default_env_file
-                )
-                logging.debug(f"Checking for env file: {auto_env_file_path}")
-                if os.path.exists(auto_env_file_path):
-                    logging.debug(f"Auto env file found: {auto_env_file_path}")
-                    env_file = auto_env_file_path
-                    break
-                auto_env_file_path_dir = os.path.dirname(auto_env_file_path_dir)
-            if env_file:
-                logging.debug(f"Using auto env file: {env_file}")
-            else:
-                logging.debug(f"No auto env file found")
-
-    if env_file:
-        ctx.obj[BUNDLEUTILS_ENV] = env_file
-        os.environ[BUNDLEUTILS_ENV] = env_file
-
-        logging.debug(f"Loading config file: {env_file}")
-        with open(env_file, "r", encoding="utf-8") as f:
-            bundle_profiles = yaml.load(f)
-            # sanity checks
-            if not isinstance(bundle_profiles, dict):
-                die(f"Invalid bundle profiles file - should be a dict: {env_file}")
-            if "profiles" not in bundle_profiles:
-                die(
-                    f'Invalid bundle profiles file - should contain a key called "profiles": {env_file}'
-                )
-            elif not isinstance(bundle_profiles["profiles"], dict):
-                die(
-                    f"Invalid bundle profiles file - profiles should be a dict: {env_file}"
-                )
-            if "bundles" not in bundle_profiles:
-                die(
-                    f'Invalid bundle profiles file - should contain a key called "bundles": {env_file}'
-                )
-            elif not isinstance(bundle_profiles["bundles"], dict):
-                die(
-                    f"Invalid bundle profiles file - bundles should be a dict: {env_file}"
-                )
-            # set the object in the context
-            ctx.obj[BUNDLE_PROFILES] = bundle_profiles
-    else:
-        ctx.obj[BUNDLEUTILS_ENV] = ""
-        logging.debug(f"No env file provided or found")
-
-
-@click.pass_context
-def _check_cwd_for_bundle_auto_vars(ctx, switch_dirs=True):
-    """Check the current working directory for a bundle.yaml file and set the auto vars if found"""
-    # no bundle_profiles found, no need to check
-    if not ctx.obj.get(BUNDLE_PROFILES, ""):
-        logging.debug("No bundle profiles found. No need to check for auto vars")
-        return
-    # if the cwd contains a file bundle.yaml
-    if not os.path.exists("bundle.yaml"):
-        logging.debug(
-            "No bundle.yaml found in current directory. No need to check for auto vars"
-        )
-        return
-
-    env_vars = {}
-    cwd = os.getcwd()
-    if not ctx.obj.get(ORIGINAL_CWD, ""):
-        ctx.obj[ORIGINAL_CWD] = cwd
-
-    # if the BUNDLE_PROFILES exists, then the BUNDLEUTILS_ENV must also exist
-    auto_env_file_path_dir = os.path.dirname(ctx.obj.get(BUNDLEUTILS_ENV))
-    bundle_profiles = ctx.obj.get(BUNDLE_PROFILES)
-    bundle_name = _basename(cwd)
-
-    # if the cwd is a subdirectory of auto_env_file_path_dir, create a relative path
-    bundle_audit_target_dir = None
-    logging.debug(f"Current working directory: {cwd}")
-    if switch_dirs:
-        logging.debug(
-            f"Switching to the base directory of env file: {auto_env_file_path_dir}"
-        )
-        os.chdir(auto_env_file_path_dir)
-    else:
-        logging.debug(f"Not switching directories")
-
-    # if the cwd contains a file bundle.yaml
-    adhoc_profile = os.environ.get(BUNDLEUTILS_USE_PROFILE, "")
-    bundle_env_vars = {}
-    if bundle_name in bundle_profiles["bundles"]:
-        bundle_env_vars = bundle_profiles["bundles"][bundle_name]
-    if adhoc_profile:
-        logging.info(f"Found env var {BUNDLEUTILS_USE_PROFILE}: {adhoc_profile}")
-        if adhoc_profile in bundle_profiles["profiles"]:
-            logging.info(f"Using adhoc bundle config for {bundle_name}")
-            env_vars = bundle_profiles["profiles"][adhoc_profile]
-            for key in [BUNDLEUTILS_CI_VERSION, BUNDLEUTILS_JENKINS_URL]:
-                if key in bundle_env_vars:
-                    logging.info(
-                        f"Adding {key}={bundle_env_vars[key]} from bundle config"
-                    )
-                    env_vars[key] = bundle_env_vars[key]
-        else:
-            die(f"No bundle profile found for {adhoc_profile}")
-    elif bundle_env_vars:
-        logging.info(f"Found bundle config for {bundle_name}")
-        env_vars = bundle_env_vars
-    else:
-        logging.info(
-            f"No bundle config found for {bundle_name} and no {BUNDLEUTILS_USE_PROFILE} set"
-        )
-
-    # get target dir values
-    bundle_target_dir = cwd
-    if cwd.startswith(auto_env_file_path_dir):
-        bundle_target_dir = os.path.relpath(cwd, auto_env_file_path_dir)
-        bundle_audit_target_base_dir = null_check(
-            env_vars.get(BUNDLEUTILS_AUDIT_TARGET_BASE_DIR, ""),
-            "bundle_audit_target_base_dir",
-            BUNDLEUTILS_AUDIT_TARGET_BASE_DIR,
-            False,
-            "",
-        )
-        # if the BUNDLEUTILS_AUDIT_TARGET_BASE_DIR is set, use it
-        if bundle_audit_target_base_dir:
-            bundle_audit_target_dir = os.path.join(
-                bundle_audit_target_base_dir, bundle_target_dir
-            )
-
-    if env_vars:
-        # check if the BUNDLEUTILS_ENV_OVERRIDE is set to true, if so, override the env vars
-        should_env_vars_override_others = is_truthy(
-            os.environ.get(BUNDLEUTILS_ENV_OVERRIDE, "false")
-        )
-        for key, value in env_vars.items():
-            if key not in os.environ:
-                logging.info(f"Setting environment variable: {key}={value}")
-                os.environ[key] = str(value)
-            elif should_env_vars_override_others:
-                logging.info(f"Overriding with env, setting: {key}=" + os.environ[key])
-            else:
-                logging.info(f"Ignoring passed env, setting: {key}={value}")
-                os.environ[key] = str(value)
-        # set the BUNDLEUTILS_FETCH_TARGET_DIR and BUNDLEUTILS_TRANSFORM_SOURCE_DIR to the default target/docs
-        _set_env_if_not_set("AUTOSET", BUNDLEUTILS_BUNDLE_NAME, bundle_name)
-        _set_env_if_not_set(
-            "AUTOSET", BUNDLEUTILS_FETCH_TARGET_DIR, f"target/fetched/{bundle_name}"
-        )
-        _set_env_if_not_set(
-            "AUTOSET",
-            BUNDLEUTILS_TRANSFORM_SOURCE_DIR,
-            os.environ.get(BUNDLEUTILS_FETCH_TARGET_DIR),
-        )
-        _set_env_if_not_set(
-            "AUTOSET", BUNDLEUTILS_TRANSFORM_TARGET_DIR, bundle_target_dir
-        )
-        _set_env_if_not_set(
-            "AUTOSET",
-            BUNDLEUTILS_SETUP_SOURCE_DIR,
-            os.environ.get(BUNDLEUTILS_TRANSFORM_TARGET_DIR),
-        )
-        _set_env_if_not_set(
-            "AUTOSET",
-            BUNDLEUTILS_VALIDATE_SOURCE_DIR,
-            os.environ.get(BUNDLEUTILS_TRANSFORM_TARGET_DIR),
-        )
-        _set_env_if_not_set(
-            "AUTOSET", BUNDLEUTILS_MERGE_OUTDIR, f"target/merged/{bundle_name}"
-        )
-        _set_env_if_not_set(
-            "AUTOSET",
-            BUNDLEUTILS_MERGE_TRANSFORM_SOURCE_DIR,
-            os.environ.get(BUNDLEUTILS_MERGE_OUTDIR),
-        )
-        _set_env_if_not_set(
-            "AUTOSET",
-            BUNDLEUTILS_MERGE_TRANSFORM_TARGET_DIR,
-            f"target/expected/{bundle_name}",
-        )
-        _set_env_if_not_set(
-            "AUTOSET",
-            BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK_SOURCE_DIR,
-            bundle_target_dir,
-        )
-        # special case for audit, set the source dir to the fetch target dir and the target dir to the audit target dir
-        if bundle_audit_target_dir is not None:
-            _set_env_if_not_set(
-                "AUTOSET",
-                BUNDLEUTILS_AUDIT_SOURCE_DIR,
-                os.environ.get(BUNDLEUTILS_FETCH_TARGET_DIR),
-            )
-            _set_env_if_not_set(
-                "AUTOSET", BUNDLEUTILS_AUDIT_TARGET_DIR, bundle_audit_target_dir
-            )
-        # loop through the env vars and replace any placeholders
-        placeholder_re = re.compile(r"\$\{([^\}]+)\}")
-        for key, value in os.environ.items():
-            if key.startswith("BUNDLEUTILS_"):
-                new_value = placeholder_re.sub(
-                    lambda m: os.environ.get(m.group(1), ""), value
-                )
-                if new_value != value:
-                    logging.info(f"Replacing {key}={value} with {new_value}")
-                    os.environ[key] = new_value
-
-
-@click.pass_context
-def _check_url_and_determine_env_vars(ctx):
-    """Create the environment variables based on the URL"""
-    # no bundle_profiles found, no need to check
-
-    cwd = os.getcwd()
-    if not ctx.obj.get(ORIGINAL_CWD, ""):
-        ctx.obj[ORIGINAL_CWD] = cwd
-
-    # if the BUNDLE_PROFILES exists, then the BUNDLEUTILS_ENV must also exist
-    url, version = lookup_url_and_version("", "")
-    if not url:
-        die(f"No URL found in environment variables or command line arguments")
-    instance_name = _extract_name_from_url(url)
-    ci_type = lookup_type_from_url(url, "")
-
+    # deduce instance name
+    instance_name = _deduce_ci_instance_name()
     bundle_name = instance_name
-    last_known_bundle_name = ""
-    append_version = is_truthy(ctx.obj.get("auto_env_append_version"))
+
+    # optional version
+    append_version = utilz.is_truthy(_get(Key.GBL_APPEND_VERSION))
     if append_version:
-        bundle_name = f"{instance_name}-{version}"
-        # if the bundle name directory does not exist, create it
+        ci_version = _deduce_version(ci_version)
+        bundle_name = f"{instance_name}-{ci_version}"
+
+    _set(Key.BUNDLE_NAME, bundle_name)
+    return instance_name, bundle_name
+
+
+def _deduce_ci_instance_name(ci_instance_name=None) -> str:
+    ci_instance_name = _get(
+        Key.CI_INSTANCE_NAME, ci_instance_name, required=False, allow_interactive=False
+    )
+    if not ci_instance_name:
+        url = _get(Key.URL, required=False)
+        if not url:
+            die("No ci_instance_name provided or URL to extract a version from.")
+        ci_instance_name = utilz.extract_name_from_url(url)
+        _set(Key.CI_INSTANCE_NAME, ci_instance_name)
+
+    return ci_instance_name
+
+
+def _deduce_version(ci_version=None) -> str:
+    ci_version = _get(
+        Key.CI_VERSION, ci_version, required=False, allow_interactive=False
+    )
+    if not ci_version:
+        url = _get(Key.URL, required=False)
+        if not url:
+            die("No ci_version provided or URL to extract a version from.")
+        try:
+            ci_type, ci_version = utilz.lookup_details_from_url(url)
+            _set(Key.CI_VERSION, ci_version)
+            # set the CI type if not already set
+            curr_ci_type = _get(Key.CI_TYPE, required=False, allow_interactive=False)
+            if not curr_ci_type:
+                _set(Key.CI_TYPE, ci_type)
+        except requests.RequestException as e:
+            # fall back to the interactive mode
+            ci_version = _get(Key.CI_VERSION)
+
+    return str(ci_version)
+
+
+def _deduce_type(ci_type=None) -> str:
+    ci_type = _get(Key.CI_TYPE, ci_type, required=False, allow_interactive=False)
+    if not ci_type:
+        url = _get(Key.URL, required=False)
+        if not url:
+            die("No ci_type provided or URL to extract a type from.")
+        try:
+            ci_type, ci_version = utilz.lookup_details_from_url(url)
+            _set(Key.CI_TYPE, ci_type)
+            # set the CI version if not already set
+            curr_ci_version = _get(
+                Key.CI_VERSION, required=False, allow_interactive=False
+            )
+            if not curr_ci_version:
+                _set(Key.CI_VERSION, ci_version)
+        except requests.RequestException as e:
+            # fall back to the interactive mode
+            ci_type = _get(Key.CI_TYPE)
+
+    return str(ci_type)
+
+
+@click.pass_context
+def _add_default_dirs_if_necessary(ctx, url, ci_version, passed_dirs):
+    """
+    Add default paths based on the URL and potentially version.
+    """
+    bundles_base = str(_get(Key.BUNDLES_BASE))
+    instance_name, bundle_name = _deduce_bundle_name(ci_version)
+
+    # check if we need to look for the last known version
+    append_version = utilz.is_truthy(_get(Key.GBL_APPEND_VERSION))
+
+    # set the bundle name and last known version
+    last_known_version = ""
+    if append_version:
         if not os.path.exists(bundle_name):
             # find the last directory that matches the pattern "{instance_name}-x.x.x.x"
             regex = re.compile(rf"^{instance_name}-[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$")
-            for dir in reversed(sorted(os.listdir(cwd), key=lambda x: x.lower())):
+            for dir in reversed(
+                sorted(os.listdir(bundles_base), key=lambda x: x.lower())
+            ):
                 if regex.match(dir):
-                    last_known_bundle_name = dir
+                    last_known_version = dir
                     break
+    _set(Key.LAST_KNOWN_VERSION, last_known_version)
 
     # get target dir values
-    bundle_target_dir = os.path.join(cwd, bundle_name)
-    if bundle_target_dir.startswith(cwd):
-        bundle_target_dir = os.path.relpath(bundle_target_dir, cwd)
+    bundle_target_dir = os.path.join(bundles_base, bundle_name)
+    bundle_target_dir = _get_relative_path(bundle_target_dir, bundles_base)
 
-    # set the BUNDLEUTILS_FETCH_TARGET_DIR and BUNDLEUTILS_TRANSFORM_SOURCE_DIR to the default target/docs
-    _set_env_if_not_set("AUTOSET", BUNDLEUTILS_JENKINS_URL, url)
-    _set_env_if_not_set("AUTOSET", BUNDLEUTILS_INSTANCE_NAME, instance_name)
-    _set_env_if_not_set("AUTOSET", BUNDLEUTILS_BUNDLE_NAME, bundle_name)
-    _set_env_if_not_set("AUTOSET", BUNDLEUTILS_CI_VERSION, version)
-    _set_env_if_not_set("AUTOSET", BUNDLEUTILS_CI_TYPE, ci_type)
-    _set_env_if_not_set(
-        "AUTOSET", BUNDLEUTILS_FETCH_TARGET_DIR, f"target/fetched/{bundle_name}"
-    )
-    _set_env_if_not_set(
-        "AUTOSET",
-        BUNDLEUTILS_TRANSFORM_SOURCE_DIR,
-        os.environ.get(BUNDLEUTILS_FETCH_TARGET_DIR),
-    )
-    _set_env_if_not_set("AUTOSET", BUNDLEUTILS_TRANSFORM_TARGET_DIR, bundle_target_dir)
-    _set_env_if_not_set(
-        "AUTOSET",
-        BUNDLEUTILS_SETUP_SOURCE_DIR,
-        os.environ.get(BUNDLEUTILS_TRANSFORM_TARGET_DIR),
-    )
-    _set_env_if_not_set(
-        "AUTOSET",
-        BUNDLEUTILS_VALIDATE_SOURCE_DIR,
-        os.environ.get(BUNDLEUTILS_TRANSFORM_TARGET_DIR),
-    )
-    _set_env_if_not_set(
-        "AUTOSET", BUNDLEUTILS_MERGE_OUTDIR, f"target/merged/{bundle_name}"
-    )
-    _set_env_if_not_set(
-        "AUTOSET",
-        BUNDLEUTILS_MERGE_TRANSFORM_SOURCE_DIR,
-        os.environ.get(BUNDLEUTILS_MERGE_OUTDIR),
-    )
-    _set_env_if_not_set(
-        "AUTOSET",
-        BUNDLEUTILS_MERGE_TRANSFORM_TARGET_DIR,
-        f"target/expected/{bundle_name}",
-    )
-    _set_env_if_not_set(
-        "AUTOSET", BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK_SOURCE_DIR, bundle_target_dir
-    )
-    _set_env_if_not_set(
-        "AUTOSET",
-        BUNDLEUTILS_AUDIT_SOURCE_DIR,
-        os.environ.get(BUNDLEUTILS_FETCH_TARGET_DIR),
-    )
-    _set_env_if_not_set("AUTOSET", BUNDLEUTILS_AUDIT_TARGET_DIR, bundle_target_dir)
-    _set_env_if_not_set(
-        "AUTOSET", BUNDLEUTILS_AUTO_ENV_LAST_KNOWN_VERSION, last_known_bundle_name
-    )
-    _set_env_if_not_set("AUTOSET", BUNDLEUTILS_AUTO_ENV_APPEND_VERSION, append_version)
+    default_dirs = {}
+    default_dirs[Key.FETCH_TARGET_DIR] = f"target/fetched/{bundle_name}"
+    default_dirs[Key.TRANSFORM_SOURCE_DIR] = default_dirs[Key.FETCH_TARGET_DIR]
+    default_dirs[Key.TRANSFORM_TARGET_DIR] = bundle_target_dir
+    default_dirs[Key.CI_SETUP_SOURCE_DIR] = default_dirs[Key.TRANSFORM_TARGET_DIR]
+    default_dirs[Key.VALIDATE_SOURCE_DIR] = default_dirs[Key.TRANSFORM_TARGET_DIR]
+    default_dirs[Key.MERGE_OUTDIR] = f"target/merged/{bundle_name}"
+    default_dirs[Key.MERGE_TRANSFORM_SOURCE_DIR] = default_dirs[Key.MERGE_OUTDIR]
+    default_dirs[Key.MERGE_TRANSFORM_TARGET_DIR] = f"target/expected/{bundle_name}"
+    default_dirs[Key.MERGE_TRANSFORM_DIFFCHECK_SOURCE_DIR] = bundle_target_dir
+    default_dirs[Key.AUDIT_SOURCE_DIR] = default_dirs[Key.FETCH_TARGET_DIR]
+    default_dirs[Key.AUDIT_TARGET_DIR] = bundle_target_dir
+
+    for key in passed_dirs:
+        value = passed_dirs[key]
+        _get(key, value, default_dirs[key])
+
+
+# TODO: refactor this to use the ctx object
+def _todo_replace_placeholders():
     # loop through the env vars and replace any placeholders
     placeholder_re = re.compile(r"\$\{([^\}]+)\}")
     for key, value in os.environ.items():
@@ -821,50 +702,108 @@ def _check_url_and_determine_env_vars(ctx):
                 os.environ[key] = new_value
 
 
-def is_truthy(value):
-    """Check if a value is truthy."""
-    if value is None:
-        return False
-    return str(value).lower() in ["true", "1", "t", "y", "yes"]
-
-
 @click.pass_context
-def set_logging(ctx, switch_dirs=True):
-    if ctx.obj.get("auto_env_url_only", False):
-        _check_url_and_determine_env_vars()
-    else:
-        _check_for_env_file()
-        _check_cwd_for_bundle_auto_vars(switch_dirs)
+def _determine_transformation_config(
+    ctx, url: str, config: str, instance_name: str = ""
+) -> str:
+    """Determine the transformation config file based on the URL and context."""
+    # base dirs
+    cwd = os.getcwd()
+    config_base = _get(Key.CONFIGS_BASE) or default_config_base
+    config_base = _get_relative_path(config_base, cwd)
+    bundles_base = _get(Key.BUNDLES_BASE)
+    bundles_base = _get_relative_path(bundles_base, cwd)
+    command_name = ctx.command.name
+    config_files = []
+
+    if config == "auto":
+        # instance details
+        ci_version = _deduce_version()
+        ci_type = _deduce_type()
+        instance_name, bundle_name = _deduce_bundle_name(ci_version)
+        if instance_name and ci_version:
+            config_files.append(f"{command_name}-{instance_name}-{ci_version}.yaml")
+        if ci_type and ci_version:
+            config_files.append(f"{command_name}-{ci_type}-{ci_version}.yaml")
+        if instance_name:
+            config_files.append(f"{command_name}-{instance_name}.yaml")
+        if ci_type:
+            config_files.append(f"{command_name}-{ci_type}.yaml")
+        if ci_version:
+            config_files.append(f"{command_name}-{ci_version}.yaml")
+
+    if config:
+        return_config = ""
+        # if config starts with "int:" then it is an internal config
+        if config.startswith("int:"):
+            return_config = utilz.get_config_file(config[4:])
+        else:
+            return_config = _get_relative_path(config, cwd)
+        if not os.path.exists(return_config):
+            die(f"Transformation config file {config} does not exist.")
+        logging.info(f"Using provided transformation configs: {return_config}")
+        return str(return_config)
+
+    # checking possible configs
+    config_files.append(f"{command_name}.yaml")
+
+    found = ""
+    for config_file in config_files:
+        msg = ""
+        for dir_to_check in [bundles_base, config_base]:
+            config = os.path.join(dir_to_check, config_file)
+            msg = f"Checking for config file: "
+            if os.path.exists(config):
+                msg = f"{msg} (x)"
+                if not found:
+                    found = config
+            else:
+                msg = f"{msg}    "
+            logging.debug(f"{msg} {config}")
+    for config_file in config_files:
+        # check internal config base
+        config = utilz.get_config_file(config_file)
+        msg = f"Checking for config file: "
+        if os.path.exists(config):
+            msg = f"{msg} (x)"
+            if not found:
+                found = config
+        else:
+            msg = f"{msg}    "
+        logging.debug(f"{msg} {config}")
+    logging.info(f"Using config file: {found}")
+    return found
 
 
 @click.group(invoke_without_command=True)
-@common_options
+@option_for(
+    Key.GBL_LOG_LEVEL,
+    default="INFO",
+    type=click.Choice(["TRACE", "DEBUG", "INFO", "WARNING"]),
+)
+@option_for(Key.GBL_RAISE_ERRORS, default="False", type=click.BOOL)
+@option_for(Key.GBL_INTERACTIVE, default="False", type=click.BOOL)
+@option_for(Key.GBL_APPEND_VERSION, default="False", type=click.BOOL)
+@option_for(
+    Key.BUNDLES_BASE,
+    type=click.Path(file_okay=False, dir_okay=True),
+    default=os.getcwd(),
+)
 @click.pass_context
 def bundleutils(
-    ctx, log_level, env_file, interactive, auto_env_url_only, auto_env_append_version
+    ctx, log_level, raise_errors, interactive, append_version, bundles_base
 ):
     """A tool to fetch and transform YAML documents."""
-    # inject PYTHONUTF8=1 into the environment
-    os.environ["PYTHONUTF8"] = "1"
     ctx.ensure_object(dict)
     ctx.max_content_width = 120
-    ctx.obj[ENV_FILE_ARG] = env_file
-    ctx.obj[INTERACTIVE_ARG] = interactive
-    null_check(
-        auto_env_url_only, "auto_env_url_only", BUNDLEUTILS_AUTO_ENV_USE_URL_ONLY, False
-    )
-    null_check(
-        auto_env_append_version,
-        "auto_env_append_version",
-        BUNDLEUTILS_AUTO_ENV_APPEND_VERSION,
-        False,
-    )
-    if not ctx.obj.get(BUNDLEUTILS_LOG_LEVEL, ""):
-        ctx.obj[BUNDLEUTILS_LOG_LEVEL] = log_level
-        logging.getLogger().setLevel(log_level)
-        logging.debug(f"Set log level to: {log_level}")
-    if not ctx.obj.get(ORIGINAL_CWD, ""):
-        ctx.obj[ORIGINAL_CWD] = os.getcwd()
+    _set(Key.GBL_INTERACTIVE, interactive)
+    _set(Key.GBL_RAISE_ERRORS, raise_errors)
+    _set(Key.GBL_APPEND_VERSION, append_version)
+    _set(Key.BUNDLES_BASE, bundles_base)
+    log_level = _get(Key.GBL_LOG_LEVEL, log_level)
+    logging.getLogger().setLevel(str(log_level))
+    logging.debug(f"Set log level to: {log_level}")
+
     if ctx.invoked_subcommand is None:
         click.echo(ctx.get_help())
 
@@ -879,288 +818,71 @@ def yaml2dict(yamlFile):
     return dict_res
 
 
-def compare_func(x, y, level=None):
-    try:
-        return x["id"] == y["id"]
-    except Exception:
-        raise CannotCompare() from None
+@click.pass_context
+def _set(ctx, key: Key, value):
+    if isinstance(value, bool):
+        value = str(value).lower()
+    ctx.obj[key.envvar[0]] = value
 
 
-def lookup_type_from_url(url, ci_type, default_ci_type=""):
-    ci_type = null_check(
-        ci_type, CI_TYPE_ARG, BUNDLEUTILS_CI_TYPE, False, default_ci_type
-    )
-    if not ci_type:
-        logging.debug(
-            f"No type found in environment variables or command line arguments. Using whoami to determine the type"
-        )
-        whoami_url = f"{url}/whoAmI"
-        try:
-            response = requests.get(whoami_url, timeout=5)
-            if response.status_code == 200:
-                # grep -oE "CloudBees CI (Managed Controller|Client Controller|Cloud Operations Center|Operations Center) [0-9.-]+-rolling"
-                response_text = response.text
-                # find the first match
-                match = re.search(
-                    r"CloudBees CI (Managed Controller|Client Controller|Cloud Operations Center|Operations Center) [0-9.-]+-rolling",
-                    response_text,
-                )
-                if match:
-                    ci_type = match.group(1)
-                    # case switch the ci_type
-                    if ci_type == "Managed Controller":
-                        ci_type = "mm"
-                    elif ci_type == "Client Controller":
-                        ci_type = "cm"
-                    elif ci_type == "Cloud Operations Center":
-                        ci_type = "oc"
-                    elif ci_type == "Operations Center":
-                        ci_type = "oc-traditional"
-                    else:
-                        die(f"Unknown CI type: {ci_type}")
-                    logging.debug(f"Type: {ci_type} (taken from remote)")
+@click.pass_context
+def _get(ctx, key: Key, value=None, default="", required=True, allow_interactive=True):
+    if isinstance(value, bool):
+        value = str(value).lower()
+
+    name = key.envvar[0]
+    # if ctx.obj has the key, return it
+    if name in ctx.obj:
+        logging.trace(f"Found {name} in context object.")  # type: ignore
+        return ctx.obj[name]
+    # check envvar
+    if not value:
+        for env_var in key.envvar:
+            if env_var in os.environ:
+                logging.trace(f"Found {name} in environment variables: {env_var}")  # type: ignore
+                value = os.environ[env_var]
+                break
+    if not value:
+        if default:
+            logging.debug(f"Using default value for {name}: {default}")
+            value = default
+    if not value:
+        if utilz.is_truthy(_get(Key.GBL_INTERACTIVE, False)) and allow_interactive:
+            if sys.stdin.isatty():
+                if key.envvar[0].endswith("PASSWORD"):
+                    value = click.prompt(
+                        f"Please enter the value for {name}",
+                        type=str,
+                        hide_input=True,
+                        default="",
+                    )
                 else:
-                    die(f"Could not determine CI type from URL {url} - no match found")
+                    value = click.prompt(
+                        f"Please enter the value for {name}",
+                        default=default,
+                        type=str,
+                        show_default=True,
+                    )
+                _set(key, value)
+                return value
             else:
                 die(
-                    f"Trying to get type from URL {url} - returned a non-OK status code: {response.status_code}"
+                    f"Cannot prompt for {name} as stdin is not a tty. Please set it via environment variable or command line argument."
                 )
-        except requests.exceptions.RequestException as e:
-            die(f"Trying to get CI type from URL {url} - not reachable. Reason: {e}")
-    else:
-        logging.debug(f"Type: {ci_type} (taken from command line or env)")
-    return ci_type
-
-
-def lookup_url_and_version(url, ci_version, default_url="", default_ci_version=""):
-    url = lookup_url(url, default_url)
-    ci_version = null_check(
-        ci_version, CI_VERSION_ARG, BUNDLEUTILS_CI_VERSION, False, default_ci_version
-    )
-    if not ci_version:
-        logging.debug(
-            f"No version found in environment variables or command line arguments. Using whoami to determine the version"
-        )
-        whoami_url = f"{url}/whoAmI/api/json?tree=authenticated"
-        try:
-            response = requests.get(whoami_url, timeout=5)
-            if response.status_code == 200:
-                # get headers from the whoami_url
-                headers = response.headers
-                logging.debug(f"Headers: {headers}")
-                # get the x-jenkins header ignoring case and removing any carriage returns
-                ci_version = headers.get(
-                    "x-jenkins", headers.get("X-Jenkins", "")
-                ).replace("\r", "")
-                logging.debug(f"Version: {ci_version} (taken from remote)")
-            else:
-                die(
-                    f"Trying to get version from URL {url} - returned a non-OK status code: {response.status_code}"
-                )
-        except requests.exceptions.RequestException as e:
-            die(f"Trying to get CI version from URL {url} - not reachable. Reason: {e}")
-    else:
-        logging.debug(f"Version: {ci_version} (taken from command line or env)")
-    return url, ci_version
-
-
-def lookup_url(url, default_url="", mandatory=True):
-    url_env = "JENKINS_URL"
-    if os.environ.get(BUNDLEUTILS_JENKINS_URL):
-        url_env = BUNDLEUTILS_JENKINS_URL
-    return null_check(url, URL_ARG, url_env, mandatory, default_url)
-
-
-@bundleutils.command()
-@click.pass_context
-@click.option(
-    "-s",
-    "--source-dir",
-    type=click.Path(file_okay=False, dir_okay=True),
-    help=f"The bundle to be bootstrapped.",
-)
-@click.option(
-    "-S",
-    "--source-base",
-    type=click.Path(file_okay=False, dir_okay=True),
-    help=f"Specify parent dir of source-dir, bundle name taken from URL.",
-)
-@click.option("-U", "--url", help=f"The controller URL to bootstrap (JENKINS_URL).")
-@click.option(
-    "-v",
-    "--ci-version",
-    type=click.STRING,
-    help=f"Optional version (taken from the remote instance otherwise).",
-)
-def delete(ctx, source_dir, source_base, url, ci_version):
-    """
-    Delete a bundle source dir and the corresponding entry in bundle-profiles.yaml
-    """
-    _check_for_env_file()
-    # no bundle_profiles found, no need to check
-    if not ctx.obj.get(BUNDLE_PROFILES, ""):
-        logging.debug("No bundle profiles found. Nothing to add the bundle to.")
-        return
-    # source_dir and source_base are mutually exclusive but we need one of them
-    source_dir = null_check(
-        source_dir, SOURCE_DIR_ARG, BUNDLEUTILS_BOOTSTRAP_SOURCE_DIR, False, ""
-    )
-    source_base = null_check(
-        source_base, SOURCE_BASE_ARG, BUNDLEUTILS_BOOTSTRAP_SOURCE_BASE, False, ""
-    )
-    if source_dir and source_base:
-        die("source-dir and source-base are mutually exclusive")
-    elif source_base:
-        url = lookup_url(url)
-        bundle_name = _extract_name_from_url(url)
-        source_dir = os.path.join(source_base, bundle_name)
-        logging.info(
-            f"Using source-dir: {source_dir} (derived from source-base and URL)"
-        )
-    elif source_dir:
-        logging.info(f"Using source-dir: {source_dir}")
-    else:
-        die("Either source-dir or source-base must be provided")
-    # bundle_profiles yaml
-    bundle_profiles = ctx.obj.get(BUNDLE_PROFILES)
-    bundle_name = _basename(source_dir)
-    if bundle_name in bundle_profiles["bundles"]:
-        logging.info(f"Deleting bundle {bundle_name} entry in the bundle-profiles.yaml")
-        del bundle_profiles["bundles"][bundle_name]
-    else:
-        logging.info(f"No bundle config found for {bundle_name}. Nothing to delete")
-
-    if not os.path.exists(source_dir):
-        logging.info(f"Bundle {bundle_name} does not exist. Nothing to delete")
-    else:
-        logging.info(f"Deleting bundle {bundle_name} source directory")
-        shutil.rmtree(source_dir)
-
-    # Loop through the profiles and reapply anchors dynamically since they get lost when loading the file
-    for key, value in bundle_profiles["profiles"].items():
-        if isinstance(value, dict):
-            CommentedMap(value).yaml_set_anchor(key, always_dump=True)
-    # write the updated file
-    with open(ctx.obj.get(BUNDLEUTILS_ENV), "w", encoding="utf-8") as ofp:
-        yaml.dump(bundle_profiles, ofp)
-
-
-@bundleutils.command()
-@click.pass_context
-@click.option(
-    "-s",
-    "--source-dir",
-    type=click.Path(file_okay=False, dir_okay=True),
-    help=f"The bundle to be bootstrapped.",
-)
-@click.option(
-    "-S",
-    "--source-base",
-    type=click.Path(file_okay=False, dir_okay=True),
-    help=f"Specify parent dir of source-dir, bundle name taken from URL.",
-)
-@click.option("-p", "--profile", help=f"The bundle profile to use.")
-@click.option("-u", "--update", help=f"Should the bundle be updated if present.")
-@click.option("-U", "--url", help=f"The controller URL to bootstrap (JENKINS_URL).")
-@click.option(
-    "-v",
-    "--ci-version",
-    type=click.STRING,
-    help=f"Optional version (taken from the remote instance otherwise).",
-)
-def bootstrap(ctx, source_dir, source_base, profile, update, url, ci_version):
-    """
-    Bootstrap a bundle.
-    """
-    _check_for_env_file()
-    # no bundle_profiles found, no need to check
-    if not ctx.obj.get(BUNDLE_PROFILES, ""):
-        logging.debug("No bundle profiles found. Nothing to add the bundle to.")
-        return
-    # source_dir and source_base are mutually exclusive but we need one of them
-    source_dir = null_check(
-        source_dir, SOURCE_DIR_ARG, BUNDLEUTILS_BOOTSTRAP_SOURCE_DIR, False, ""
-    )
-    source_base = null_check(
-        source_base, SOURCE_BASE_ARG, BUNDLEUTILS_BOOTSTRAP_SOURCE_BASE, False, ""
-    )
-    if source_dir and source_base:
-        die("source-dir and source-base are mutually exclusive")
-    elif source_base:
-        url = lookup_url(url)
-        bundle_name = _extract_name_from_url(url)
-        source_dir = os.path.join(source_base, bundle_name)
-        logging.info(
-            f"Using source-dir: {source_dir} (derived from source-base and URL)"
-        )
-    elif source_dir:
-        logging.info(f"Using source-dir: {source_dir}")
-    else:
-        die("Either source-dir or source-base must be provided")
-
-    bootstrap_profile = null_check(profile, "profile", BUNDLEUTILS_BOOTSTRAP_PROFILE)
-    bootstrap_update = null_check(
-        update, "update", BUNDLEUTILS_BOOTSTRAP_UPDATE, False, "false"
-    )
-    if bootstrap_profile:
-        bundle_profiles = ctx.obj.get(BUNDLE_PROFILES)
-        bundle_name = _basename(source_dir)
-        if bootstrap_profile in bundle_profiles["profiles"]:
-            default_url = ""
-            default_ci_version = ""
-            if bundle_name in bundle_profiles["bundles"]:
-                if bootstrap_update in ["true", "1", "t", "y", "yes"]:
-                    logging.info(
-                        f"The bundle config for {bundle_name} already exists. Updating it."
-                    )
-                    if ctx.obj.get(INTERACTIVE_ARG):
-                        default_url = bundle_profiles["bundles"][bundle_name].get(
-                            BUNDLEUTILS_JENKINS_URL, ""
-                        )
-                        default_ci_version = bundle_profiles["bundles"][
-                            bundle_name
-                        ].get(BUNDLEUTILS_CI_VERSION, "")
-                else:
-                    die(
-                        f"The bundle config for {bundle_name} already exists. Please check, then either use {BUNDLEUTILS_BOOTSTRAP_UPDATE} or remove it first."
-                    )
-            else:
-                logging.info(
-                    f"No bundle config found for {bundle_name}. Adding it to the bundles"
-                )
-            bundle_yaml = os.path.join(source_dir, "bundle.yaml")
-            url, ci_version = lookup_url_and_version(
-                url, ci_version, default_url, default_ci_version
-            )
-            if not os.path.exists(bundle_yaml):
-                logging.info(f"Creating an empty {bundle_yaml}")
-                os.makedirs(source_dir)
-                with open(bundle_yaml, "w", encoding="utf-8") as file:
-                    file.write("")
-            else:
-                logging.info(f"The bundle yaml already exists {bundle_yaml}")
-
-            # open for reading
-            with open(ctx.obj.get(BUNDLEUTILS_ENV)) as ifp:
-                data = yaml.load(ifp)
-            # Loop through the profiles and reapply anchors dynamically since they get lost when loading the file
-            for key, value in data["profiles"].items():
-                if isinstance(value, dict):
-                    CommentedMap(value).yaml_set_anchor(key, always_dump=True)
-            # Create a new bundle entry
-            upd = CommentedMap()
-            upd.add_yaml_merge([(0, data["profiles"][bootstrap_profile])])
-            data["bundles"][bundle_name] = upd
-            data["bundles"][bundle_name]["BUNDLEUTILS_JENKINS_URL"] = f"{url}"
-            data["bundles"][bundle_name]["BUNDLEUTILS_CI_VERSION"] = f"{ci_version}"
-            # write the updated file
-            with open(ctx.obj.get(BUNDLEUTILS_ENV), "w", encoding="utf-8") as ofp:
-                yaml.dump(data, ofp)
-            logging.info(
-                f"Added/updated bundle {bundle_name} with profile {bootstrap_profile}, URL {url}, and version {ci_version}"
+        elif default is not None:
+            logging.debug(f"Using default value for {name}: {default}")
+            value = default
+    if not value:
+        if required:
+            die(
+                f"No value found for {name} in context object, arg, environment variables or prompt"
             )
         else:
-            die(f"No bundle profile found for {bootstrap_profile}")
+            logging.debug(f"No value found for {name}, returning empty string")
+            return ""
+    logging.debug(f"Setting {name}...")
+    _set(key, value)
+    return value
 
 
 @bundleutils.command()
@@ -1183,31 +905,21 @@ def help_pages(ctx):
         )
 
 
+# @option_for(Key.CI_MAX_START_TIME, default=120, type=int)
+#     max_start_time = _get(Key.CI_MAX_START_TIME, max_start_time)
+
+
 @bundleutils.command()
-@server_options
-@click.option(
-    "-s",
-    "--source-dir",
-    type=click.Path(file_okay=False, dir_okay=True),
-    help=f"The bundle to be validated (startup will use the plugins from here).",
-)
-@click.option(
-    "-T",
-    "--ci-bundle-template",
-    type=click.Path(file_okay=False, dir_okay=True),
-    required=False,
-    help=f"Path to a template bundle used to start the test server (defaults to in-built tempalte).",
-)
-@click.option(
-    "-f",
-    "--force",
-    default=False,
-    is_flag=True,
-    help=f"Force download of the WAR file even if exists.",
-)
+@option_for(Key.CI_SERVER_HOME, default=os.path.join("target", "ci_server_home"))
+@option_for(Key.URL)
+@option_for(Key.CI_TYPE)
+@option_for(Key.CI_VERSION)
+@option_for(Key.CI_SETUP_SOURCE_DIR, type=click.Path(file_okay=False, dir_okay=True))
+@option_for(Key.CI_BUNDLE_TEMPLATE, type=click.Path(file_okay=False, dir_okay=True))
+@option_for(Key.CI_FORCE, default="False", type=click.BOOL)
 @click.pass_context
 def ci_setup(
-    ctx, ci_version, ci_type, ci_server_home, source_dir, ci_bundle_template, force
+    ctx, ci_server_home, url, ci_type, ci_version, source_dir, ci_bundle_template, force
 ):
     """
     Download CloudBees WAR file, and setup the starter bundle.
@@ -1229,14 +941,22 @@ def ci_setup(
             BUNDLEUTILS_CB_DOCKER_IMAGE_MM=my-registry/cloudbees-core-mm
 
     """
-    set_logging()
-    ci_version, ci_type, ci_server_home = server_options_null_check(
-        ci_version, ci_type, ci_server_home
-    )
-    source_dir = null_check(source_dir, SOURCE_DIR_ARG, BUNDLEUTILS_SETUP_SOURCE_DIR)
-    source_dir = os.path.normpath(source_dir)
+
+    ci_server_home = _get(Key.CI_SERVER_HOME, ci_server_home)
+    url = _get(Key.URL, url, required=False)
+    ci_type = _deduce_type(ci_type)
+    ci_version = _deduce_version(ci_version)
+    passed_dirs = {}
+    passed_dirs[Key.CI_SETUP_SOURCE_DIR] = source_dir
+    _add_default_dirs_if_necessary(url, ci_version, passed_dirs)
+    source_dir = str(_get(Key.CI_SETUP_SOURCE_DIR))
     if not os.path.exists(source_dir):
         die(f"Source directory '{source_dir}' does not exist")
+    ci_bundle_template = _get(
+        Key.CI_BUNDLE_TEMPLATE, ci_bundle_template, required=False
+    )
+    force = utilz.is_truthy(_get(Key.CI_FORCE, force))
+
     # parse the source directory bundle.yaml file and copy the files under the plugins and catalog keys to the target_jenkins_home_casc_startup_bundle directory
     bundle_yaml = os.path.join(source_dir, "bundle.yaml")
     plugin_files = [bundle_yaml]
@@ -1248,31 +968,17 @@ def ci_setup(
                 for plugin_file in bundle_yaml[key]:
                     plugin_files.append(os.path.join(source_dir, plugin_file))
     jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
-    jenkins_manager.get_war(force)
+    jenkins_manager.get_war()
     jenkins_manager.create_startup_bundle(plugin_files, ci_bundle_template)
     _update_bundle(jenkins_manager.target_jenkins_home_casc_startup_bundle)
 
 
 @bundleutils.command()
-@click.option(
-    "-m",
-    "--config",
-    type=click.Path(file_okay=True, dir_okay=False),
-    help=f"An optional custom merge config file if needed.",
+@option_for(Key.MERGE_CONFIG, type=click.Path(file_okay=True, dir_okay=False))
+@option_for(
+    Key.MERGE_FILES, type=click.Path(file_okay=True, dir_okay=False), multiple=True
 )
-@click.option(
-    "-f",
-    "--files",
-    multiple=True,
-    type=click.Path(file_okay=True, dir_okay=False),
-    help=f"The files to be merged.",
-)
-@click.option(
-    "-o",
-    "--outfile",
-    type=click.Path(file_okay=True, dir_okay=False),
-    help=f"The target for the merged file.",
-)
+@option_for(Key.MERGE_OUTDIR, type=click.Path(file_okay=True, dir_okay=False))
 @click.pass_context
 def merge_yamls(ctx, config, files, outfile=None):
     """
@@ -1344,34 +1050,6 @@ def _merge_bundles(bundles, use_parent, outdir, config, api_version=None):
         logging.info(f"Using parent bundles: {new_bundles}")
         bundles = new_bundles
 
-    # handle the BUNDLEUTILS_MERGE_PREFER_VERSION env var
-    prefer_version = is_truthy(
-        os.environ.get(BUNDLEUTILS_MERGE_PREFER_VERSION, "false")
-    )
-    if prefer_version:
-        current_version = os.environ.get(BUNDLEUTILS_CI_VERSION, "")
-        if not current_version:
-            die(
-                f"Cannot prefer version without a current version. Please set {BUNDLEUTILS_CI_VERSION}"
-            )
-        new_bundles = []
-        for bundle_dir in bundles:
-            # say the bundle_dir is snippets/mybundle and current_version is 1.1.2, check if snippets/mybundle-1.1.2 exists and use it if it does
-            versioned_bundle_dir = f"{bundle_dir}-{current_version}"
-            logging.info(
-                f"Checking for versioned bundle directory: {versioned_bundle_dir}"
-            )
-            if os.path.exists(versioned_bundle_dir):
-                logging.info(
-                    f"Using versioned bundle directory: {versioned_bundle_dir}"
-                )
-                new_bundles.append(versioned_bundle_dir)
-            else:
-                if not os.path.exists(bundle_dir):
-                    die(f"Bundle directory '{bundle_dir}' does not exist")
-                new_bundles.append(bundle_dir)
-        bundles = new_bundles
-
     merger = YAMLMerger(merge_configs)  # Merge lists of dicts by 'name' field
     # ensure at least two files are provided
     if len(bundles) < 1:
@@ -1392,30 +1070,6 @@ def _merge_bundles(bundles, use_parent, outdir, config, api_version=None):
                 else:
                     logging.warning(
                         f"Bundle file '{last_bundle_yaml}' does not contain an apiVersion. Using default apiVersion: {default_bundle_api_version}"
-                    )
-                    api_version = default_bundle_api_version
-            elif os.environ.get(BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK_SOURCE_DIR):
-                # get the apiVersion from the source directory
-                source_dir = os.environ.get(
-                    BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK_SOURCE_DIR, ""
-                )
-                if not source_dir:
-                    die(
-                        f"Bundle file '{source_dir}' does not exist. Please set {BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK_SOURCE_DIR}"
-                    )
-                source_bundle_yaml = os.path.join(source_dir, "bundle.yaml")
-                if os.path.exists(source_bundle_yaml):
-                    source_bundle_yaml_dict = yaml2dict(source_bundle_yaml)
-                    if "apiVersion" in source_bundle_yaml_dict:
-                        api_version = source_bundle_yaml_dict["apiVersion"]
-                    else:
-                        logging.warning(
-                            f"Bundle file '{source_bundle_yaml}' does not contain an apiVersion. Using default apiVersion: {default_bundle_api_version}"
-                        )
-                        api_version = default_bundle_api_version
-                else:
-                    logging.warning(
-                        f"Bundle file '{source_bundle_yaml}' does not exist. Using default apiVersion: {default_bundle_api_version}"
                     )
                     api_version = default_bundle_api_version
             else:
@@ -1459,62 +1113,19 @@ def _merge_bundles(bundles, use_parent, outdir, config, api_version=None):
 
 
 @bundleutils.command()
-@click.option(
-    "-S",
-    "--strict",
-    default=False,
-    is_flag=True,
-    help=f"Fail when referencing non-existent files - warn otherwise.",
-)
-@click.option(
-    "-m",
-    "--config",
-    type=click.Path(file_okay=True, dir_okay=False),
-    help=f"An optional custom merge config file if needed.",
-)
-@click.option(
-    "-b",
-    "--bundles",
+@option_for(Key.URL)
+@option_for(Key.STRICT, default="False", type=click.BOOL)
+@option_for(Key.MERGE_CONFIG, type=click.Path(file_okay=True, dir_okay=False))
+@option_for(
+    Key.MERGE_BUNDLES,
     multiple=True,
     type=click.Path(file_okay=False, dir_okay=True, exists=True),
-    help=f"The bundles to be rendered.",
 )
-@click.option(
-    "-p",
-    "--use-parent",
-    default=False,
-    is_flag=True,
-    help=f"Optionally use the (legacy) parent key to work out which bundles to merge.",
-)
-@click.option(
-    "-o",
-    "--outdir",
-    type=click.Path(file_okay=False, dir_okay=True),
-    help=f"The target for the merged bundle.",
-)
-@click.option(
-    "-a",
-    "--api-version",
-    help=f"Optional apiVersion. Defaults to {default_bundle_api_version}",
-)
-@click.option(
-    "-t",
-    "--transform",
-    default=False,
-    is_flag=True,
-    help=f"Optionally transform using the transformation configs ({BUNDLEUTILS_MERGE_TRANSFORM_PERFORM}).",
-)
-@click.option(
-    "-d",
-    "--diffcheck",
-    default=False,
-    is_flag=True,
-    help=f"Optionally perform bundleutils diff against the original source bundle and expected bundle ({BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK}).",
-)
+@option_for(Key.MERGE_USE_PARENT, default="False", type=click.BOOL)
+@option_for(Key.MERGE_OUTDIR, type=click.Path(file_okay=False, dir_okay=True))
+@option_for(Key.MERGE_API_VERSION)
 @click.pass_context
-def merge_bundles(
-    ctx, strict, config, bundles, use_parent, outdir, transform, diffcheck, api_version
-):
+def merge_bundles(ctx, url, strict, config, bundles, use_parent, outdir, api_version):
     """
     Used for merging bundles. Given a list of bundles, merge them into a single bundle.
 
@@ -1533,76 +1144,19 @@ def merge_bundles(
     - merge them together
     - write the result to the outdir or stdout if not provided
     - update the outdir/bundle.yaml with the new references
-
-    \b
-    Prefer versioned directories (env: BUNDLEUTILS_MERGE_PREFER_VERSION):
-    - listing "-b snippets/bootstrap" will look for "snippets/bootstrap-2.492.1.3" if the current version is 2.492.1.3
-
-    \b
-    Optional features:
-    - transform the merged bundle using the transformation configs
-        (BUNDLEUTILS_TRANSFORM_CONFIGS and BUNDLEUTILS_TRANSFORM_SOURCE_DIR needed for this)
-    - perform a diff check against the source bundle and the transformed bundle
-        (BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK_SOURCE_DIR needed for this)
     """
-    set_logging()
-
-    config = null_check(config, MERGE_CONFIG_ARG, BUNDLEUTILS_MERGE_CONFIG, False, "")
-    bundles = null_check(bundles, BUNDLES_ARG, BUNDLEUTILS_MERGE_BUNDLES, False, "")
-    use_parent = null_check(
-        use_parent, "use_parent", BUNDLEUTILS_MERGE_USE_PARENT, False, ""
-    )
-    outdir = null_check(outdir, OUTDIR_ARG, BUNDLEUTILS_MERGE_OUTDIR, False, "")
-
-    transform = null_check(
-        transform, "transform", BUNDLEUTILS_MERGE_TRANSFORM_PERFORM, False, ""
-    )
-    transform_outdir = ""
-    diffcheck_source_bundle = ""
-    transform_srcdir = ""
-    transform_configs = ""
-    if transform:
-        logging.debug(f"Transforming detected. Looking for transform options")
-        transform_outdir = null_check(
-            "", "transform_outdir", BUNDLEUTILS_MERGE_TRANSFORM_TARGET_DIR
-        )
-        transform_srcdir = null_check(
-            outdir, OUTDIR_ARG, BUNDLEUTILS_MERGE_TRANSFORM_SOURCE_DIR
-        )
-        transform_configs = null_check("", "configs", BUNDLEUTILS_TRANSFORM_CONFIGS)
-
-    diffcheck = null_check(
-        diffcheck, "diffcheck", BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK, False, ""
-    )
-    if diffcheck:
-        logging.debug(f"Diffcheck detected. Looking for diffcheck options")
-        diffcheck_source_bundle = null_check(
-            "",
-            "diffcheck_source_bundle",
-            BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK_SOURCE_DIR,
-        )
-    # sanity check
-    if transform:
-        if transform_outdir and not outdir:
-            die(f"Cannot perform transform without specifying outdir")
-        if diffcheck and not transform_outdir:
-            die(f"Cannot perform diffcheck without specifying transform_outdir")
-    if diffcheck and not diffcheck_source_bundle:
-        die(f"Cannot perform diffcheck without specifying diffcheck_source_bundle")
+    url = _get(Key.URL, url, required=False)
+    strict = utilz.is_truthy(_get(Key.STRICT, strict))
+    config = _get(Key.MERGE_CONFIG, config, required=False)
+    bundles = _get(Key.MERGE_BUNDLES, bundles)
+    use_parent = utilz.is_truthy(_get(Key.MERGE_USE_PARENT, use_parent))
+    outdir = _get(Key.MERGE_OUTDIR, outdir, required=False)
+    api_version = _get(Key.MERGE_API_VERSION, api_version, required=False)
 
     if isinstance(bundles, str):
         bundles = bundles.split()
 
     _merge_bundles(bundles, use_parent, outdir, config, api_version)
-
-    if transform:
-        announce(
-            f"Performing transform on merged bundle from {transform_srcdir} to {transform_outdir}"
-        )
-        _transform(transform_configs, transform_srcdir, transform_outdir)
-    if diffcheck:
-        announce("Performing diffcheck on transformed bundle")
-        diff_dirs(diffcheck_source_bundle, transform_outdir)
 
 
 def announce(string):
@@ -1610,38 +1164,36 @@ def announce(string):
 
 
 @bundleutils.command()
-@server_options
-@click.option(
-    "-s",
-    "--source-dir",
-    type=click.Path(file_okay=False, dir_okay=True),
-    help=f"The bundle to be validated.",
-)
-@click.option(
-    "-w",
-    "--ignore-warnings",
-    default=False,
-    is_flag=True,
-    help=f"Do not fail if warnings are found.",
-)
-@click.option(
-    "-r",
-    "--external-rbac",
-    type=click.Path(file_okay=True, dir_okay=False),
-    help=f"Path to an external rbac.yaml from an Operations Center bundle.",
-)
+@option_for(Key.CI_SERVER_HOME, default=os.path.join("target", "ci_server_home"))
+@option_for(Key.URL)
+@option_for(Key.CI_TYPE)
+@option_for(Key.CI_VERSION)
+@option_for(Key.VALIDATE_SOURCE_DIR, type=click.Path(file_okay=False, dir_okay=True))
+@option_for(Key.VALIDATE_IGNORE_WARNINGS, default="False", type=click.BOOL)
+@option_for(Key.VALIDATE_EXTERNAL_RBAC, type=click.Path(file_okay=True, dir_okay=False))
 @click.pass_context
 def ci_validate(
-    ctx, ci_version, ci_type, ci_server_home, source_dir, ignore_warnings, external_rbac
+    ctx,
+    ci_server_home,
+    url,
+    ci_version,
+    ci_type,
+    source_dir,
+    ignore_warnings,
+    external_rbac,
 ):
     """Validate bundle against controller started with ci-start."""
-    set_logging()
-    ci_version, ci_type, ci_server_home = server_options_null_check(
-        ci_version, ci_type, ci_server_home
-    )
-    source_dir = null_check(source_dir, SOURCE_DIR_ARG, BUNDLEUTILS_VALIDATE_SOURCE_DIR)
+    ci_server_home = _get(Key.CI_SERVER_HOME, ci_server_home)
+    url = _get(Key.URL, url, required=False)
+    ci_type = _deduce_type(ci_type)
+    ci_version = _deduce_version(ci_version)
+    passed_dirs = {}
+    passed_dirs[Key.VALIDATE_SOURCE_DIR] = source_dir
+    _add_default_dirs_if_necessary(url, ci_version, passed_dirs)
+    source_dir = str(_get(Key.VALIDATE_SOURCE_DIR))
     if not os.path.exists(source_dir):
         die(f"Source directory '{source_dir}' does not exist")
+
     jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
     server_url, username, password = jenkins_manager.get_server_details()
     logging.debug(
@@ -1659,40 +1211,31 @@ def _get_plugins_from_server(server_url, username, password):
 
 
 @bundleutils.command()
-@server_options
-@click.option(
-    "-s",
-    "--source-dir",
-    type=click.Path(file_okay=False, dir_okay=True),
-    help=f"The bundle of the plugins to be sanitized.",
-)
-@click.option(
-    "-p",
-    "--pin-plugins",
-    default=False,
-    is_flag=True,
-    help=f"Add versions to 3rd party plugins (only available for apiVersion 2).",
-)
-@click.option(
-    "-c",
-    "--custom-url",
-    help=f"Add a custom URL, e.g. http://plugins-repo/plugins/PNAME/PVERSION/PNAME.hpi",
-)
+@option_for(Key.CI_SERVER_HOME, default=os.path.join("target", "ci_server_home"))
+@option_for(Key.URL)
+@option_for(Key.CI_TYPE)
+@option_for(Key.CI_VERSION)
+@option_for(Key.CI_SETUP_SOURCE_DIR, type=click.Path(file_okay=False, dir_okay=True))
+@option_for(Key.SANITIZE_PLUGINS_PIN_PLUGINS, default="False", type=click.BOOL)
+@option_for(Key.SANITIZE_PLUGINS_CUSTOM_URL)
 @click.pass_context
 def ci_sanitize_plugins(
-    ctx, ci_version, ci_type, ci_server_home, source_dir, pin_plugins, custom_url
+    ctx, ci_server_home, url, ci_version, ci_type, source_dir, pin_plugins, custom_url
 ):
     """Sanitizes plugins (needs ci-start)."""
-    set_logging()
-    ci_version, ci_type, ci_server_home = server_options_null_check(
-        ci_version, ci_type, ci_server_home
-    )
-    source_dir = null_check(
-        source_dir, SOURCE_DIR_ARG, BUNDLEUTILS_TRANSFORM_TARGET_DIR
-    )
+    ci_server_home = _get(Key.CI_SERVER_HOME, ci_server_home)
+    url = _get(Key.URL, url, required=False)
+    ci_type = _deduce_type(ci_type)
+    ci_version = _deduce_version(ci_version)
+    passed_dirs = {}
+    passed_dirs[Key.CI_SETUP_SOURCE_DIR] = source_dir
+    _add_default_dirs_if_necessary(url, ci_version, passed_dirs)
+    source_dir = str(_get(Key.CI_SETUP_SOURCE_DIR))
     if not os.path.exists(source_dir):
         die(f"Source directory '{source_dir}' does not exist")
+
     jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
+
     server_url, username, password = jenkins_manager.get_server_details()
     logging.debug(
         f"Server URL: {server_url}, Username: {username}, Password: {password}"
@@ -1770,37 +1313,38 @@ def ci_sanitize_plugins(
 
 
 @bundleutils.command()
-@server_options
-@click.option(
-    "-M",
-    "--ci-max-start-time",
-    default=120,
-    envvar=BUNDLEUTILS_CI_MAX_START_TIME,
-    show_envvar=True,
-    required=False,
-    type=click.INT,
-    help=f"Max minutes to start.",
-)
+@option_for(Key.CI_SERVER_HOME, default=os.path.join("target", "ci_server_home"))
+@option_for(Key.URL)
+@option_for(Key.CI_TYPE)
+@option_for(Key.CI_VERSION)
+@option_for(Key.CI_MAX_START_TIME, default=120, type=click.INT)
 @click.pass_context
-def ci_start(ctx, ci_version, ci_type, ci_server_home, ci_max_start_time):
+def ci_start(ctx, ci_server_home, url, ci_version, ci_type, ci_max_start_time):
     """Start CloudBees Server"""
-    set_logging()
-    ci_version, ci_type, ci_server_home = server_options_null_check(
-        ci_version, ci_type, ci_server_home
-    )
+    ci_server_home = _get(Key.CI_SERVER_HOME, ci_server_home)
+    url = _get(Key.URL, url, required=False)
+    ci_type = _deduce_type(ci_type)
+    ci_version = _deduce_version(ci_version)
+    ci_max_start_time = _get(Key.CI_MAX_START_TIME, ci_max_start_time)
+
     jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
     jenkins_manager.start_server(ci_max_start_time)
 
 
 @bundleutils.command()
-@server_options
 @click.pass_context
-def ci_stop(ctx, ci_version, ci_type, ci_server_home):
+@option_for(Key.CI_SERVER_HOME, default=os.path.join("target", "ci_server_home"))
+@option_for(Key.URL)
+@option_for(Key.CI_TYPE)
+@option_for(Key.CI_VERSION)
+@option_for(Key.CI_MAX_START_TIME, default=120, type=click.INT)
+def ci_stop(ctx, ci_server_home, url, ci_version, ci_type):
     """Stop CloudBees Server"""
-    set_logging()
-    ci_version, ci_type, ci_server_home = server_options_null_check(
-        ci_version, ci_type, ci_server_home
-    )
+    ci_server_home = _get(Key.CI_SERVER_HOME, ci_server_home)
+    url = _get(Key.URL, url, required=False)
+    ci_type = _deduce_type(ci_type)
+    ci_version = _deduce_version(ci_version)
+
     jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
     jenkins_manager.stop_server()
 
@@ -1816,7 +1360,7 @@ def ci_stop(ctx, ci_version, ci_type, ci_server_home):
 @click.pass_context
 def diff(ctx, sources):
     """Diff two YAML directories or files."""
-    set_logging(False)
+    # set_logging(False)
     diff_detected = False
     src1 = ""
     src2 = ""
@@ -1870,7 +1414,7 @@ def maybe_temp_dir():
 @click.pass_context
 def diff_merged(ctx, config, sources, api_version):
     """Diff two bundle directories by temporarily merging both before the diff."""
-    set_logging(False)
+    # set_logging(False)
     diff_detected = False
     # if src1 is a directory, ensure src2 is also directory
     src1 = ""
@@ -1931,9 +1475,6 @@ def diff2(file1, file2):
 
 def _preflight(url, username, password):
     preflight_checks = {}
-    # check if the URL is valid
-    url = lookup_url(url)
-    username, password = _lookup_username_password(url, username, password)
     try:
         _get_plugins_from_server(url, username, password)
         preflight_checks["plugins-export"] = "OK"
@@ -1946,7 +1487,7 @@ def _preflight(url, username, password):
     except Exception as e:
         if str(e).startswith("404"):
             preflight_checks["casc-plugins-installed"] = (
-                "NOK? Received a 404 when accessing the casc page?"
+                "NOK? Received a 404 when accessing the casc page. Are the plugins installed?"
             )
         preflight_checks["casc-export"] = str(e)
     for value in preflight_checks.values():
@@ -1955,74 +1496,62 @@ def _preflight(url, username, password):
             die(f"Preflight checks failed.")
     else:
         logging.debug("Preflight checks OK.")
-    return url, username, password
 
 
 @bundleutils.command()
-@url_username_password_options
+@option_for(Key.URL, required=True)
+@option_for(Key.USERNAME, required=True)
+@option_for(Key.PASSWORD, required=True)
 @click.pass_context
 def preflight(ctx, url, username, password):
     """Preconditions for fetching the CasC export."""
-    set_logging()
     _preflight(url, username, password)
 
 
-def find_controllers(obj):
-    """
-    Recursively find all dicts that contain the 'state' key.
-    :param obj: The JSON structure (dict or list).
-    :return: A list of dicts that contain the 'state' key.
-    """
-    result = []
-
-    if isinstance(obj, dict):
-        if "state" in obj:
-            result.append(obj)
-        for value in obj.values():
-            result.extend(find_controllers(value))
-
-    elif isinstance(obj, list):
-        for item in obj:
-            result.extend(find_controllers(item))
-
-    return result
-
-
 @bundleutils.command()
-@url_username_password_options
-@click.option(
-    "-P", "--path", type=click.STRING, help=f"Path to the API endpoint to call."
-)
+@option_for(Key.URL)
+@option_for(Key.USERNAME)
+@option_for(Key.PASSWORD)
+@option_for(Key.API_PATH)
 @click.pass_context
 def api(ctx, url, username, password, path):
     """
     Utility for calling the Jenkins API.
     \b
-    e.g. bundleutils api -P /whoAmI/api/json
+    e.g. bundleutils api -P /whoAmI/api/json?pretty
     """
-    set_logging()
-    url, username, password = _preflight(url, username, password)
-    url_path = url
-    if path:
-        url_path = url.rstrip("/") + "/" + path.lstrip("/")
+    url = _get(Key.URL, url)
+    username = _get(Key.USERNAME, username)
+    password = _get(Key.PASSWORD, password)
+    path = _get(Key.API_PATH, path)
+
+    _preflight(url, username, password)
+    url_path = utilz.join_url(url, path) if path else url
     response_text = call_jenkins_api(url_path, username, password)
     click.echo(response_text)
 
 
 @bundleutils.command()
-@url_username_password_options
+@option_for(Key.URL)
+@option_for(Key.USERNAME)
+@option_for(Key.PASSWORD)
 @click.pass_context
 def controllers(ctx, url, username, password):
-    """Return all online controllers from an operation center."""
-    set_logging()
-    url, username, password = _preflight(url, username, password)
-    ci_type = lookup_type_from_url(url, "")
+    """
+    Return all online controllers from an operation center.
+    """
+    url = _get(Key.URL, url)
+    ci_type = _deduce_type()
+    username = _get(Key.USERNAME, username)
+    password = _get(Key.PASSWORD, password)
+
+    _preflight(url, username, password)
     if not ci_type or not ci_type in ["oc", "oc-traditional"]:
         die(f"The url must be an operation center url.")
-    controllers_api_url = url + controllers_url_path
+    controllers_api_url = utilz.join_url(url, controllers_url_path)
     response_text = call_jenkins_api(controllers_api_url, username, password)
     controllers = json.loads(response_text)
-    controllers = find_controllers(controllers)
+    controllers = utilz.find_controllers(controllers)
     lines = []
     for controller in controllers:
         controller_endpoint = controller.get("endpoint")
@@ -2031,49 +1560,42 @@ def controllers(ctx, url, username, password):
             logging.debug(f"Controller endpoint not found for {controller_url}")
             continue
         controller_online = controller.get("online")
-        if is_truthy(controller_online):
+        if utilz.is_truthy(controller_online):
             logging.debug(f"Controller '{controller_endpoint}' is online.")
             lines.append(controller_endpoint)
         else:
             logging.debug(f"Controller '{controller_endpoint}' is not online.")
-    if lines:
-        click.echo("\n".join(lines))
+    click.echo("\n".join(lines or []))
 
 
-@bundleutils.command()
-@click.option(
-    "-k",
-    "--key",
-    type=click.STRING,
-    help=f"Return the value of the key or an error if not found.",
-)
 @click.pass_context
-def config(ctx, key):
+def _config(ctx, key=""):
     """List evaluated config based on cwd and env file."""
+    lines = []
+    if key == "NONE":
+        return lines
+    if key == "ALL":
+        key = ""
+
     # if key disable logging
-    if key:
-        logging.getLogger().setLevel(logging.ERROR)
-    set_logging()
     if key:
         # check if the key starts with BUNDLEUTILS_
         if not key.startswith("BUNDLEUTILS_"):
             die(f"Key '{key}' must start with 'BUNDLEUTILS_'")
-        # check if the key is in the environment variables
-        if key in os.environ:
-            click.echo(os.environ[key])
-            return
+        # check if the key is in the context object
+        if key in ctx.obj.keys():
+            lines.append(str(ctx.obj[key]))
         else:
-            die(f"Key '{key}' not found in environment variables")
-    # loop through all the environment variables, sorted alphabetically, starting with BUNDLEUTILS_ and print them as a single multiline string
-    logging.info("Evaluated configuration:")
-    lines = []
-    for key, value in sorted(os.environ.items()):
+            die(f"Key '{key}' not found in configuration.")
+        return lines
+    # loop through all config values
+    for key, value in sorted(ctx.obj.items()):
         if key.startswith("BUNDLEUTILS_"):
             # if the key is a password, mask it
             if "PASSWORD" in key:
-                value = "*" * len(value)
+                value = "<REDACTED>"
             lines.append(f"{key}={value}")
-    click.echo("\n".join(lines))
+    return lines
 
 
 @bundleutils.command()
@@ -2094,15 +1616,15 @@ def version():
 
 
 @bundleutils.command()
-@click.option("-u", "--url", help=f"The URL to extract the controller name from.")
+@option_for(Key.URL, required=True)
 def extract_version_from_url(url):
     """Get the instance version from the URL."""
-    name, version = lookup_url_and_version(url, "")
-    click.echo(version)
+    ci_type, ci_version = utilz.lookup_details_from_url(url)
+    click.echo(ci_version)
 
 
 @bundleutils.command()
-@click.option("-u", "--url", help=f"The URL to extract the controller name from.")
+@option_for(Key.URL, required=True)
 def extract_name_from_url(url):
     """
     Smart extraction of the controller name from the URL.
@@ -2118,48 +1640,21 @@ def extract_name_from_url(url):
     - https://NAME.b.c/
     - https://NAME.b.c
     """
-    url = lookup_url(url)
-    name = _extract_name_from_url(url)
+    name = utilz.extract_name_from_url(url)
     click.echo(name)
 
 
-def _extract_name_from_url(url):
-    if not url:
-        url = lookup_url(url)
-    parsed = urlparse(url)
-    # Check if the URL has a path
-    if parsed.path and parsed.path != "/":
-        return parsed.path.rstrip("/").split("/")[-1]
-    # Otherwise, extract the first subdomain
-    else:
-        subdomain = parsed.netloc.split(".")[0]
-        return subdomain
-
-
 @bundleutils.command()
-@click.option(
-    "-s",
-    "--string",
-    required=True,
-    type=click.STRING,
-    help=f"The string to test (e.g. a feature/testing-controller-a or main-controller-a-drift).",
-)
-@click.option(
-    "-p",
-    "--pattern",
-    type=click.STRING,
-    help=f"Optional version (taken from the remote instance otherwise).",
-)
-@click.option(
-    "-b",
-    "--bundles-dir",
-    type=click.Path(file_okay=False, dir_okay=True),
-    help=f"The directory containing the bundles.",
-)
+@option_for(Key.EXTRACT_STRING, required=True)
+@option_for(Key.EXTRACT_PATTERN, default=default_bundle_detection_pattern)
 @click.pass_context
-def extract_from_pattern(ctx, string, pattern, bundles_dir):
+def extract_from_pattern(ctx, string, pattern):
     r"""
-    Extract the controller name from a string using a regex pattern. e.g.
+    Extract the controller name from a string using a regex pattern.
+    This command is useful for extracting controller name from a feature branch name or similar strings.
+
+    \b
+    e.g.
 
     - Full string.
     Pattern: ^([a-z0-9\-]+)$
@@ -2176,20 +1671,6 @@ def extract_from_pattern(ctx, string, pattern, bundles_dir):
     - Prefix: feature/JIRA-1234/, Suffix: optional __something.
     Pattern: ^feature/[A-Z]+-\d+/([a-z0-9\-]+)(?:__[a-z0-9\-]+)*$
     """
-    bundles_dir = null_check(
-        bundles_dir,
-        BUNDLES_DIR_ARG,
-        BUNDLEUTILS_BUNDLES_DIR,
-        False,
-        ctx.obj.get(ORIGINAL_CWD),
-    )
-    pattern = null_check(
-        pattern,
-        BUNDLES_PATTERN_ARG,
-        BUNDLEUTILS_BUNDLES_PATTERN,
-        False,
-        default_bundle_detection_pattern,
-    )
     # return the first match of the pattern in the string
     match = re.search(pattern, string)
     if match:
@@ -2203,85 +1684,10 @@ def extract_from_pattern(ctx, string, pattern, bundles_dir):
 
 
 @bundleutils.command()
-@click.option("-U", "--url", help=f"The controller URL to test for (JENKINS_URL).")
-@click.option(
-    "-v",
-    "--ci-version",
-    type=click.STRING,
-    help=f"Optional version (taken from the remote instance otherwise).",
-)
-@click.option(
-    "-b",
-    "--bundles-dir",
-    type=click.Path(file_okay=False, dir_okay=True),
-    help=f"The directory containing the bundles.",
-)
-@click.pass_context
-def find_bundle_by_url(ctx, url, ci_version, bundles_dir):
-    """
-    Find a bundle by Jenkins URL and CI Version.
-
-    Use -v '.*' to match any version.
-    """
-    set_logging()
-    if not ctx.obj.get(BUNDLE_PROFILES, ""):  # if no bundle profiles are found, exit
-        logging.error("No bundle profiles found. Exiting.")
-        return
-    bundles_dir = null_check(
-        bundles_dir,
-        BUNDLES_DIR_ARG,
-        BUNDLEUTILS_BUNDLES_DIR,
-        False,
-        ctx.obj.get(ORIGINAL_CWD),
-    )
-    url, ci_version = lookup_url_and_version(url, ci_version)
-    # search the profiles for a bundle with the given URL and version
-    my_bundle = None
-    bundle_profiles = ctx.obj.get(BUNDLE_PROFILES)
-    for bundle_name, bundle_env_vars in bundle_profiles["bundles"].items():
-        if bundle_env_vars.get(BUNDLEUTILS_JENKINS_URL, "").strip().rstrip(
-            "/"
-        ) == url.strip().rstrip("/") and re.match(
-            ci_version, bundle_env_vars.get(BUNDLEUTILS_CI_VERSION, "")
-        ):
-            logging.debug(
-                f"Found bundle: {bundle_name}. Checking for bundle.yaml in {bundles_dir}"
-            )
-            bundles_found = []
-            for bundle_found in glob.iglob(
-                f"{bundles_dir}/**/{bundle_name}/bundle.yaml", recursive=True
-            ):
-                logging.debug(f"Found bundle.yaml: {bundle_found}")
-                bundles_found.append(bundle_found)
-                if my_bundle:
-                    # exit with exit code 1 and text message if a second bundle is found
-                    die(f"Multiple bundles found with the name '{bundle_found}'")
-
-            if len(bundles_found) > 1:
-                die(f"Multiple bundles found: {bundles_found}")
-            if len(bundles_found) == 1:
-                # echo the parent directory of the bundle.yaml file
-                click.echo(os.path.dirname(bundles_found[0]))
-                my_bundle = bundle_name
-    if not my_bundle:
-        die(f"No bundle found for URL {url} and version {ci_version}")
-
-
-# add completion command which takes the shell as an argument
-# shell can only be bash, fish, or zsh
-@bundleutils.command()
-@click.option(
-    "-s",
-    "--shell",
-    required=True,
-    type=click.Choice(["bash", "fish", "zsh"]),
-    help=f"The shell to generate completion script for.",
-)
+@option_for(Key.SHELL, type=click.Choice(["bash", "fish", "zsh"]), required=True)
 @click.pass_context
 def completion(ctx, shell):
     """Print the shell completion script"""
-    ctx.ensure_object(dict)
-    # run process 'echo "$(_BUNDLEUTILS_COMPLETE=bash_source bundleutils)"'
     click.echo("Run either of the following commands to enable completion:")
     click.echo(
         f'  1. eval "$(_{script_name_upper}_COMPLETE={shell}_source {script_name})"'
@@ -2292,91 +1698,29 @@ def completion(ctx, shell):
     click.echo(f"     source {script_name}-complete.{shell}")
 
 
-@click.pass_context
-def null_check(ctx, obj, obj_name, obj_env_var=None, mandatory=True, default=None):
-    """Check if the object is None and set it to the env var or default if mandatory"""
-    if not obj:
-        if obj_env_var:
-            obj = os.environ.get(obj_env_var, "")
-            if not obj:
-                if default is not None and default != "":
-                    obj = default
-                if mandatory and ctx.obj.get(INTERACTIVE_ARG):
-                    if obj_env_var:
-                        msg = f"Please provide the {obj_name} or set the {obj_env_var}"
-                    else:
-                        msg = f"Please provide the {obj_name}"
-                    if obj:
-                        obj = click.prompt(msg, default=obj)
-                    else:
-                        obj = click.prompt(msg)
-                if mandatory and not obj:
-                    die(f"No {obj_name} option provided and no {obj_env_var} set")
-    # mask password or token
-    obj_str = obj
-    if "password" in obj_name or "token" in obj_name:
-        obj_str = "*******"
-    logging.debug(f"Setting ctx - > {obj_name}: {obj_str}")
-    # if the object_name already exists in the context and if different, warn the user
-    if obj_name in ctx.obj and ctx.obj[obj_name] and ctx.obj[obj_name] != obj:
-        logging.warning(f"Overriding {obj_name} from {ctx.obj[obj_name]} to {obj_str}")
-    ctx.obj[obj_name] = obj
-    return obj
-
-
 @bundleutils.command()
-@click.option(
-    "-U",
-    "--url",
-    help=f"The controller URL to validate agianst ({BUNDLEUTILS_JENKINS_URL}).",
-)
-@click.option(
-    "-u",
-    "--username",
-    help=f"Username for basic authentication ({BUNDLEUTILS_USERNAME}).",
-)
-@click.option(
-    "-p",
-    "--password",
-    help=f"Password for basic authentication ({BUNDLEUTILS_PASSWORD}).",
-)
-@click.option(
-    "-s",
-    "--source-dir",
-    required=False,
-    type=click.Path(file_okay=False, dir_okay=True),
-    help=f"The source directory for the YAML documents ({BUNDLEUTILS_VALIDATE_SOURCE_DIR}).",
-)
-@click.option(
-    "-w",
-    "--ignore-warnings",
-    default=False,
-    is_flag=True,
-    help=f"Do not fail if warnings are found.",
-)
-@click.option(
-    "-r",
-    "--external-rbac",
-    type=click.Path(file_okay=True, dir_okay=False),
-    help=f"Path to an external rbac.yaml from an Operations Center bundle.",
-)
+@option_for(Key.URL)
+@option_for(Key.USERNAME)
+@option_for(Key.PASSWORD)
+@option_for(Key.VALIDATE_SOURCE_DIR, type=click.Path(file_okay=False, dir_okay=True))
+@option_for(Key.VALIDATE_IGNORE_WARNINGS, default="False", type=click.BOOL)
+@option_for(Key.VALIDATE_EXTERNAL_RBAC, type=click.Path(file_okay=True, dir_okay=False))
 @click.pass_context
 def validate(ctx, url, username, password, source_dir, ignore_warnings, external_rbac):
     """Validate bundle in source dir against URL."""
-    set_logging()
     _validate(url, username, password, source_dir, ignore_warnings, external_rbac)
 
 
 def _validate(url, username, password, source_dir, ignore_warnings, external_rbac):
-    username = null_check(username, "username", BUNDLEUTILS_USERNAME)
-    password = null_check(password, "password", BUNDLEUTILS_PASSWORD)
-    source_dir = null_check(
-        source_dir, "source directory", BUNDLEUTILS_VALIDATE_SOURCE_DIR
+    username = _get(Key.USERNAME, username)
+    password = _get(Key.PASSWORD, password)
+    source_dir = _get(Key.VALIDATE_SOURCE_DIR, source_dir)
+    external_rbac = utilz.is_truthy(
+        _get(Key.VALIDATE_EXTERNAL_RBAC, external_rbac, default="False")
     )
-    external_rbac = null_check(
-        external_rbac, EXTERNAL_RBAC_ARG, BUNDLEUTILS_VALIDATE_EXTERNAL_RBAC, False
+    ignore_warnings = utilz.is_truthy(
+        _get(Key.VALIDATE_IGNORE_WARNINGS, ignore_warnings)
     )
-    url = lookup_url(url)
 
     if external_rbac:
         if not os.path.exists(external_rbac):
@@ -2385,7 +1729,7 @@ def _validate(url, username, password, source_dir, ignore_warnings, external_rba
 
     # if the url does end with /casc-bundle-mgnt/casc-bundle-validate, append it
     if validate_url_path not in url:
-        url = url + validate_url_path
+        url = utilz.join_url(url, validate_url_path)
 
     # fetch the YAML from the URL
     headers = {"Content-Type": "application/zip"}
@@ -2398,15 +1742,11 @@ def _validate(url, username, password, source_dir, ignore_warnings, external_rba
     with tempfile.TemporaryDirectory() as temp_dir:
         logging.debug(f"Copying bundle files to {temp_dir}")
         for filename in os.listdir(source_dir):
-            subprocess.run(
-                ["cp", os.path.join(source_dir, filename), temp_dir], check=True
+            # python native copy
+            shutil.copy2(
+                os.path.join(f"{source_dir}", filename),
+                os.path.join(temp_dir, filename),
             )
-        if external_rbac:
-            logging.info(
-                f"Copying external RBAC file {external_rbac} to {temp_dir}. Will need to update the bundle.yaml."
-            )
-            subprocess.run(["cp", external_rbac, temp_dir], check=True)
-            _update_bundle(temp_dir)
         # zip and post the YAML to the URL
         with zipfile.ZipFile("bundle.zip", "w") as zip_ref:
             for filename in os.listdir(temp_dir):
@@ -2451,178 +1791,160 @@ def _validate(url, username, password, source_dir, ignore_warnings, external_rba
                 die("Validation failed with errors or critical messages")
 
 
-@click.pass_context
-def update_plugins_options_null_check(
-    ctx,
-    plugins_json_list_strategy,
-    plugins_json_merge_strategy,
-    catalog_warnings_strategy,
-    cap,
+def _convert_strategies_to_enums(
+    plugins_json_list_strategy, plugins_json_merge_strategy, catalog_warnings_strategy
 ):
-    cap = null_check(cap, "cap", BUNDLEUTILS_FETCH_USE_CAP_ENVELOPE, False, "")
-    # fail fast if any strategy is passed explicitly
-    default_plugins_json_list_strategy = PluginJsonListStrategy.AUTO.name
-    default_plugins_json_merge_strategy = (
-        PluginJsonMergeStrategy.ADD_DELETE_SKIP_PINNED.name
-    )
-    default_catalog_warnings_strategy = CatalogWarningsStrategy.FAIL.name
-    plugins_json_list_strategy = null_check(
-        plugins_json_list_strategy,
-        "plugins_json_list_strategy",
-        BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY,
-        True,
-        default_plugins_json_list_strategy,
-    )
-    plugins_json_merge_strategy = null_check(
-        plugins_json_merge_strategy,
-        "plugins_json_merge_strategy",
-        BUNDLEUTILS_PLUGINS_JSON_MERGE_STRATEGY,
-        True,
-        default_plugins_json_merge_strategy,
-    )
-    catalog_warnings_strategy = null_check(
-        catalog_warnings_strategy,
-        "catalog_warnings_strategy",
-        BUNDLEUTILS_CATALOG_WARNINGS_STRATEGY,
-        True,
-        default_catalog_warnings_strategy,
-    )
     logging.debug(f"Converting strategies to enums...")
+    lines = []
     try:
-        ctx.obj["plugins_json_list_strategy"] = PluginJsonListStrategy[
-            plugins_json_list_strategy
-        ]
-        ctx.obj["plugins_json_merge_strategy"] = PluginJsonMergeStrategy[
+        plugins_json_list_strategy = PluginJsonListStrategy[plugins_json_list_strategy]
+    except KeyError:
+        lines.append(
+            f"{Key.PLUGINS_JSON_LIST_STRATEGY.envvar[0]}: {plugins_json_list_strategy} (out of {get_name_from_enum(PluginJsonListStrategy)})"
+        )
+    try:
+        plugins_json_merge_strategy = PluginJsonMergeStrategy[
             plugins_json_merge_strategy
         ]
-        ctx.obj["catalog_warnings_strategy"] = CatalogWarningsStrategy[
+    except KeyError:
+        lines.append(
+            f"{Key.PLUGINS_JSON_MERGE_STRATEGY.envvar[0]}: {plugins_json_merge_strategy} (out of {get_name_from_enum(PluginJsonMergeStrategy)})"
+        )
+    try:
+        catalog_warnings_strategy = PluginCatalogWarningsStrategy[
             catalog_warnings_strategy
         ]
     except KeyError:
-        die(f"""Invalid strategy either:
-            {plugins_json_list_strategy} (out of {get_name_from_enum(PluginJsonListStrategy)})
-            or {plugins_json_merge_strategy} (out of {get_name_from_enum(PluginJsonMergeStrategy)})
-            or {catalog_warnings_strategy} (out of {get_name_from_enum(CatalogWarningsStrategy)})
-            """)
-
-
-def _lookup_username_password(url, username, password):
-    creds_needed = url is not None and url != ""
-    username = null_check(username, USERNAME_ARG, BUNDLEUTILS_USERNAME, creds_needed)
-    password = null_check(password, PASSWORD_ARG, BUNDLEUTILS_PASSWORD, creds_needed)
-    return username, password
-
-
-@click.pass_context
-def fetch_options_null_check(
-    ctx,
-    url,
-    path,
-    username,
-    password,
-    target_dir,
-    keys_to_scalars,
-    plugin_json_path,
-    offline,
-    ignore_items,
-):
-    # creds boolean True if URL set and not empty
-    ignore_items = null_check(
-        ignore_items, "ignore_items", BUNDLEUTILS_FETCH_IGNORE_ITEMS, False, ""
-    )
-    offline = null_check(offline, "offline", BUNDLEUTILS_FETCH_OFFLINE, False, "")
-    url = lookup_url(url, "", False)
-    username, password = _lookup_username_password(url, username, password)
-    path = null_check(path, PATH_ARG, BUNDLEUTILS_PATH, False)
-    plugin_json_path = null_check(
-        plugin_json_path, PLUGIN_JSON_PATH_ARG, BUNDLEUTILS_PLUGINS_JSON_PATH, False
-    )
-    target_dir = null_check(
-        target_dir, TARGET_DIR_ARG, BUNDLEUTILS_FETCH_TARGET_DIR, False, default_target
-    )
-    keys_to_scalars = keys_to_scalars.split(",") if keys_to_scalars else []
-    logging.debug(f"Using keys_to_scalars={keys_to_scalars}")
-    keys_to_scalars = null_check(
-        keys_to_scalars,
-        KEYS_TO_CONVERT_TO_SCALARS_ARG,
-        BUNDLEUTILS_KEYS_TO_CONVERT_TO_SCALARS,
-        True,
-        default_keys_to_scalars,
-    )
-    # if path or url is not provided, look for a zip file in the current directory matching the pattern core-casc-export-*.zip
-    if not path and not url:
-        zip_files = glob.glob("core-casc-export-*.zip")
-        if len(zip_files) == 1:
-            logging.info(f"Found core-casc-export-*.zip file: {zip_files[0]}")
-            path = zip_files[0]
-        elif len(zip_files) > 1:
-            die("Multiple core-casc-export-*.zip files found in the current directory")
-    if not plugin_json_path and not url:
-        plugin_json_files = glob.glob("plugins*.json")
-        if len(plugin_json_files) == 1:
-            logging.info(f"Found plugins*.json file: {plugin_json_files[0]}")
-            plugin_json_path = plugin_json_files[0]
-        elif len(plugin_json_files) > 1:
-            die("Multiple plugins*.json files found in the current directory")
-
-
-@bundleutils.command()
-@update_plugins_options
-@url_username_password_options
-@fetch_options
-@click.pass_context
-def fetch(
-    ctx,
-    url,
-    path,
-    username,
-    password,
-    target_dir,
-    keys_to_scalars,
-    plugin_json_path,
-    plugins_json_list_strategy,
-    plugins_json_merge_strategy,
-    catalog_warnings_strategy,
-    offline,
-    ignore_items,
-    cap,
-):
-    """Fetch YAML documents from a URL or path."""
-    set_logging()
-    update_plugins_options_null_check(
+        lines.append(
+            f"{Key.PLUGINS_CATALOG_WARNINGS_STRATEGY.envvar[0]}: {catalog_warnings_strategy} (out of {get_name_from_enum(PluginCatalogWarningsStrategy)})"
+        )
+    if lines:
+        lines_str = "\n".join(lines)
+        die(
+            f"""
+            Invalid strategies provided:
+            {lines_str}
+            Please use one of the valid strategies.
+            """
+        )
+    return (
         plugins_json_list_strategy,
         plugins_json_merge_strategy,
         catalog_warnings_strategy,
-        cap,
     )
-    fetch_options_null_check(
-        url,
-        path,
-        username,
-        password,
-        target_dir,
-        keys_to_scalars,
-        plugin_json_path,
-        offline,
-        ignore_items,
-    )
-    try:
-        fetch_yaml_docs()
-    except Exception as e:
-        # print the error trace
-        die(f"Failed to fetch and write YAML documents: {e}")
-    try:
-        _update_plugins()
-    except Exception as e:
-        logging.error(f"Failed to fetch and update plugin data: {e}")
-        raise e
-    # TODO remove as soon as the export does not add '^' to variables
-    handle_unwanted_escape_characters()
 
 
+def _print_config(config_key):
+    """Print the configuration for the given config key."""
+    lines = _config(config_key)
+    if lines:
+        logging.info("Evaluated configuration:")
+        click.echo("\n".join(lines or []))
+        return True
+    return False
+
+
+@bundleutils.command()
+@option_for(Key.CONFIG_KEY, is_flag=False, flag_value="ALL", default="NONE")
+@option_for(Key.FETCH_LOCAL_PATH, type=click.Path(file_okay=True, dir_okay=False))
+@option_for(Key.URL)
+@option_for(Key.USERNAME)
+@option_for(Key.PASSWORD)
+@option_for(Key.FETCH_TARGET_DIR, type=click.Path(file_okay=False, dir_okay=True))
+@option_for(Key.FETCH_IGNORE_ITEMS, default="False", type=click.BOOL)
+@option_for(Key.FETCH_KEYS_TO_SCALARS, default=default_keys_to_scalars)
+@option_for(Key.PLUGINS_USE_CAP, default="False", type=click.BOOL)
+@option_for(Key.PLUGINS_JSON_LIST_STRATEGY, default=PluginJsonListStrategy.AUTO.name)
+@option_for(
+    Key.PLUGINS_JSON_MERGE_STRATEGY,
+    default=PluginJsonMergeStrategy.ADD_DELETE_SKIP_PINNED.name,
+)
+@option_for(
+    Key.PLUGINS_CATALOG_WARNINGS_STRATEGY,
+    default=PluginCatalogWarningsStrategy.FAIL.name,
+)
 @click.pass_context
-def handle_unwanted_escape_characters(ctx):
-    target_dir = ctx.obj.get("target_dir")
+def fetch(
+    ctx,
+    config_key,
+    path,
+    url,
+    username,
+    password,
+    target_dir,
+    ignore_items,
+    keys_to_scalars,
+    use_cap,
+    plugins_json_list_strategy,
+    plugins_json_merge_strategy,
+    catalog_warnings_strategy,
+):
+    """Fetch YAML documents from a URL."""
+    if not config_key in ["ALL", "NONE"]:
+        logging.getLogger().setLevel(logging.WARNING)
+
+    path = _get(Key.FETCH_LOCAL_PATH, path, required=False)
+    if not path:
+        url = _get(Key.URL, url)
+        username = _get(Key.USERNAME, username)
+        password = _get(Key.PASSWORD, password)
+
+    if not target_dir:
+        ci_version = _deduce_version()
+        passed_dirs = {}
+        passed_dirs[Key.FETCH_TARGET_DIR] = target_dir
+        _add_default_dirs_if_necessary(url, ci_version, passed_dirs)
+        target_dir = _get(Key.FETCH_TARGET_DIR)
+
+    ignore_items = utilz.is_truthy(_get(Key.FETCH_IGNORE_ITEMS, ignore_items))
+    keys_to_scalars = _get(Key.FETCH_KEYS_TO_SCALARS, keys_to_scalars)
+    use_cap = _get(Key.PLUGINS_USE_CAP, use_cap)
+    plugins_json_list_strategy = _get(
+        Key.PLUGINS_JSON_LIST_STRATEGY, plugins_json_list_strategy
+    )
+    plugins_json_merge_strategy = _get(
+        Key.PLUGINS_JSON_MERGE_STRATEGY, plugins_json_merge_strategy
+    )
+    catalog_warnings_strategy = _get(
+        Key.PLUGINS_CATALOG_WARNINGS_STRATEGY, catalog_warnings_strategy
+    )
+
+    (
+        plugins_json_list_strategy,
+        plugins_json_merge_strategy,
+        catalog_warnings_strategy,
+    ) = _convert_strategies_to_enums(
+        plugins_json_list_strategy,
+        plugins_json_merge_strategy,
+        catalog_warnings_strategy,
+    )
+
+    if _print_config(config_key):
+        return
+    if not path:
+        _preflight(url, username, password)
+
+    try:
+        fetch_yaml_docs(ignore_items, path, url, username, password, target_dir)
+    except Exception as e:
+        die(f"Failed to fetch and write YAML documents: {e}", e)
+    try:
+        _update_plugins(
+            url,
+            username,
+            password,
+            target_dir,
+            plugins_json_list_strategy,
+            plugins_json_merge_strategy,
+            use_cap,
+        )
+    except Exception as e:
+        die(f"Failed to fetch and update plugin data: {e}", e)
+    # TODO remove as soon as the export does not add '^' to variables
+    handle_unwanted_escape_characters(target_dir)
+
+
+def handle_unwanted_escape_characters(target_dir):
     prefix = "ESCAPE CHAR CHECK - SECO-3944: "
     # check in the jenkins.yaml file for the key 'cascItemsConfiguration.variableInterpolationEnabledForAdmin'
     jenkins_yaml = os.path.join(target_dir, "jenkins.yaml")
@@ -2703,13 +2025,13 @@ def replace_string_in_dict(data, pattern, replacement, prefix=""):
                 match = re.search(pattern, value)
                 if match:
                     # if env var BUNDLEUTILS_TRACE is set, print the replacement
-                    if is_truthy(os.environ.get("BUNDLEUTILS_TRACE", "")):
-                        logging.debug(
+                    if logging.getLogger().isEnabledFor(logging.TRACE):  # type: ignore
+                        logging.trace(  # type: ignore
                             f"{prefix}Replacing '{pattern}' with '{replacement}' in dict '{value}'"
                         )
                     else:
                         logging.debug(
-                            f"{prefix}Replacing '{pattern}' with '{replacement}' in dict (export BUNDLEUTILS_TRACE=1 for details)"
+                            f"{prefix}Replacing '{pattern}' with '{replacement}' in dict (use TRACE for details)"
                         )
                     data[key] = re.sub(pattern, replacement, value)
     return data
@@ -2740,17 +2062,17 @@ def show_diff(title, plugins, col1, col2):
         # in the format plugin_name | < or > or = | plugin_name
         str = ""
         if plugin not in col2:
-            logging.debug(f"{plugin:40} < {str:40}")
+            logging.trace(f"{plugin:40} < {str:40}")  # type: ignore
         elif plugin not in col1:
-            logging.debug(f"{str:40} > {plugin:40}")
+            logging.trace(f"{str:40} > {plugin:40}")  # type: ignore
         else:
-            logging.debug(f"{plugin:40} | {plugin:40}")
+            logging.trace(f"{plugin:40} | {plugin:40}")  # type: ignore
 
 
 def hline(text):
-    logging.debug("-" * 80)
-    logging.debug(text)
-    logging.debug("-" * 80)
+    logging.trace("-" * 80)  # type: ignore
+    logging.trace(text)  # type: ignore
+    logging.trace("-" * 80)  # type: ignore
 
 
 # graph types
@@ -2860,10 +2182,10 @@ def _analyze_server_plugins(
         graphs[graph_type]["roots"] = find_root_plugins(graph_type)
         # render the dependency tree for each root plugin
         for plugin in graphs[graph_type]["roots"]:
-            logging.debug(f"Dependency tree for root plugin: {plugin}")
+            logging.trace(f"Dependency tree for root plugin: {plugin}")  # type: ignore
             dependency_list = build_dependency_list(graph_type, plugin)
             for line in render_dependency_list(dependency_list):
-                logging.debug(line)
+                logging.trace(line)  # type: ignore
     for graph_type in graph_types:
         # create a list of all roots and their non-optional dependencies
         result = set()
@@ -2898,20 +2220,20 @@ def _analyze_server_plugins(
     if cap:
         if plugins_json_list_strategy == PluginJsonListStrategy.ALL:
             logging.info(
-                f"{BUNDLEUTILS_FETCH_USE_CAP_ENVELOPE} option detected with ALL strategy. Ignoring..."
+                f"{Key.PLUGINS_JSON_LIST_STRATEGY.envvar[0]} option detected with ALL strategy. Ignoring..."
             )
         else:
             logging.info(
-                f"{BUNDLEUTILS_FETCH_USE_CAP_ENVELOPE} option detected. Removing CAP plugin dependencies..."
+                f"{Key.PLUGINS_USE_CAP.envvar[0]} option detected. Removing CAP plugin dependencies..."
             )
             expected_plugins_copy = expected_plugins.copy()
-            url, ci_version = lookup_url_and_version(url, "")
-            ci_type = lookup_type_from_url(url, "")
             if not url:
                 die("No URL provided for CAP plugin removal")
-            ci_version, ci_type, ci_server_home = server_options_null_check(
-                ci_version, ci_type, ""
+            ci_server_home = _get(
+                Key.CI_SERVER_HOME, os.path.join("target", "ci_server_home")
             )
+            ci_type = _deduce_type()
+            ci_version = _deduce_version()
             jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
             envelope_json = jenkins_manager.get_envelope_json_from_war()
             envelope_json = json.loads(envelope_json)
@@ -2993,7 +2315,7 @@ def plugins_with_plugin_in_tree(graphs, graph_type, target_plugin):
 
 
 def find_plugin_by_id(plugins, plugin_id):
-    logging.debug(f"Finding plugin by id: {plugin_id}")
+    logging.trace(f"Finding plugin by id: {plugin_id}")  # type: ignore
     for plugin in plugins:
         if plugin.get("id") == plugin_id:
             return plugin
@@ -3001,123 +2323,90 @@ def find_plugin_by_id(plugins, plugin_id):
 
 
 @bundleutils.command()
-@update_plugins_options
-@url_username_password_options
-@fetch_options
+@option_for(Key.URL)
+@option_for(Key.USERNAME)
+@option_for(Key.PASSWORD)
+@option_for(Key.FETCH_TARGET_DIR, type=click.Path(file_okay=False, dir_okay=True))
+@option_for(Key.FETCH_IGNORE_ITEMS, default="False", type=click.BOOL)
+@option_for(Key.PLUGINS_USE_CAP, default="False", type=click.BOOL)
+@option_for(Key.PLUGINS_JSON_LIST_STRATEGY, default=PluginJsonListStrategy.AUTO.name)
+@option_for(
+    Key.PLUGINS_JSON_MERGE_STRATEGY,
+    default=PluginJsonMergeStrategy.ADD_DELETE_SKIP_PINNED.name,
+)
+@option_for(
+    Key.PLUGINS_CATALOG_WARNINGS_STRATEGY,
+    default=PluginCatalogWarningsStrategy.FAIL.name,
+)
 @click.pass_context
 def update_plugins(
     ctx,
     url,
-    path,
     username,
     password,
     target_dir,
-    keys_to_convert,
-    plugin_json_path,
+    use_cap,
     plugins_json_list_strategy,
     plugins_json_merge_strategy,
     catalog_warnings_strategy,
-    offline,
-    ignore_items,
-    cap,
 ):
     """Update plugins in the target directory."""
-    set_logging()
-    update_plugins_options_null_check(
-        ctx,
+    url = _get(Key.URL, url)
+    ci_version = _deduce_version()
+    username = _get(Key.USERNAME, username)
+    password = _get(Key.PASSWORD, password)
+
+    passed_dirs = {}
+    passed_dirs[Key.FETCH_TARGET_DIR] = target_dir
+    _add_default_dirs_if_necessary(url, ci_version, passed_dirs)
+    target_dir = _get(Key.FETCH_TARGET_DIR)
+
+    use_cap = _get(Key.PLUGINS_USE_CAP, use_cap)
+    plugins_json_list_strategy = _get(
+        Key.PLUGINS_JSON_LIST_STRATEGY, plugins_json_list_strategy
+    )
+    plugins_json_merge_strategy = _get(
+        Key.PLUGINS_JSON_MERGE_STRATEGY, plugins_json_merge_strategy
+    )
+    catalog_warnings_strategy = _get(Key.PLUGINS_CATALOG_WARNINGS_STRATEGY)
+
+    (
         plugins_json_list_strategy,
         plugins_json_merge_strategy,
         catalog_warnings_strategy,
-        cap,  # type: ignore
+    ) = _convert_strategies_to_enums(
+        plugins_json_list_strategy,
+        plugins_json_merge_strategy,
+        catalog_warnings_strategy,
     )
-    fetch_options_null_check(
-        url,
-        path,
-        username,
-        password,
-        target_dir,
-        keys_to_convert,
-        plugin_json_path,
-        offline,
-        ignore_items,
-    )
-    _update_plugins()
+
+    _preflight(url, username, password)
+
+    try:
+        _update_plugins(
+            url,
+            username,
+            password,
+            target_dir,
+            plugins_json_list_strategy,
+            plugins_json_merge_strategy,
+            use_cap,
+        )
+    except Exception as e:
+        die(f"Failed to fetch and update plugin data: {e}", e)
 
 
-@bundleutils.command()
-@update_plugins_options
-@server_options
-@click.option(
-    "-t",
-    "--target-dir",
-    type=click.Path(file_okay=False, dir_okay=True),
-    help=f"The target directory in which to update the plugins.yaml.",
-)
 @click.pass_context
-def update_plugins_from_test_server(
+def _update_plugins(
     ctx,
-    ci_type,
-    ci_version,
-    ci_server_home,
+    url,
+    username,
+    password,
     target_dir,
     plugins_json_list_strategy,
     plugins_json_merge_strategy,
-    catalog_warnings_strategy,
-    cap,
+    use_cap,
 ):
-    """
-    Update plugins in the target directory using the plugins from the test server started for validation.
-    """
-    set_logging()
-    update_plugins_options_null_check(
-        plugins_json_list_strategy,
-        plugins_json_merge_strategy,
-        catalog_warnings_strategy,
-        cap,
-    )
-    ci_version, ci_type, ci_server_home = server_options_null_check(
-        ci_type, ci_version, ci_server_home
-    )
-    target_dir = null_check(
-        target_dir, TARGET_DIR_ARG, BUNDLEUTILS_MERGE_TRANSFORM_TARGET_DIR
-    )
-    jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
-    server_url, username, password = jenkins_manager.get_server_details()
-    ctx.obj["url"] = server_url
-    ctx.obj["username"] = username
-    ctx.obj["password"] = password
-    _update_plugins()
-
-
-@click.pass_context
-def _update_plugins(ctx):
-    username = ctx.obj.get("username")
-    password = ctx.obj.get("password")
-    target_dir = ctx.obj.get("target_dir")
-    url = ctx.obj.get("url")
-    plugin_json_path = ctx.obj.get("plugin_json_path")
-    plugins_json_list_strategy = ctx.obj.get("plugins_json_list_strategy")
-    plugins_json_merge_strategy = ctx.obj.get("plugins_json_merge_strategy")
-    offline = ctx.obj.get("offline")
-    cap = ctx.obj.get("cap")
-
-    target_dir_offline = target_dir + "-offline"
-    # handle offline mode
-    export_json = None
-    if offline:
-        if plugin_json_path:
-            die("Offline mode is not supported with the path option")
-        os.makedirs(target_dir_offline, exist_ok=True)
-        export_json = os.path.join(target_dir_offline, "export.json")
-        if os.path.exists(export_json):
-            logging.info(
-                f"[offline] Offline export plugins.json file exists. Skipping fetch and using it instead."
-            )
-            plugin_json_path = export_json
-            plugin_json_url = None
-    else:
-        remove_files_from_dir(target_dir_offline)
-
     # if no plugins_json_list_strategy is provided, determine it based on the apiVersion in the bundle.yaml file
     if plugins_json_list_strategy == PluginJsonListStrategy.AUTO:
         # find the apiVersion from the bundle.yaml file
@@ -3149,28 +2438,21 @@ def _update_plugins(ctx):
 
     # load the plugin JSON from the URL or path
     plugin_json_str = None
-    if plugin_json_path:
-        logging.debug(f"Loading plugin JSON from path: {plugin_json_path}")
-        with open(plugin_json_path, "r", encoding="utf-8") as f:
-            plugin_json_str = f.read()
-    elif url:
-        _preflight(url, username, password)
+    if url:
         plugin_json_url = url + plugin_json_url_path
         logging.debug(f"Loading plugin JSON from URL: {plugin_json_url}")
         plugin_json_str = call_jenkins_api(plugin_json_url, username, password)
-        if offline and export_json:
-            with open(export_json, "w", encoding="utf-8") as f:
-                logging.info(f"[offline] Writing plugins.json to {export_json}")
-                f.write(plugin_json_str)
     else:
         logging.info(
-            "No plugin JSON URL or path provided. Cannot determine if disabled/deleted plugins present in list."
+            "No plugin JSON URL provided. Cannot determine if disabled/deleted plugins present in list."
         )
         return
     data = json.loads(plugin_json_str)
     plugins_from_json = data.get("plugins", [])
     expected_plugins, all_bootstrap_plugins, all_deleted_or_inactive_plugins, graphs = (
-        _analyze_server_plugins(plugins_from_json, plugins_json_list_strategy, cap, url)
+        _analyze_server_plugins(
+            plugins_from_json, plugins_json_list_strategy, use_cap, url
+        )
     )
 
     # checking the plugin-catalog.yaml file
@@ -3229,30 +2511,30 @@ def _update_plugins(ctx):
         )
         for plugin in current_plugins:
             if plugin["id"] in plugin_catalog_plugin_ids:
-                logging.debug(
+                logging.trace(  # type: ignore
                     f" -> skipping plugin {plugin['id']} due to entry in plugin-catalog.yaml"
                 )
                 updated_plugins.append(plugin)
                 continue
             if plugin["id"] in all_bootstrap_plugins:
                 if plugins_json_merge_strategy == PluginJsonMergeStrategy.ALL:
-                    logging.debug(
+                    logging.trace(  # type: ignore
                         f" -> keeping bootstrap plugin {plugin['id']} according to merge strategy: {plugins_json_merge_strategy.name}"
                     )
                     updated_plugins.append(plugin)
                 else:
-                    logging.debug(f" -> removing bootstrap plugin {plugin['id']}")
+                    logging.trace(f" -> removing bootstrap plugin {plugin['id']}")  # type: ignore
                 continue
             if not plugin["id"] in expected_plugins:
                 if plugins_json_merge_strategy.skip_pinned:
                     # if plugin map has a url or version, skip it
                     if "url" in plugin:
-                        logging.debug(
+                        logging.trace(  # type: ignore
                             f" -> skipping plugin {plugin['id']} with pinned url according to merge strategy: {plugins_json_merge_strategy.name}"
                         )
                         updated_plugins.append(plugin)
                     elif "version" in plugin:
-                        logging.debug(
+                        logging.trace(  # type: ignore
                             f" -> skipping plugin {plugin['id']} with pinned version according to merge strategy: {plugins_json_merge_strategy.name}"
                         )
                         updated_plugins.append(plugin)
@@ -3264,7 +2546,7 @@ def _update_plugins(ctx):
                         expected_parents = ", ".join(
                             associated_parents.intersection(expected_plugins)
                         )
-                        logging.debug(
+                        logging.trace(  # type: ignore
                             f" -> removing non-pinned plugin {plugin['id']} (parents: {expected_parents}) according to merge strategy: {plugins_json_merge_strategy.name}"
                         )
                 elif plugins_json_merge_strategy.should_delete:
@@ -3275,7 +2557,7 @@ def _update_plugins(ctx):
                     expected_parents = ", ".join(
                         associated_parents.intersection(expected_plugins)
                     )
-                    logging.debug(
+                    logging.trace(  # type: ignore
                         f" -> removing plugin {plugin['id']} (parents: {expected_parents}) according to merge strategy: {plugins_json_merge_strategy.name}"
                     )
                 else:
@@ -3354,33 +2636,9 @@ def _read_core_casc_export_file(url, username, password, filename="bundle.yaml")
 
 
 @click.pass_context
-def fetch_yaml_docs(ctx):
-    ignore_items = is_truthy(ctx.obj.get("ignore_items"))
-    url = ctx.obj.get("url")
-    path = ctx.obj.get("path")
-    username = ctx.obj.get("username")
-    password = ctx.obj.get("password")
-    target_dir = ctx.obj.get("target_dir")
-    offline = is_truthy(ctx.obj.get("offline"))
-    # place each document in a separate file under a target directory
+def fetch_yaml_docs(ctx, ignore_items, path, url, username, password, target_dir):
     logging.debug(f"Creating target directory: {target_dir}")
     os.makedirs(target_dir, exist_ok=True)
-
-    # handle offline mode
-    target_dir_offline = target_dir + "-offline"
-    if offline:
-        if path:
-            die("Offline mode is not supported with the path option")
-        os.makedirs(target_dir_offline, exist_ok=True)
-        export_yaml = os.path.join(target_dir_offline, "export.yaml")
-        if os.path.exists(export_yaml):
-            logging.info(
-                f"Offline export YAML file exists. Skipping fetch and using it instead."
-            )
-            path = export_yaml
-            url = None
-    else:
-        remove_files_from_dir(target_dir_offline)
 
     # remove any existing files
     remove_files_from_dir(target_dir)
@@ -3412,7 +2670,6 @@ def fetch_yaml_docs(ctx):
                 yaml_docs = list(yaml.load_all(response_text))
                 write_all_yaml_docs_from_comments(yaml_docs, target_dir)
     elif url:
-        _preflight(url, username, password)
         filename = "bundle.yaml"
         response_text = _read_core_casc_export_file(url, username, password, filename)
         response_text = preprocess_yaml_text(response_text)
@@ -3438,7 +2695,7 @@ def fetch_yaml_docs(ctx):
 
 @click.pass_context
 def preprocess_yaml_text(ctx, response_text):
-    catalog_warnings_strategy = ctx.obj.get("catalog_warnings_strategy")
+    catalog_warnings_strategy = _get(Key.PLUGINS_CATALOG_WARNINGS_STRATEGY)
     if isinstance(response_text, bytes):
         response_text = response_text.decode("utf-8")
     # if the response is empty, skip
@@ -3451,20 +2708,20 @@ def preprocess_yaml_text(ctx, response_text):
         # log results
         for line in matching_lines:
             logging.warning(f"Found catalog warnings: {line}")
-        if catalog_warnings_strategy == CatalogWarningsStrategy.COMMENT:
+        if catalog_warnings_strategy == PluginCatalogWarningsStrategy.COMMENT.name:
             logging.warning(
-                f"Found catalog warnings in the response. Converting to comments according to strategy {catalog_warnings_strategy.name}"
+                f"Found catalog warnings in the response. Converting to comments according to strategy {catalog_warnings_strategy}"
             )
             response_text = re.sub(
                 r"^--- .*$", r"# \g<0>", response_text, flags=re.MULTILINE
             )
-        elif catalog_warnings_strategy == CatalogWarningsStrategy.FAIL:
+        elif catalog_warnings_strategy == PluginCatalogWarningsStrategy.FAIL.name:
             die(f"""
-                    Found catalog warnings in the response. Exiting according to strategy {catalog_warnings_strategy.name}
-                    Either fix the warnings or change the strategy to {CatalogWarningsStrategy.COMMENT.name} to convert warnings to comments.""")
+                    Found catalog warnings in the response. Exiting according to strategy {catalog_warnings_strategy}
+                    Either fix the warnings or change the strategy to {PluginCatalogWarningsStrategy.COMMENT.name} to convert warnings to comments.""")
         else:
             die(
-                f"Invalid catalog warnings strategy: {catalog_warnings_strategy.name}. Expected one of: {get_name_from_enum(CatalogWarningsStrategy)}"
+                f"Invalid catalog warnings strategy: {catalog_warnings_strategy}. Expected one of: {get_name_from_enum(PluginCatalogWarningsStrategy)}"
             )
     return response_text
 
@@ -3478,9 +2735,9 @@ def call_jenkins_api(url, username, password):
         logging.debug(f"Found URL in internal cache: {url}")
         return internal_cache[url]
     logging.debug(f"Fetching response from URL: {url}")
-    logging.debug(f"Using username: {username}")
+    logging.trace(f"Using username:` {username}")  # type: ignore
     # print last 5 characters of password
-    logging.debug(f"Using password: ...{password[-5:]}")
+    logging.trace(f"Using password: ...{password[-1:]}")  # type: ignore
     headers = {}
     if username and password:
         headers["Authorization"] = "Basic " + base64.b64encode(
@@ -3847,7 +3104,7 @@ def apply_replacements(ctx, filename, custom_replacements):
         if obj is None:
             logging.error(f"Failed to load YAML object from file {filename}")
             return
-        hash_only = is_truthy(os.environ.get(BUNDLEUTILS_CREDENTIAL_HASH, "false"))
+        hash_only = utilz.is_truthy(_get(Key.AUDIT_HASH, "false"))
         hash_seed = ctx.obj.get("hash_seed", "")
         if hash_only:
             if hash_seed is None or hash_seed == "":
@@ -3959,8 +3216,8 @@ def uncomment(obj2):
 
 
 def recursive_merge(obj1, obj2):
-    logging.debug(f"Obj1 ----> Key: {type(obj1)} Value: {obj1}")
-    logging.debug(f"Obj2 ----> Key: {type(obj2)} Value: {obj2}")
+    # logging.debug(f"Obj1 ----> Key: {type(obj1)} Value: {obj1}")
+    # logging.debug(f"Obj2 ----> Key: {type(obj2)} Value: {obj2}")
 
     if isinstance(obj2, CommentedMap):
         for key, value in obj2.items():
@@ -3979,104 +3236,6 @@ def recursive_merge(obj1, obj2):
     return obj1
 
 
-def source_target_prep(source_dir, target_dir, configs, suffix, filename):
-    if not source_dir:
-        source_dir = default_target
-    source_dir = os.path.normpath(source_dir)
-    if not target_dir:
-        target_dir = source_dir + suffix
-    target_dir = os.path.normpath(target_dir)
-    if not configs:
-        # if a normalize.yaml file is found in the current directory, use it
-        if os.path.exists(filename):
-            logging.info(f"Using {filename} in the current directory")
-            configs = [filename]
-        else:
-            path = get_config_file(filename)
-            configs = [path]
-    return source_dir, target_dir, configs
-
-
-@bundleutils.command()
-@transform_options
-@click.pass_context
-def normalize(ctx, strict, configs, source_dir, target_dir, dry_run):
-    """Transform using the normalize.yaml for better comparison."""
-    set_logging()
-    source_dir, target_dir, configs = source_target_prep(
-        source_dir, target_dir, configs, "-normalized", "normalize.yaml"
-    )
-    _transform(configs, source_dir, target_dir, dry_run)
-
-
-@bundleutils.command()
-@transform_options
-@click.option(
-    "-H",
-    "--hash-seed",
-    help=f"""
-    Optional prefix for the hashing process (also {BUNDLEUTILS_CREDENTIAL_HASH_SEED}).
-
-    NOTE: Ideally, this should be a secret value that is not shared with anyone. Changing this value will result in different hashes.""",
-)
-@click.option(
-    "--no-hash",
-    default=False,
-    is_flag=True,
-    help="Replace sensitive data with its ${THIS_IS_THE_SECRET} equivalent.",
-)
-@click.pass_context
-def audit(ctx, strict, configs, source_dir, target_dir, dry_run, hash_seed, no_hash):
-    """
-    Transform using the normalize.yaml but obfuscating any sensitive data.
-
-    \b
-    NOTE:
-    - The credentials and sensitive data will be hashed and cannot be used in an actual bundle.
-    - Setting BUNDLEUTILS_CREDENTIAL_HASH=false will revert to the standard method.
-
-    """
-    set_logging()
-
-    source_dir = null_check(source_dir, SOURCE_DIR_ARG, BUNDLEUTILS_AUDIT_SOURCE_DIR)
-    target_dir = null_check(target_dir, TARGET_DIR_ARG, BUNDLEUTILS_AUDIT_TARGET_DIR)
-    configs = null_check(configs, "configs", BUNDLEUTILS_AUDIT_CONFIGS, False)
-
-    # set the environment variable if not already set, command line arg takes precedence
-    if no_hash:
-        os.environ[BUNDLEUTILS_CREDENTIAL_HASH] = "false"
-    elif BUNDLEUTILS_CREDENTIAL_HASH not in os.environ:
-        os.environ[BUNDLEUTILS_CREDENTIAL_HASH] = "true"
-
-    null_check(hash_seed, "hash_seed", BUNDLEUTILS_CREDENTIAL_HASH_SEED, False, "")
-
-    # set the is_audit flag for the bundle update later (we want to set the version later)
-    os.environ[BUNDLEUTILS_AUDIT_FIXED_VERSION] = "AUDITED_BUNDLE_DO_NOT_USE"
-
-    source_dir, target_dir, configs = source_target_prep(
-        source_dir, target_dir, configs, "-audit", "normalize.yaml"
-    )
-    _transform(configs, source_dir, target_dir, dry_run)
-
-
-@bundleutils.command()
-@transform_options
-@click.pass_context
-def transform(ctx, strict, configs, source_dir, target_dir, dry_run):
-    """Transform using a custom transformation config."""
-    set_logging()
-    source_dir = null_check(
-        source_dir, SOURCE_DIR_ARG, BUNDLEUTILS_TRANSFORM_SOURCE_DIR
-    )
-    source_dir = os.path.normpath(source_dir)
-    target_dir = null_check(
-        target_dir, TARGET_DIR_ARG, BUNDLEUTILS_TRANSFORM_TARGET_DIR
-    )
-    target_dir = os.path.normpath(target_dir)
-    configs = null_check(configs, "configs", BUNDLEUTILS_TRANSFORM_CONFIGS, False)
-    _transform(configs, source_dir, target_dir, dry_run)
-
-
 @click.pass_context
 def _file_check(ctx, file, strict=False):
     # if file does not exist, or is empty, skip
@@ -4092,28 +3251,130 @@ def _file_check(ctx, file, strict=False):
     return True
 
 
-def _transform(configs, source_dir, target_dir, dry_run=False):
+@bundleutils.command()
+@option_for(Key.CONFIG_KEY, is_flag=False, flag_value="ALL", default="NONE")
+@option_for(Key.URL)
+@option_for(Key.DRY_RUN, default="False", type=click.BOOL)
+@option_for(Key.STRICT, default="False", type=click.BOOL)
+@option_for(
+    Key.CONFIGS_BASE,
+    type=click.Path(file_okay=False, dir_okay=True),
+    default=default_config_base,
+)
+@option_for(Key.CONFIG, type=click.Path(file_okay=True, dir_okay=False))
+@option_for(Key.AUDIT_SOURCE_DIR, type=click.Path(file_okay=False, dir_okay=True))
+@option_for(Key.AUDIT_TARGET_DIR, type=click.Path(file_okay=False, dir_okay=True))
+@option_for(Key.AUDIT_HASH_SEED, default="")
+@option_for(Key.AUDIT_HASH, default="True", type=click.BOOL)
+@click.pass_context
+def audit(
+    ctx,
+    config_key,
+    url,
+    dry_run,
+    strict,
+    configs_base,
+    config,
+    source_dir,
+    target_dir,
+    hash_seed,
+    hash,
+):
+    """
+    Transform bundle but obfuscating any sensitive data.
+
+    \b
+    NOTE:
+    - The credentials and sensitive data will be hashed and cannot be used in an actual bundle.
+    - Use the hash arg to revert to the standard method.
+
+    """
+
+    if not config_key in ["ALL", "NONE"]:
+        logging.getLogger().setLevel(logging.WARNING)
+    dry_run = _get(Key.DRY_RUN, dry_run)
+    strict = _get(Key.STRICT, strict)
+    configs_base = _get(Key.CONFIGS_BASE, configs_base)
+    hash_seed = _get(Key.AUDIT_HASH_SEED, hash_seed, required=False)
+    hash = _get(Key.AUDIT_HASH, hash)
+
+    url = str(_get(Key.URL, url, required=False))
+    config = _determine_transformation_config(url, config)
+
+    source_dir = _get(Key.AUDIT_SOURCE_DIR, source_dir, required=False)
+    target_dir = _get(Key.AUDIT_TARGET_DIR, target_dir, required=False)
+    if not source_dir or not target_dir:
+        passed_dirs = {}
+        passed_dirs[Key.AUDIT_SOURCE_DIR] = source_dir
+        passed_dirs[Key.AUDIT_TARGET_DIR] = target_dir
+        _add_default_dirs_if_necessary(url, None, passed_dirs)
+    source_dir = os.path.normpath(str(_get(Key.AUDIT_SOURCE_DIR)))
+    target_dir = os.path.normpath(str(_get(Key.AUDIT_TARGET_DIR)))
+
+    if _print_config(config_key):
+        return
+
+    # set the is_audit flag for the bundle update later (we want to set the version later)
+    os.environ[BUNDLEUTILS_AUDIT_FIXED_VERSION] = "AUDITED_BUNDLE_DO_NOT_USE"
+
+    _transform(config, source_dir, target_dir, utilz.is_truthy(dry_run))
+
+
+@bundleutils.command()
+@option_for(Key.CONFIG_KEY, is_flag=False, flag_value="ALL", default="NONE")
+@option_for(Key.URL)
+@option_for(Key.DRY_RUN, default="False", type=click.BOOL)
+@option_for(Key.STRICT, default="False", type=click.BOOL)
+@option_for(
+    Key.CONFIGS_BASE,
+    type=click.Path(file_okay=False, dir_okay=True),
+    default=default_config_base,
+)
+@option_for(Key.CONFIG, type=click.Path(file_okay=True, dir_okay=False))
+@option_for(Key.TRANSFORM_SOURCE_DIR, type=click.Path(file_okay=False, dir_okay=True))
+@option_for(Key.TRANSFORM_TARGET_DIR, type=click.Path(file_okay=False, dir_okay=True))
+@click.pass_context
+def transform(
+    ctx, config_key, url, dry_run, strict, configs_base, config, source_dir, target_dir
+):
     """Transform using a custom transformation config."""
-    # add the transformation configs recursively into the merged config
-    # if the configs is a string, split it by space
-    if isinstance(configs, str):
-        configs = configs.split()
-    if not configs:
-        # if a transform.yaml file is found in the current directory, use it
-        if os.path.exists("transform.yaml"):
-            logging.info("Using transform.yaml in the current directory")
-            configs = ["transform.yaml"]
-        else:
-            die(
-                "No transformation config provided and no transform.yaml found in the current directory"
-            )
+    if not config_key in ["ALL", "NONE"]:
+        logging.getLogger().setLevel(logging.WARNING)
+    dry_run = _get(Key.DRY_RUN, dry_run)
+    strict = _get(Key.STRICT, strict)
+    configs_base = _get(Key.CONFIGS_BASE, configs_base)
+
+    url = str(_get(Key.URL, url, required=False))
+    config = _determine_transformation_config(url, config)
+
+    source_dir = _get(Key.TRANSFORM_SOURCE_DIR, source_dir, required=False)
+    target_dir = _get(Key.TRANSFORM_TARGET_DIR, target_dir, required=False)
+    if not source_dir or not target_dir:
+        passed_dirs = {}
+        passed_dirs[Key.TRANSFORM_SOURCE_DIR] = source_dir
+        passed_dirs[Key.TRANSFORM_TARGET_DIR] = target_dir
+        _add_default_dirs_if_necessary(url, None, passed_dirs)
+    source_dir = os.path.normpath(str(_get(Key.TRANSFORM_SOURCE_DIR)))
+    target_dir = os.path.normpath(str(_get(Key.TRANSFORM_TARGET_DIR)))
+
+    if _print_config(config_key):
+        return
+    _transform(config, source_dir, target_dir, utilz.is_truthy(dry_run))
+
+
+def _transform(config, source_dir, target_dir, dry_run=False):
+    """Transform using a custom transformation config."""
+    # add the transformation config recursively into the merged config
+    # if the config is a string, split it by space
+    if not config:
+        die("No transformation config provided and no default config found.")
+
+    # TODO: handle multiple configs via includes section
     merged_config = {}
-    for config in configs:
-        _file_check(config, True)
-        with open(config, "r", encoding="utf-8") as inp:
-            logging.info(f"Transformation: processing {config}")
-            obj = yaml.load(inp)
-            merged_config = recursive_merge(merged_config, obj)
+    _file_check(config, True)
+    with open(config, "r", encoding="utf-8") as inp:
+        logging.info(f"Transformation: processing {config}")
+        merged_config = yaml.load(inp)
 
     if dry_run:
         logging.info(f"Merged config:\n" + printYaml(merged_config))
@@ -4121,9 +3382,8 @@ def _transform(configs, source_dir, target_dir, dry_run=False):
 
     logging.debug(f"Merged config:\n" + printYaml(merged_config))
     source_dir = os.path.normpath(source_dir)
-    # if the target directory is not set, use the source directory suffixed with -transformed
     if not target_dir:
-        target_dir = source_dir + "-transformed"
+        die(f"Target directory is not set. Please provide a target directory.")
     target_dir = os.path.normpath(target_dir)
     logging.info(f"Transform: source {source_dir} to target {target_dir}")
     # create the target directory if it does not exist, delete all files in it
@@ -4159,7 +3419,9 @@ def preprocess_yaml_object(ctx, data, parent_key=None):
                 del data[key]
         # Convert values to block scalars if needed
         convert_to_scalars = [
-            k for k in data if k in ctx.obj.get(KEYS_TO_CONVERT_TO_SCALARS_ARG)
+            k
+            for k in data
+            if k in _get(Key.FETCH_KEYS_TO_SCALARS) and data[k] is not None
         ]
         for key in convert_to_scalars:
             if key in data and isinstance(data[key], str) and data[key].strip():
@@ -4215,6 +3477,10 @@ def _find_bundles(target_dir):
 )
 @click.pass_context
 def find_bundles(ctx, target_dir):
+    """
+    Find all bundle.yaml files in the target directory and print their paths.
+    If no target directory is provided, the current working directory is used.
+    """
     if not target_dir:
         target_dir = os.curdir
     for bundle_path in _find_bundles(target_dir):
@@ -4222,34 +3488,15 @@ def find_bundles(ctx, target_dir):
 
 
 @bundleutils.command()
-@click.option(
-    "-t",
-    "--target-dir",
+@option_for(
+    Key.UPDATE_BUNDLE_TARGET_DIR,
     type=click.Path(file_okay=False, dir_okay=True),
-    help=f"The target directory to update the bundle.yaml file (defaults to CWD).",
+    default=os.getcwd(),
 )
-@click.option(
-    "-d",
-    "--description",
-    help=f"Optional description for the bundle (also {BUNDLEUTILS_BUNDLE_DESCRIPTION}).",
-)
-@click.option(
-    "-o",
-    "--output-sorted",
-    help=f"Optional place to put the sorted yaml string used to created the version.",
-)
-@click.option(
-    "-e",
-    "--empty-bundle-strategy",
-    help=f"Optional strategy for handling empty bundles ({BUNDLEUTILS_EMPTY_BUNDLE_STRATEGY}).",
-)
-@click.option(
-    "-r",
-    "--recursive",
-    default=False,
-    is_flag=True,
-    help=f"Update recursively on all bundles found from target dir.",
-)
+@option_for(Key.UPDATE_BUNDLE_DESCRIPTION)
+@option_for(Key.UPDATE_BUNDLE_OUTPUT_SORTED)
+@option_for(Key.UPDATE_BUNDLE_EMPTY_BUNDLE_STRATEGY)
+@option_for(Key.UPDATE_BUNDLE_RECURSIVE, default="False", type=click.BOOL)
 @click.pass_context
 def update_bundle(
     ctx, target_dir, description, output_sorted, empty_bundle_strategy, recursive
@@ -4274,10 +3521,7 @@ def update_bundle(
     - 'noop': Create a noop jenkins.yaml and continue
 
     """
-    set_logging()
     if recursive:
-        if not target_dir:
-            target_dir = ctx.obj.get(ORIGINAL_CWD)
         target_dir = os.path.normpath(target_dir)
         bundle_paths = _find_bundles(target_dir)
         if not bundle_paths:
@@ -4407,19 +3651,14 @@ def _get_files_for_key(target_dir, key):
 def _update_bundle(
     ctx, target_dir, description=None, output_sorted=None, empty_bundle_strategy=None
 ):
-    description = null_check(
-        description, "description", BUNDLEUTILS_BUNDLE_DESCRIPTION, False
-    )
-    empty_bundle_strategy = null_check(
+    description = _get(Key.UPDATE_BUNDLE_DESCRIPTION, description, required=False)
+    empty_bundle_strategy = _get(
+        Key.UPDATE_BUNDLE_EMPTY_BUNDLE_STRATEGY,
         empty_bundle_strategy,
-        "empty_bundle_strategy",
-        BUNDLEUTILS_EMPTY_BUNDLE_STRATEGY,
-        False,
         default_empty_bundle_strategy,
     )
-
     if not target_dir:
-        target_dir = ctx.obj.get(ORIGINAL_CWD)
+        die("Target directory is not set. Please provide a target directory.")
     logging.debug(f"Updating bundle in {target_dir}")
     # Load the YAML file
     with open(os.path.join(target_dir, "bundle.yaml"), "r", encoding="utf-8") as file:
@@ -4471,7 +3710,7 @@ def _update_bundle(
                 yaml.dump({"jenkins": {}}, file)
         else:
             die(
-                f"Empty Bundle Strategy: Strategy '{empty_bundle_strategy}' not supported. {BUNDLEUTILS_EMPTY_BUNDLE_STRATEGY} must be one of {empty_bundle_strategies}"
+                f"Empty Bundle Strategy: Strategy '{empty_bundle_strategy}' not supported. {Key.UPDATE_BUNDLE_EMPTY_BUNDLE_STRATEGY.envvar[0]} must be one of {empty_bundle_strategies}"
             )
 
     # update the id key with the basename of the target_dir
@@ -4588,8 +3827,7 @@ def split_jcasc(target_dir, filename, configs):
 
         logging.debug(f"Old paths before wildcards: {new_paths}")
         logging.debug(f"New paths after wildcards: {new_paths}")
-        if is_truthy(os.environ.get("BUNDLEUTILS_TRACE", "")):
-            logging.debug(f"Source data: \n{printYaml(source_data)}")
+        logging.trace(f"Source data: \n{printYaml(source_data)}")  # type: ignore
 
         # For each path to move...
         for path in new_paths:

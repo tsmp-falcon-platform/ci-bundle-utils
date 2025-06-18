@@ -10,7 +10,7 @@ This tutorial will explain how to have your controller audited in 5 mins.
 - [3, 2, 1...Go](#3-2-1go)
 - [Bonus Exercise: using `BUNDLEUTILS_CREDENTIAL_HASH`](#bonus-exercise-using-bundleutils_credential_hash)
 - [Bonus Exercise: using the `gitleaks` check](#bonus-exercise-using-the-gitleaks-check)
-- [Bonus Exercise: using a custom `normalize.yaml`](#bonus-exercise-using-a-custom-normalizeyaml)
+- [Bonus Exercise: using a custom `audit.yaml`](#bonus-exercise-using-a-custom-audityaml)
 - [Bonus Exercise: avoid downloading expensive `items.yaml`](#bonus-exercise-avoid-downloading-expensive-itemsyaml)
 - [Bonus Exercise: version based bundles](#bonus-exercise-version-based-bundles)
 - [Bonus Exercise: version based bundles (and preserving git history)](#bonus-exercise-version-based-bundles-and-preserving-git-history)
@@ -207,9 +207,9 @@ This is useful for noticing when the encrypted value changes without actually kn
 > - the credentials are changed in the UI (even it the change does not include the credential value, e.g. changing the description)
 > - reloading a CasC bundle which includes credentials (in this case, the credentials are recreated and thus re-encrypted)
 
-If false positives such as those above are not wanted, setting `BUNDLEUTILS_CREDENTIAL_HASH=false` will use a env var like representation instead.
+If false positives such as those above are not wanted, setting `BUNDLEUTILS_AUDIT_HASH=false` will use a env var like representation instead.
 
-**Using...** `export BUNDLEUTILS_CREDENTIAL_HASH=false`
+**Using...** `export BUNDLEUTILS_AUDIT_HASH=false`
 
 ```yaml
        - usernamePassword:
@@ -307,30 +307,30 @@ Let's remove the checks before continuing:
 }
 ```
 
-## Bonus Exercise: using a custom `normalize.yaml`
+## Bonus Exercise: using a custom `audit.yaml`
 
-Auditing will, by default, use the [default `normalize.yaml`](../bundleutilspkg/src/bundleutilspkg/data/configs/normalize.yaml) to transform the fetched bundle.
+Auditing will, by default, use the [default `audit.yaml`](../bundleutilspkg/src/bundleutilspkg/data/configs/audit.yaml) to transform the fetched bundle.
 
-If you wish to use a custom `normalize.yaml`, simply place the file in the root directory and make the appropriate changes.
+If you wish to use a custom `audit.yaml`, simply place the file in the root directory and make the appropriate changes.
 
 Example: copy and alter the file (removing the patch which deletes the labelAtoms):
 
 ```sh
-cp ../../.app/bundleutilspkg/src/bundleutilspkg/data/configs/normalize.yaml .
+cp ../../.app/bundleutilspkg/src/bundleutilspkg/data/configs/audit.yaml .
 ```
 
 ```sh
-vi normalize.yaml
+vi audit.yaml
 ```
 
 Example Output:
 
 ```sh
-bundle-user@82b69d6e24b9:/opt/bundleutils/work/audits$ cp ../../.app/bundleutilspkg/src/bundleutilspkg/data/configs/normalize.yaml .
+bundle-user@82b69d6e24b9:/opt/bundleutils/work/audits$ cp ../../.app/bundleutilspkg/src/bundleutilspkg/data/configs/audit.yaml .
 
-bundle-user@82b69d6e24b9:/opt/bundleutils/work/audits$ vi normalize.yaml
+bundle-user@82b69d6e24b9:/opt/bundleutils/work/audits$ vi audit.yaml
 
-bundle-user@82b69d6e24b9:/opt/bundleutils/work/audits$ diff ../../.app/bundleutilspkg/src/bundleutilspkg/data/configs/normalize.yaml normalize.yaml
+bundle-user@82b69d6e24b9:/opt/bundleutils/work/audits$ diff ../../.app/bundleutilspkg/src/bundleutilspkg/data/configs/audit.yaml audit.yaml
 7,9d6
 <     # these labels are dynamic based on the agents available
 <   - op: remove
@@ -342,12 +342,8 @@ Running the audit again now results in:
 ```sh
 bundle-user@82b69d6e24b9:/opt/bundleutils/work/audits$ ../examples/tutorials/auditing/audit.sh
 AUDITING: GIT_ACTION=commit-only
-AUDITING: Running bundleutils extract-name-from-url...
-AUDITING: Running bundleutils fetch -t target/fetched/cjoc
-...
-...
-INFO:root:Using normalize.yaml in the current directory            # <-- Here we see it using the custom normalize.yaml
-INFO:root:Transformation: processing normalize.yaml
+AUDITING: Running bundleutils config...
+INFO:root:Using config file: ./audit.yaml            # <-- Here we see it using the custom audit.yaml
 ...
 ...
 diff --git a/cjoc/jenkins.yaml b/cjoc/jenkins.yaml
@@ -374,7 +370,7 @@ Revert by removing the custom file:
 
 ```sh
 {
-  rm normalize.yaml
+  rm audit.yaml
   ../examples/tutorials/auditing/audit.sh
 }
 ```
@@ -455,7 +451,7 @@ It might be useful to track the CI versions on bundles when performing audits.
 - Wouldn't it be nice if the bundle was called `team-mobility-2.492.3.5` instead?
 - This way, changes within a particular version could be tracked more easily.
 
-This is where the `BUNDLEUTILS_AUTO_ENV_APPEND_VERSION` comes in.
+This is where the `BUNDLEUTILS_GBL_APPEND_VERSION` comes in.
 
 Up until now, we have simple bundle names. E.g.
 
@@ -472,7 +468,7 @@ Let us use version based bundle names:
 
 ```sh
 {
-  export BUNDLEUTILS_AUTO_ENV_APPEND_VERSION=true
+  export BUNDLEUTILS_GBL_APPEND_VERSION=true
   ../examples/tutorials/auditing/audit.sh
   git show --stat
 }

@@ -49,122 +49,124 @@ Usage: bundleutils [OPTIONS] COMMAND [ARGS]...
   A tool to fetch and transform YAML documents.
 
 Options:
-  -a, --auto-env-append-version  Append the current version to the bundle
-                                 directory
-                                 (BUNDLEUTILS_AUTO_ENV_APPEND_VERSION).
-  -u, --auto-env-url-only        Determine env vars via URL only
-                                 (BUNDLEUTILS_AUTO_ENV_USE_URL_ONLY).
-  -i, --interactive              Run in interactive mode.
-  -e, --env-file FILE            Optional bundle profiles file
-                                 (BUNDLEUTILS_ENV).
-  -l, --log-level TEXT           The log level (BUNDLEUTILS_LOG_LEVEL).
-  --help                         Show this message and exit.
+  -l, --log-level [TRACE|DEBUG|INFO|WARNING]
+                                  The log level (BUNDLEUTILS_GBL_LOG_LEVEL)
+  -e, --raise-errors / --no-raise-errors
+                                  Raise errors instead of printing them
+                                  (BUNDLEUTILS_GBL_RAISE_ERRORS)
+  -i, --interactive / --no-interactive
+                                  Run in interactive mode
+                                  (BUNDLEUTILS_GBL_INTERACTIVE)
+  -a, --append-version / --no-append-version
+                                  Append the current version to the bundle
+                                  directory (BUNDLEUTILS_GBL_APPEND_VERSION)
+  -b, --bundles-base DIRECTORY    The base directory for the bundles
+                                  (BUNDLEUTILS_BUNDLES_BASE)
+  --help                          Show this message and exit.
 
 Commands:
-  api                             Utility for calling the Jenkins API.
-  audit                           Transform using the normalize.yaml but...
-  bootstrap                       Bootstrap a bundle.
-  ci-sanitize-plugins             Sanitizes plugins (needs ci-start).
-  ci-setup                        Download CloudBees WAR file, and setup...
-  ci-start                        Start CloudBees Server
-  ci-stop                         Stop CloudBees Server
-  ci-validate                     Validate bundle against controller...
-  completion                      Print the shell completion script
-  config                          List evaluated config based on cwd and...
-  controllers                     Return all online controllers from an...
-  delete                          Delete a bundle source dir and the...
-  diff                            Diff two YAML directories or files.
-  diff-merged                     Diff two bundle directories by...
-  extract-from-pattern            Extract the controller name from a...
-  extract-name-from-url           Smart extraction of the controller...
-  extract-version-from-url        Get the instance version from the URL.
-  fetch                           Fetch YAML documents from a URL or path.
-  find-bundle-by-url              Find a bundle by Jenkins URL and CI...
-  find-bundles
-  help-pages                      Show all help pages by running...
-  merge-bundles                   Used for merging bundles.
-  merge-yamls                     Used for merging YAML files of the...
-  normalize                       Transform using the normalize.yaml for...
-  preflight                       Preconditions for fetching the CasC...
-  transform                       Transform using a custom...
-  update-bundle                   Update the bundle.yaml file in the...
-  update-plugins                  Update plugins in the target directory.
-  update-plugins-from-test-server
-                                  Update plugins in the target directory...
-  validate                        Validate bundle in source dir against...
-  version                         Show the app version.
+  api                       Utility for calling the Jenkins API.
+  audit                     Transform bundle but obfuscating any...
+  ci-sanitize-plugins       Sanitizes plugins (needs ci-start).
+  ci-setup                  Download CloudBees WAR file, and setup the...
+  ci-start                  Start CloudBees Server
+  ci-stop                   Stop CloudBees Server
+  ci-validate               Validate bundle against controller started...
+  completion                Print the shell completion script
+  controllers               Return all online controllers from an...
+  diff                      Diff two YAML directories or files.
+  diff-merged               Diff two bundle directories by temporarily...
+  extract-from-pattern      Extract the controller name from a string...
+  extract-name-from-url     Smart extraction of the controller name from...
+  extract-version-from-url  Get the instance version from the URL.
+  fetch                     Fetch YAML documents from a URL.
+  find-bundles              Find all bundle.yaml files in the target...
+  help-pages                Show all help pages by running 'bundleutils...
+  merge-bundles             Used for merging bundles.
+  merge-yamls               Used for merging YAML files of the same type...
+  preflight                 Preconditions for fetching the CasC export.
+  transform                 Transform using a custom transformation config.
+  update-bundle             Update the bundle.yaml file in the target...
+  update-plugins            Update plugins in the target directory.
+  validate                  Validate bundle in source dir against URL.
+  version                   Show the app version.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils api [OPTIONS]
 
   Utility for calling the Jenkins API.  e.g. bundleutils api -P
-  /whoAmI/api/json
+  /whoAmI/api/json?pretty
 
 Options:
-  -p, --password TEXT  Password for basic authentication
-                       (BUNDLEUTILS_PASSWORD).
+  -U, --url TEXT       The URL to interact with (BUNDLEUTILS_JENKINS_URL)
   -u, --username TEXT  Username for basic authentication
-                       (BUNDLEUTILS_USERNAME).
-  -U, --url TEXT       The URL to fetch YAML from (BUNDLEUTILS_JENKINS_URL).
-  -P, --path TEXT      Path to the API endpoint to call.
+                       (BUNDLEUTILS_USERNAME)
+  -p, --password TEXT  Password for basic authentication
+                       (BUNDLEUTILS_PASSWORD)
+  -P, --path TEXT      Path to the API endpoint to call (BUNDLEUTILS_API_PATH)
   --help               Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils audit [OPTIONS]
 
-  Transform using the normalize.yaml but obfuscating any sensitive data.
+  Transform bundle but obfuscating any sensitive data.
 
   NOTE:
   - The credentials and sensitive data will be hashed and cannot be used in an actual bundle.
-  - Setting BUNDLEUTILS_CREDENTIAL_HASH=false will revert to the standard method.
+  - Use the hash arg to revert to the standard method.
 
 Options:
-  -t, --target-dir DIRECTORY  The target directory for the YAML documents.
-                              Defaults to the source directory suffixed with
-                              -transformed.
-  -s, --source-dir DIRECTORY  The source directory for the YAML documents.
-  -c, --config FILE           The transformation config(s).
-  -S, --strict                Fail when referencing non-existent files - warn
-                              otherwise.
-  -d, --dry-run               Print the merged transform config and exit.
-  -H, --hash-seed TEXT        Optional prefix for the hashing process (also
-                              BUNDLEUTILS_CREDENTIAL_HASH_SEED).
-                              
-                              NOTE: Ideally, this should be a secret value
-                              that is not shared with anyone. Changing this
-                              value will result in different hashes.
-  --no-hash                   Replace sensitive data with its
-                              ${THIS_IS_THE_SECRET} equivalent.
-  --help                      Show this message and exit.
-------------------------------------------------------------------------------------------------------------------------
-Usage: bundleutils bootstrap [OPTIONS]
-
-  Bootstrap a bundle.
-
-Options:
-  -s, --source-dir DIRECTORY   The bundle to be bootstrapped.
-  -S, --source-base DIRECTORY  Specify parent dir of source-dir, bundle name
-                               taken from URL.
-  -p, --profile TEXT           The bundle profile to use.
-  -u, --update TEXT            Should the bundle be updated if present.
-  -U, --url TEXT               The controller URL to bootstrap (JENKINS_URL).
-  -v, --ci-version TEXT        Optional version (taken from the remote
-                               instance otherwise).
-  --help                       Show this message and exit.
+  -K, --config-key TEXT         Returns value if key provided (error if not
+                                found), or k=v when used as flag
+                                (BUNDLEUTILS_CONFIG_KEY)
+  -U, --url TEXT                The URL to interact with
+                                (BUNDLEUTILS_JENKINS_URL)
+  -d, --dry-run / --no-dry-run  Print the merged transform config and exit
+                                (BUNDLEUTILS_DRY_RUN)
+  -S, --strict / --no-strict    Fail when referencing non-existent files -
+                                warn otherwise (BUNDLEUTILS_STRICT)
+  -C, --configs-base DIRECTORY  The directory containing the transformation
+                                config(s) (BUNDLEUTILS_CONFIGS_BASE)
+  -c, --config FILE             The transformation config to use
+                                (BUNDLEUTILS_CONFIG)
+  -s, --source-dir DIRECTORY    The source directory for the YAML documents to
+                                audit (BUNDLEUTILS_AUDIT_SOURCE_DIR)
+  -t, --target-dir DIRECTORY    The target directory for the audited YAML
+                                documents (BUNDLEUTILS_AUDIT_TARGET_DIR)
+  -H, --hash-seed TEXT          Optional prefix for the hashing process.
+                                
+                                NOTE: Ideally, this should be a secret value
+                                that is not shared with anyone. Changing this
+                                value will result in different hashes.
+                                (BUNDLEUTILS_AUDIT_HASH_SEED)
+  -n, --hash / --no-hash        Replace sensitive data with its
+                                ${THIS_IS_THE_SECRET} equivalent
+                                (BUNDLEUTILS_AUDIT_HASH)
+  --help                        Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils ci-sanitize-plugins [OPTIONS]
 
   Sanitizes plugins (needs ci-start).
 
 Options:
-  -H, --ci-server-home TEXT   Defaults to
-                              /tmp/ci_server_home/<ci_type>/<ci_version>.
-  -t, --ci-type TEXT          The type of the CloudBees server.
-  -v, --ci-version TEXT       The version of the CloudBees WAR file.
-  -s, --source-dir DIRECTORY  The bundle of the plugins to be sanitized.
-  -p, --pin-plugins           Add versions to 3rd party plugins (only
-                              available for apiVersion 2).
-  -c, --custom-url TEXT       Add a custom URL, e.g. http://plugins-
-                              repo/plugins/PNAME/PVERSION/PNAME.hpi
-  --help                      Show this message and exit.
+  -H, --ci-server-home TEXT       Defaults to
+                                  /tmp/ci_server_home/<ci_type>/<ci_version>
+                                  (BUNDLEUTILS_CI_SERVER_HOME)
+  -U, --url TEXT                  The URL to interact with
+                                  (BUNDLEUTILS_JENKINS_URL)
+  -t, --ci-type TEXT              The type of the CloudBees instance
+                                  (BUNDLEUTILS_CI_TYPE)
+  -v, --ci-version TEXT           The version of the CloudBees instance
+                                  (BUNDLEUTILS_CI_VERSION)
+  -s, --source-dir DIRECTORY      The bundle to be validated - startup will
+                                  use the plugins from here
+                                  (BUNDLEUTILS_CI_SETUP_SOURCE_DIR)
+  -p, --pin-plugins / --no-pin-plugins
+                                  Add versions to 3rd party plugins (only
+                                  available for apiVersion 2)
+                                  (BUNDLEUTILS_SANITIZE_PLUGINS_PIN_PLUGINS)
+  -u, --custom-url TEXT           Add a custom URL, e.g. http://plugins-
+                                  repo/plugins/PNAME/PVERSION/PNAME.hpi
+                                  (BUNDLEUTILS_SANITIZE_PLUGINS_CUSTOM_URL)
+  --help                          Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils ci-setup [OPTIONS]
 
@@ -185,16 +187,23 @@ Usage: bundleutils ci-setup [OPTIONS]
 
 Options:
   -H, --ci-server-home TEXT       Defaults to
-                                  /tmp/ci_server_home/<ci_type>/<ci_version>.
-  -t, --ci-type TEXT              The type of the CloudBees server.
-  -v, --ci-version TEXT           The version of the CloudBees WAR file.
-  -s, --source-dir DIRECTORY      The bundle to be validated (startup will use
-                                  the plugins from here).
+                                  /tmp/ci_server_home/<ci_type>/<ci_version>
+                                  (BUNDLEUTILS_CI_SERVER_HOME)
+  -U, --url TEXT                  The URL to interact with
+                                  (BUNDLEUTILS_JENKINS_URL)
+  -t, --ci-type TEXT              The type of the CloudBees instance
+                                  (BUNDLEUTILS_CI_TYPE)
+  -v, --ci-version TEXT           The version of the CloudBees instance
+                                  (BUNDLEUTILS_CI_VERSION)
+  -s, --source-dir DIRECTORY      The bundle to be validated - startup will
+                                  use the plugins from here
+                                  (BUNDLEUTILS_CI_SETUP_SOURCE_DIR)
   -T, --ci-bundle-template DIRECTORY
                                   Path to a template bundle used to start the
-                                  test server (defaults to in-built tempalte).
-  -f, --force                     Force download of the WAR file even if
-                                  exists.
+                                  test server - defaults to in-built template
+                                  (BUNDLEUTILS_CI_BUNDLE_TEMPLATE)
+  -f, --force / --no-force        Force download of the WAR file even if
+                                  exists (BUNDLEUTILS_CI_FORCE)
   --help                          Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils ci-start [OPTIONS]
@@ -203,12 +212,17 @@ Usage: bundleutils ci-start [OPTIONS]
 
 Options:
   -H, --ci-server-home TEXT       Defaults to
-                                  /tmp/ci_server_home/<ci_type>/<ci_version>.
-  -t, --ci-type TEXT              The type of the CloudBees server.
-  -v, --ci-version TEXT           The version of the CloudBees WAR file.
-  -M, --ci-max-start-time INTEGER
-                                  Max minutes to start.  [env var:
-                                  BUNDLEUTILS_CI_MAX_START_TIME]
+                                  /tmp/ci_server_home/<ci_type>/<ci_version>
+                                  (BUNDLEUTILS_CI_SERVER_HOME)
+  -U, --url TEXT                  The URL to interact with
+                                  (BUNDLEUTILS_JENKINS_URL)
+  -t, --ci-type TEXT              The type of the CloudBees instance
+                                  (BUNDLEUTILS_CI_TYPE)
+  -v, --ci-version TEXT           The version of the CloudBees instance
+                                  (BUNDLEUTILS_CI_VERSION)
+  -x, --ci-max-start-time INTEGER
+                                  The maximum time to wait for the CI to start
+                                  (in seconds) (BUNDLEUTILS_CI_MAX_START_TIME)
   --help                          Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils ci-stop [OPTIONS]
@@ -216,69 +230,66 @@ Usage: bundleutils ci-stop [OPTIONS]
   Stop CloudBees Server
 
 Options:
-  -H, --ci-server-home TEXT  Defaults to
-                             /tmp/ci_server_home/<ci_type>/<ci_version>.
-  -t, --ci-type TEXT         The type of the CloudBees server.
-  -v, --ci-version TEXT      The version of the CloudBees WAR file.
-  --help                     Show this message and exit.
+  -H, --ci-server-home TEXT       Defaults to
+                                  /tmp/ci_server_home/<ci_type>/<ci_version>
+                                  (BUNDLEUTILS_CI_SERVER_HOME)
+  -U, --url TEXT                  The URL to interact with
+                                  (BUNDLEUTILS_JENKINS_URL)
+  -t, --ci-type TEXT              The type of the CloudBees instance
+                                  (BUNDLEUTILS_CI_TYPE)
+  -v, --ci-version TEXT           The version of the CloudBees instance
+                                  (BUNDLEUTILS_CI_VERSION)
+  -x, --ci-max-start-time INTEGER
+                                  The maximum time to wait for the CI to start
+                                  (in seconds) (BUNDLEUTILS_CI_MAX_START_TIME)
+  --help                          Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils ci-validate [OPTIONS]
 
   Validate bundle against controller started with ci-start.
 
 Options:
-  -H, --ci-server-home TEXT   Defaults to
-                              /tmp/ci_server_home/<ci_type>/<ci_version>.
-  -t, --ci-type TEXT          The type of the CloudBees server.
-  -v, --ci-version TEXT       The version of the CloudBees WAR file.
-  -s, --source-dir DIRECTORY  The bundle to be validated.
-  -w, --ignore-warnings       Do not fail if warnings are found.
-  -r, --external-rbac FILE    Path to an external rbac.yaml from an Operations
-                              Center bundle.
-  --help                      Show this message and exit.
+  -H, --ci-server-home TEXT       Defaults to
+                                  /tmp/ci_server_home/<ci_type>/<ci_version>
+                                  (BUNDLEUTILS_CI_SERVER_HOME)
+  -U, --url TEXT                  The URL to interact with
+                                  (BUNDLEUTILS_JENKINS_URL)
+  -t, --ci-type TEXT              The type of the CloudBees instance
+                                  (BUNDLEUTILS_CI_TYPE)
+  -v, --ci-version TEXT           The version of the CloudBees instance
+                                  (BUNDLEUTILS_CI_VERSION)
+  -s, --source-dir DIRECTORY      The source directory for the YAML documents
+                                  to validate
+                                  (BUNDLEUTILS_VALIDATE_SOURCE_DIR)
+  -w, --ignore-warnings / --no-ignore-warnings
+                                  Do not fail if warnings are found in
+                                  validation
+                                  (BUNDLEUTILS_VALIDATE_IGNORE_WARNINGS)
+  -r, --external-rbac FILE        Path to an external rbac.yaml from an
+                                  operations center bundle
+                                  (BUNDLEUTILS_VALIDATE_EXTERNAL_RBAC)
+  --help                          Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils completion [OPTIONS]
 
   Print the shell completion script
 
 Options:
-  -s, --shell [bash|fish|zsh]  The shell to generate completion script for.
-                               [required]
+  -s, --shell [bash|fish|zsh]  The shell to generate completion script for
+                               (BUNDLEUTILS_SHELL)  [required]
   --help                       Show this message and exit.
-------------------------------------------------------------------------------------------------------------------------
-Usage: bundleutils config [OPTIONS]
-
-  List evaluated config based on cwd and env file.
-
-Options:
-  -k, --key TEXT  Return the value of the key or an error if not found.
-  --help          Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils controllers [OPTIONS]
 
   Return all online controllers from an operation center.
 
 Options:
-  -p, --password TEXT  Password for basic authentication
-                       (BUNDLEUTILS_PASSWORD).
+  -U, --url TEXT       The URL to interact with (BUNDLEUTILS_JENKINS_URL)
   -u, --username TEXT  Username for basic authentication
-                       (BUNDLEUTILS_USERNAME).
-  -U, --url TEXT       The URL to fetch YAML from (BUNDLEUTILS_JENKINS_URL).
+                       (BUNDLEUTILS_USERNAME)
+  -p, --password TEXT  Password for basic authentication
+                       (BUNDLEUTILS_PASSWORD)
   --help               Show this message and exit.
-------------------------------------------------------------------------------------------------------------------------
-Usage: bundleutils delete [OPTIONS]
-
-  Delete a bundle source dir and the corresponding entry in bundle-
-  profiles.yaml
-
-Options:
-  -s, --source-dir DIRECTORY   The bundle to be bootstrapped.
-  -S, --source-base DIRECTORY  Specify parent dir of source-dir, bundle name
-                               taken from URL.
-  -U, --url TEXT               The controller URL to bootstrap (JENKINS_URL).
-  -v, --ci-version TEXT        Optional version (taken from the remote
-                               instance otherwise).
-  --help                       Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils diff [OPTIONS]
 
@@ -301,7 +312,11 @@ Options:
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils extract-from-pattern [OPTIONS]
 
-  Extract the controller name from a string using a regex pattern. e.g.
+  Extract the controller name from a string using a regex pattern. This
+  command is useful for extracting controller name from a feature branch name
+  or similar strings.
+
+  \b e.g.
 
   - Full string. Pattern: ^([a-z0-9\-]+)$
 
@@ -316,13 +331,12 @@ Usage: bundleutils extract-from-pattern [OPTIONS]
   ^feature/[A-Z]+-\d+/([a-z0-9\-]+)(?:__[a-z0-9\-]+)*$
 
 Options:
-  -s, --string TEXT            The string to test (e.g. a feature/testing-
-                               controller-a or main-controller-a-drift).
-                               [required]
-  -p, --pattern TEXT           Optional version (taken from the remote
-                               instance otherwise).
-  -b, --bundles-dir DIRECTORY  The directory containing the bundles.
-  --help                       Show this message and exit.
+  -s, --string TEXT   The string to test (e.g. a feature/testing-controller-a
+                      or main-controller-a-drift) (BUNDLEUTILS_EXTRACT_STRING)
+                      [required]
+  -p, --pattern TEXT  Optional pattern to match against
+                      (BUNDLEUTILS_EXTRACT_PATTERN)
+  --help              Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils extract-name-from-url [OPTIONS]
 
@@ -339,7 +353,8 @@ Usage: bundleutils extract-name-from-url [OPTIONS]
   - https://NAME.b.c
 
 Options:
-  -u, --url TEXT  The URL to extract the controller name from.
+  -U, --url TEXT  The URL to interact with (BUNDLEUTILS_JENKINS_URL)
+                  [required]
   --help          Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils extract-version-from-url [OPTIONS]
@@ -347,67 +362,57 @@ Usage: bundleutils extract-version-from-url [OPTIONS]
   Get the instance version from the URL.
 
 Options:
-  -u, --url TEXT  The URL to extract the controller name from.
+  -U, --url TEXT  The URL to interact with (BUNDLEUTILS_JENKINS_URL)
+                  [required]
   --help          Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils fetch [OPTIONS]
 
-  Fetch YAML documents from a URL or path.
+  Fetch YAML documents from a URL.
 
 Options:
-  -C, --catalog-warnings-strategy TEXT
-                                  Strategy for handling beekeeper warnings in
-                                  the plugin catalog
-                                  (BUNDLEUTILS_CATALOG_WARNINGS_STRATEGY).
-  -J, --plugins-json-merge-strategy TEXT
-                                  Strategy for merging plugins from list into
-                                  the bundle
-                                  (BUNDLEUTILS_PLUGINS_JSON_MERGE_STRATEGY).
-  -j, --plugins-json-list-strategy TEXT
-                                  Strategy for creating list from the plugins
-                                  json
-                                  (BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY).
-  -c, --cap                       Use the envelope.json from the war file to
-                                  remove CAP plugin dependencies
-                                  (BUNDLEUTILS_FETCH_USE_CAP_ENVELOPE).
-  -p, --password TEXT             Password for basic authentication
-                                  (BUNDLEUTILS_PASSWORD).
+  -K, --config-key TEXT           Returns value if key provided (error if not
+                                  found), or k=v when used as flag
+                                  (BUNDLEUTILS_CONFIG_KEY)
+  -P, --path FILE                 The path to fetch YAML from
+                                  (BUNDLEUTILS_FETCH_LOCAL_PATH)
+  -U, --url TEXT                  The URL to interact with
+                                  (BUNDLEUTILS_JENKINS_URL)
   -u, --username TEXT             Username for basic authentication
-                                  (BUNDLEUTILS_USERNAME).
-  -U, --url TEXT                  The URL to fetch YAML from
-                                  (BUNDLEUTILS_JENKINS_URL).
+                                  (BUNDLEUTILS_USERNAME)
+  -p, --password TEXT             Password for basic authentication
+                                  (BUNDLEUTILS_PASSWORD)
+  -t, --target-dir DIRECTORY      The target directory for the fetched YAML
+                                  documents (BUNDLEUTILS_FETCH_TARGET_DIR)
+  -I, --ignore-items / --no-ignore-items
+                                  Do not fetch the computationally expensive
+                                  items.yaml (BUNDLEUTILS_FETCH_IGNORE_ITEMS)
   -k, --keys-to-scalars TEXT      Comma-separated list of yaml dict keys to
                                   convert to "|" type strings instead of
                                   quoted strings, defaults to
                                   'systemMessage,script,description'
-                                  (BUNDLEUTILS_KEYS_TO_CONVERT_TO_SCALARS).
-  -t, --target-dir DIRECTORY      The target directory for the YAML documents
-                                  (BUNDLEUTILS_FETCH_TARGET_DIR).
-  -I, --ignore-items              Do not fetch the computationally expensive
-                                  items.yaml (BUNDLEUTILS_FETCH_IGNORE_ITEMS).
-  -O, --offline                   Save the export and plugin data to <target-
-                                  dir>-offline (BUNDLEUTILS_FETCH_OFFLINE).
-  -P, --path FILE                 The path to fetch YAML from
-                                  (BUNDLEUTILS_PATH).
-  -M, --plugin-json-path TEXT     The path to fetch JSON file from (found at /
-                                  manage/pluginManager/api/json?pretty&depth=1
-                                  &tree=plugins[*[*]]).
+                                  (BUNDLEUTILS_FETCH_KEYS_TO_SCALARS)
+  -c, --use-cap / --no-use-cap    Use the envelope.json from the war file to
+                                  remove CAP plugin dependencies
+                                  (BUNDLEUTILS_PLUGINS_USE_CAP)
+  -j, --plugins-json-list-strategy TEXT
+                                  Strategy for creating list from the plugins
+                                  json
+                                  (BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY)
+  -J, --plugins-json-merge-strategy TEXT
+                                  Strategy for merging plugins from list into
+                                  the bundle
+                                  (BUNDLEUTILS_PLUGINS_JSON_MERGE_STRATEGY)
+  -C, --catalog-warnings-strategy TEXT
+                                  Strategy for handling beekeeper warnings in
+                                  the plugin catalog (BUNDLEUTILS_PLUGINS_CATA
+                                  LOG_WARNINGS_STRATEGY)
   --help                          Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
-Usage: bundleutils find-bundle-by-url [OPTIONS]
-
-  Find a bundle by Jenkins URL and CI Version.
-
-  Use -v '.*' to match any version.
-
-Options:
-  -U, --url TEXT               The controller URL to test for (JENKINS_URL).
-  -v, --ci-version TEXT        Optional version (taken from the remote
-                               instance otherwise).
-  -b, --bundles-dir DIRECTORY  The directory containing the bundles.
-  --help                       Show this message and exit.
-------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils find-bundles [OPTIONS]
+
+  Find all bundle.yaml files in the target directory and print their paths. If
+  no target directory is provided, the current working directory is used.
 
 Options:
   -t, --target-dir DIRECTORY  The target directory to find bundles (defaults
@@ -441,30 +446,24 @@ Usage: bundleutils merge-bundles [OPTIONS]
   - write the result to the outdir or stdout if not provided
   - update the outdir/bundle.yaml with the new references
 
-  Prefer versioned directories (env: BUNDLEUTILS_MERGE_PREFER_VERSION):
-  - listing "-b snippets/bootstrap" will look for "snippets/bootstrap-2.492.1.3" if the current version is 2.492.1.3
-
-  Optional features:
-  - transform the merged bundle using the transformation configs
-      (BUNDLEUTILS_TRANSFORM_CONFIGS and BUNDLEUTILS_TRANSFORM_SOURCE_DIR needed for this)
-  - perform a diff check against the source bundle and the transformed bundle
-      (BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK_SOURCE_DIR needed for this)
-
 Options:
-  -S, --strict             Fail when referencing non-existent files - warn
-                           otherwise.
-  -m, --config FILE        An optional custom merge config file if needed.
-  -b, --bundles DIRECTORY  The bundles to be rendered.
-  -p, --use-parent         Optionally use the (legacy) parent key to work out
-                           which bundles to merge.
-  -o, --outdir DIRECTORY   The target for the merged bundle.
-  -a, --api-version TEXT   Optional apiVersion. Defaults to 2
-  -t, --transform          Optionally transform using the transformation
-                           configs (BUNDLEUTILS_MERGE_TRANSFORM_PERFORM).
-  -d, --diffcheck          Optionally perform bundleutils diff against the
-                           original source bundle and expected bundle
-                           (BUNDLEUTILS_MERGE_TRANSFORM_DIFFCHECK).
-  --help                   Show this message and exit.
+  -U, --url TEXT                  The URL to interact with
+                                  (BUNDLEUTILS_JENKINS_URL)
+  -S, --strict / --no-strict      Fail when referencing non-existent files -
+                                  warn otherwise (BUNDLEUTILS_STRICT)
+  -m, --config FILE               An optional custom merge config file if
+                                  needed (BUNDLEUTILS_MERGE_CONFIG)
+  -b, --bundles DIRECTORY         The bundles to be rendered
+                                  (BUNDLEUTILS_MERGE_BUNDLES)
+  -p, --use-parent / --no-use-parent
+                                  Optionally use the (legacy) parent key to
+                                  work out which bundles to merge
+                                  (BUNDLEUTILS_MERGE_USE_PARENT)
+  -o, --outdir DIRECTORY          The target for the merged bundle
+                                  (BUNDLEUTILS_MERGE_OUTDIR)
+  -a, --api-version TEXT          Optional apiVersion. Defaults to 2
+                                  (BUNDLEUTILS_MERGE_API_VERSION)
+  --help                          Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils merge-yamls [OPTIONS]
 
@@ -474,36 +473,24 @@ Usage: bundleutils merge-yamls [OPTIONS]
   The merging strategy is defined in a merge-config file. The default contents are shown on execution.
 
 Options:
-  -m, --config FILE   An optional custom merge config file if needed.
-  -f, --files FILE    The files to be merged.
-  -o, --outfile FILE  The target for the merged file.
-  --help              Show this message and exit.
-------------------------------------------------------------------------------------------------------------------------
-Usage: bundleutils normalize [OPTIONS]
-
-  Transform using the normalize.yaml for better comparison.
-
-Options:
-  -t, --target-dir DIRECTORY  The target directory for the YAML documents.
-                              Defaults to the source directory suffixed with
-                              -transformed.
-  -s, --source-dir DIRECTORY  The source directory for the YAML documents.
-  -c, --config FILE           The transformation config(s).
-  -S, --strict                Fail when referencing non-existent files - warn
-                              otherwise.
-  -d, --dry-run               Print the merged transform config and exit.
-  --help                      Show this message and exit.
+  -m, --config FILE  An optional custom merge config file if needed
+                     (BUNDLEUTILS_MERGE_CONFIG)
+  -f, --files FILE   The files to merge (BUNDLEUTILS_MERGE_FILES)
+  -o, --outdir FILE  The target for the merged bundle
+                     (BUNDLEUTILS_MERGE_OUTDIR)
+  --help             Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils preflight [OPTIONS]
 
   Preconditions for fetching the CasC export.
 
 Options:
-  -p, --password TEXT  Password for basic authentication
-                       (BUNDLEUTILS_PASSWORD).
+  -U, --url TEXT       The URL to interact with (BUNDLEUTILS_JENKINS_URL)
+                       [required]
   -u, --username TEXT  Username for basic authentication
-                       (BUNDLEUTILS_USERNAME).
-  -U, --url TEXT       The URL to fetch YAML from (BUNDLEUTILS_JENKINS_URL).
+                       (BUNDLEUTILS_USERNAME)  [required]
+  -p, --password TEXT  Password for basic authentication
+                       (BUNDLEUTILS_PASSWORD)  [required]
   --help               Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils transform [OPTIONS]
@@ -511,15 +498,24 @@ Usage: bundleutils transform [OPTIONS]
   Transform using a custom transformation config.
 
 Options:
-  -t, --target-dir DIRECTORY  The target directory for the YAML documents.
-                              Defaults to the source directory suffixed with
-                              -transformed.
-  -s, --source-dir DIRECTORY  The source directory for the YAML documents.
-  -c, --config FILE           The transformation config(s).
-  -S, --strict                Fail when referencing non-existent files - warn
-                              otherwise.
-  -d, --dry-run               Print the merged transform config and exit.
-  --help                      Show this message and exit.
+  -K, --config-key TEXT         Returns value if key provided (error if not
+                                found), or k=v when used as flag
+                                (BUNDLEUTILS_CONFIG_KEY)
+  -U, --url TEXT                The URL to interact with
+                                (BUNDLEUTILS_JENKINS_URL)
+  -d, --dry-run / --no-dry-run  Print the merged transform config and exit
+                                (BUNDLEUTILS_DRY_RUN)
+  -S, --strict / --no-strict    Fail when referencing non-existent files -
+                                warn otherwise (BUNDLEUTILS_STRICT)
+  -C, --configs-base DIRECTORY  The directory containing the transformation
+                                config(s) (BUNDLEUTILS_CONFIGS_BASE)
+  -c, --config FILE             The transformation config to use
+                                (BUNDLEUTILS_CONFIG)
+  -s, --source-dir DIRECTORY    The source directory for the YAML documents to
+                                transform (BUNDLEUTILS_TRANSFORM_SOURCE_DIR)
+  -t, --target-dir DIRECTORY    The target directory for the transformed YAML
+                                documents (BUNDLEUTILS_TRANSFORM_TARGET_DIR)
+  --help                        Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils update-bundle [OPTIONS]
 
@@ -540,16 +536,21 @@ Usage: bundleutils update-bundle [OPTIONS]
 
 Options:
   -t, --target-dir DIRECTORY      The target directory to update the
-                                  bundle.yaml file (defaults to CWD).
-  -d, --description TEXT          Optional description for the bundle (also
-                                  BUNDLEUTILS_BUNDLE_DESCRIPTION).
+                                  bundle.yaml file (defaults to CWD)
+                                  (BUNDLEUTILS_UPDATE_BUNDLE_TARGET_DIR)
+  -d, --description TEXT          Optional description for the bundle
+                                  (BUNDLEUTILS_UPDATE_BUNDLE_DESCRIPTION)
   -o, --output-sorted TEXT        Optional place to put the sorted yaml string
-                                  used to created the version.
+                                  used to create the version
+                                  (BUNDLEUTILS_UPDATE_BUNDLE_OUTPUT_SORTED)
   -e, --empty-bundle-strategy TEXT
                                   Optional strategy for handling empty bundles
-                                  (BUNDLEUTILS_EMPTY_BUNDLE_STRATEGY).
-  -r, --recursive                 Update recursively on all bundles found from
-                                  target dir.
+                                  (BUNDLEUTILS_UPDATE_BUNDLE_EMPTY_BUNDLE_STRA
+                                  TEGY)
+  -r, --recursive / --no-recursive
+                                  Update recursively on all bundles found from
+                                  target dir
+                                  (BUNDLEUTILS_UPDATE_BUNDLE_RECURSIVE)
   --help                          Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils update-plugins [OPTIONS]
@@ -557,72 +558,32 @@ Usage: bundleutils update-plugins [OPTIONS]
   Update plugins in the target directory.
 
 Options:
-  -C, --catalog-warnings-strategy TEXT
-                                  Strategy for handling beekeeper warnings in
-                                  the plugin catalog
-                                  (BUNDLEUTILS_CATALOG_WARNINGS_STRATEGY).
-  -J, --plugins-json-merge-strategy TEXT
-                                  Strategy for merging plugins from list into
-                                  the bundle
-                                  (BUNDLEUTILS_PLUGINS_JSON_MERGE_STRATEGY).
-  -j, --plugins-json-list-strategy TEXT
-                                  Strategy for creating list from the plugins
-                                  json
-                                  (BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY).
-  -c, --cap                       Use the envelope.json from the war file to
-                                  remove CAP plugin dependencies
-                                  (BUNDLEUTILS_FETCH_USE_CAP_ENVELOPE).
-  -p, --password TEXT             Password for basic authentication
-                                  (BUNDLEUTILS_PASSWORD).
+  -U, --url TEXT                  The URL to interact with
+                                  (BUNDLEUTILS_JENKINS_URL)
   -u, --username TEXT             Username for basic authentication
-                                  (BUNDLEUTILS_USERNAME).
-  -U, --url TEXT                  The URL to fetch YAML from
-                                  (BUNDLEUTILS_JENKINS_URL).
-  -k, --keys-to-scalars TEXT      Comma-separated list of yaml dict keys to
-                                  convert to "|" type strings instead of
-                                  quoted strings, defaults to
-                                  'systemMessage,script,description'
-                                  (BUNDLEUTILS_KEYS_TO_CONVERT_TO_SCALARS).
-  -t, --target-dir DIRECTORY      The target directory for the YAML documents
-                                  (BUNDLEUTILS_FETCH_TARGET_DIR).
-  -I, --ignore-items              Do not fetch the computationally expensive
-                                  items.yaml (BUNDLEUTILS_FETCH_IGNORE_ITEMS).
-  -O, --offline                   Save the export and plugin data to <target-
-                                  dir>-offline (BUNDLEUTILS_FETCH_OFFLINE).
-  -P, --path FILE                 The path to fetch YAML from
-                                  (BUNDLEUTILS_PATH).
-  -M, --plugin-json-path TEXT     The path to fetch JSON file from (found at /
-                                  manage/pluginManager/api/json?pretty&depth=1
-                                  &tree=plugins[*[*]]).
-  --help                          Show this message and exit.
-------------------------------------------------------------------------------------------------------------------------
-Usage: bundleutils update-plugins-from-test-server [OPTIONS]
-
-  Update plugins in the target directory using the plugins from the test
-  server started for validation.
-
-Options:
-  -C, --catalog-warnings-strategy TEXT
-                                  Strategy for handling beekeeper warnings in
-                                  the plugin catalog
-                                  (BUNDLEUTILS_CATALOG_WARNINGS_STRATEGY).
-  -J, --plugins-json-merge-strategy TEXT
-                                  Strategy for merging plugins from list into
-                                  the bundle
-                                  (BUNDLEUTILS_PLUGINS_JSON_MERGE_STRATEGY).
+                                  (BUNDLEUTILS_USERNAME)
+  -p, --password TEXT             Password for basic authentication
+                                  (BUNDLEUTILS_PASSWORD)
+  -t, --target-dir DIRECTORY      The target directory for the fetched YAML
+                                  documents (BUNDLEUTILS_FETCH_TARGET_DIR)
+  -I, --ignore-items / --no-ignore-items
+                                  Do not fetch the computationally expensive
+                                  items.yaml (BUNDLEUTILS_FETCH_IGNORE_ITEMS)
+  -c, --use-cap / --no-use-cap    Use the envelope.json from the war file to
+                                  remove CAP plugin dependencies
+                                  (BUNDLEUTILS_PLUGINS_USE_CAP)
   -j, --plugins-json-list-strategy TEXT
                                   Strategy for creating list from the plugins
                                   json
-                                  (BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY).
-  -c, --cap                       Use the envelope.json from the war file to
-                                  remove CAP plugin dependencies
-                                  (BUNDLEUTILS_FETCH_USE_CAP_ENVELOPE).
-  -H, --ci-server-home TEXT       Defaults to
-                                  /tmp/ci_server_home/<ci_type>/<ci_version>.
-  -t, --ci-type TEXT              The type of the CloudBees server.
-  -v, --ci-version TEXT           The version of the CloudBees WAR file.
-  -t, --target-dir DIRECTORY      The target directory in which to update the
-                                  plugins.yaml.
+                                  (BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY)
+  -J, --plugins-json-merge-strategy TEXT
+                                  Strategy for merging plugins from list into
+                                  the bundle
+                                  (BUNDLEUTILS_PLUGINS_JSON_MERGE_STRATEGY)
+  -C, --catalog-warnings-strategy TEXT
+                                  Strategy for handling beekeeper warnings in
+                                  the plugin catalog (BUNDLEUTILS_PLUGINS_CATA
+                                  LOG_WARNINGS_STRATEGY)
   --help                          Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils validate [OPTIONS]
@@ -630,18 +591,23 @@ Usage: bundleutils validate [OPTIONS]
   Validate bundle in source dir against URL.
 
 Options:
-  -U, --url TEXT              The controller URL to validate agianst
-                              (BUNDLEUTILS_JENKINS_URL).
-  -u, --username TEXT         Username for basic authentication
-                              (BUNDLEUTILS_USERNAME).
-  -p, --password TEXT         Password for basic authentication
-                              (BUNDLEUTILS_PASSWORD).
-  -s, --source-dir DIRECTORY  The source directory for the YAML documents
-                              (BUNDLEUTILS_VALIDATE_SOURCE_DIR).
-  -w, --ignore-warnings       Do not fail if warnings are found.
-  -r, --external-rbac FILE    Path to an external rbac.yaml from an Operations
-                              Center bundle.
-  --help                      Show this message and exit.
+  -U, --url TEXT                  The URL to interact with
+                                  (BUNDLEUTILS_JENKINS_URL)
+  -u, --username TEXT             Username for basic authentication
+                                  (BUNDLEUTILS_USERNAME)
+  -p, --password TEXT             Password for basic authentication
+                                  (BUNDLEUTILS_PASSWORD)
+  -s, --source-dir DIRECTORY      The source directory for the YAML documents
+                                  to validate
+                                  (BUNDLEUTILS_VALIDATE_SOURCE_DIR)
+  -w, --ignore-warnings / --no-ignore-warnings
+                                  Do not fail if warnings are found in
+                                  validation
+                                  (BUNDLEUTILS_VALIDATE_IGNORE_WARNINGS)
+  -r, --external-rbac FILE        Path to an external rbac.yaml from an
+                                  operations center bundle
+                                  (BUNDLEUTILS_VALIDATE_EXTERNAL_RBAC)
+  --help                          Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils version [OPTIONS]
 

@@ -67,7 +67,7 @@ class JenkinsServerManager:
         if not os.path.exists(self.target_jenkins_webroot):
             os.makedirs(self.target_jenkins_webroot)
 
-    def set_cloudbees_variables(self):
+    def set_cloudbees_variables(self) -> tuple[str, str]:
         """
         Set the CloudBees Docker image and WAR download URL based on the ci_type and ci_version.
         Env vars:
@@ -89,9 +89,7 @@ class JenkinsServerManager:
         elif self.ci_type == "oc-traditional":
             cb_war_download_url = f"{cb_downloads_url}/operations-center/rolling/war/{self.ci_version}/cloudbees-core-oc.war"
         else:
-            self.die(
-                f"BUNDLEUTILS_CI_TYPE '{self.ci_type}' not recognised", file=sys.stderr
-            )
+            self.die(f"BUNDLEUTILS_CI_TYPE '{self.ci_type}' not recognised")
 
         # check the environment variables:
         cb_docker_image_env = f"BUNDLEUTILS_CB_DOCKER_IMAGE_{self.ci_type.upper()}"
@@ -125,7 +123,7 @@ class JenkinsServerManager:
                 f"Using default cloudbees download URL. Overwrite with environment variable {cb_war_download_url_env}"
             )
 
-        return cb_docker_image, cb_war_download_url
+        return str(cb_docker_image), str(cb_war_download_url)
 
     def copy_war_from_skopeo(self, force=False):
         """
@@ -208,6 +206,7 @@ class JenkinsServerManager:
         except subprocess.CalledProcessError:
             self.die(f"Failed to pull the Docker image {self.cb_docker_image}")
 
+        container_id = None
         try:
             # Create a container without starting it
             container_id = (
@@ -397,7 +396,7 @@ class JenkinsServerManager:
                     f"JAVA_HOME is set to {os.environ['JAVA_HOME']} but {java} does not exist."
                 )
         else:
-            java = shutil.which("java")
+            java = str(shutil.which("java"))
 
         self.test_java_specification_version(required_java_version)
         # print the java -version output
