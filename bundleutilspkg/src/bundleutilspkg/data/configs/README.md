@@ -1,7 +1,5 @@
 # Transformation Process
 
-The transformation from exported bundle to a more sanitized form uses transformation instructions.
-
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 
@@ -13,6 +11,8 @@ The transformation from exported bundle to a more sanitized form uses transforma
 - [Substitutions](#substitutions)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
+The transformation from exported bundle to a more sanitized form uses transformation instructions.
 
 The process is executed in the following order:
 
@@ -99,7 +99,7 @@ A simple selectors feature has also been included for navigating lists, etc.
 
 The `credentials` section traverses the files specified and replaces any credentials found with its env var equivalent.
 
-> [!WARN]
+> [!IMPORTANT]
 > We do not want to leave encrypted values in the bundle, even if they are encrypted.
 
 This allows you to provide credentials as a volume mount or secret and have them recognised on a bundle reload.
