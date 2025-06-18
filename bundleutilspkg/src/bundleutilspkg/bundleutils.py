@@ -794,6 +794,8 @@ def bundleutils(
     ctx, log_level, raise_errors, interactive, append_version, bundles_base
 ):
     """A tool to fetch and transform YAML documents."""
+    # inject PYTHONUTF8=1 into the environment
+    os.environ["PYTHONUTF8"] = "1"
     ctx.ensure_object(dict)
     ctx.max_content_width = 120
     _set(Key.GBL_INTERACTIVE, interactive)
