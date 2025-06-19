@@ -10,7 +10,6 @@
   - [Setup](#setup)
   - [Code Completion](#code-completion)
   - [Makefile](#makefile)
-- [Walkthrough](#walkthrough)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -230,19 +229,16 @@ Usage: bundleutils ci-stop [OPTIONS]
   Stop CloudBees Server
 
 Options:
-  -H, --ci-server-home TEXT       Defaults to
-                                  /tmp/ci_server_home/<ci_type>/<ci_version>
-                                  (BUNDLEUTILS_CI_SERVER_HOME)
-  -U, --url TEXT                  The URL to interact with
-                                  (BUNDLEUTILS_JENKINS_URL)
-  -t, --ci-type TEXT              The type of the CloudBees instance
-                                  (BUNDLEUTILS_CI_TYPE)
-  -v, --ci-version TEXT           The version of the CloudBees instance
-                                  (BUNDLEUTILS_CI_VERSION)
-  -x, --ci-max-start-time INTEGER
-                                  The maximum time to wait for the CI to start
-                                  (in seconds) (BUNDLEUTILS_CI_MAX_START_TIME)
-  --help                          Show this message and exit.
+  -H, --ci-server-home TEXT  Defaults to
+                             /tmp/ci_server_home/<ci_type>/<ci_version>
+                             (BUNDLEUTILS_CI_SERVER_HOME)
+  -U, --url TEXT             The URL to interact with
+                             (BUNDLEUTILS_JENKINS_URL)
+  -t, --ci-type TEXT         The type of the CloudBees instance
+                             (BUNDLEUTILS_CI_TYPE)
+  -v, --ci-version TEXT      The version of the CloudBees instance
+                             (BUNDLEUTILS_CI_VERSION)
+  --help                     Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils ci-validate [OPTIONS]
 
@@ -252,6 +248,9 @@ Options:
   -H, --ci-server-home TEXT       Defaults to
                                   /tmp/ci_server_home/<ci_type>/<ci_version>
                                   (BUNDLEUTILS_CI_SERVER_HOME)
+  -K, --config-key TEXT           Returns value if key provided (error if not
+                                  found), or k=v when used as flag
+                                  (BUNDLEUTILS_CONFIG_KEY)
   -U, --url TEXT                  The URL to interact with
                                   (BUNDLEUTILS_JENKINS_URL)
   -t, --ci-type TEXT              The type of the CloudBees instance
@@ -591,6 +590,9 @@ Usage: bundleutils validate [OPTIONS]
   Validate bundle in source dir against URL.
 
 Options:
+  -K, --config-key TEXT           Returns value if key provided (error if not
+                                  found), or k=v when used as flag
+                                  (BUNDLEUTILS_CONFIG_KEY)
   -U, --url TEXT                  The URL to interact with
                                   (BUNDLEUTILS_JENKINS_URL)
   -u, --username TEXT             Username for basic authentication
@@ -681,6 +683,7 @@ Targets:
   compose/enter          Enter the bundleutils container
   docker/create-volume   Create the bundleutils-cache volume
   docker/build-dev       Build the bundleutils:dev image
+  docker/update-dev      Update the bundleutils:dev image with local changes
   docker/start-dev       Start the bundleutils:dev container
   docker/start           Start the bundleutils container
   docker/stop            Stop the bundleutils container
@@ -689,13 +692,3 @@ Targets:
   help                   Makefile Help Page
 ```
 <!-- END makefile-doc -->
-
-## Walkthrough
-
-This is most likely too complicated for and is therefore being relegated to the bottom for now.
-
-A [walkthrough](https://dictionary.cambridge.org/dictionary/english/walkthrough) setup has been provided at [example-bundles-drift](https://github.com/tsmp-falcon-platform/example-bundles-drift).
-
-The walkthough contains a comprehensive list of steps to setting up bundle management.
-
-TODO: An issue has been created to add a "merge bundles" workflow to the walkthrough - see [Issue #70](https://github.com/tsmp-falcon-platform/ci-bundle-utils/issues/70)

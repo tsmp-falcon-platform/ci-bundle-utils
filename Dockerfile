@@ -73,7 +73,8 @@ RUN cd /opt/bundleutils/.app/bundleutilspkg \
 	src/bundleutilspkg/bundleutils.py
 
 # Install any needed packages specified in setup.py
-RUN useradd -m -u 1000 bundle-user
+RUN useradd -m -u 1000 bundle-user && \
+    echo 'eval "$(_BUNDLEUTILS_COMPLETE=bash_source bundleutils)"' >> /home/bundle-user/.bashrc
 
 # Set the working directory in the container to /home/bundle-user
 WORKDIR /opt/bundleutils/work

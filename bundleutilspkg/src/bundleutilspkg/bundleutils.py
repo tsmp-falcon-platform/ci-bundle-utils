@@ -1167,6 +1167,7 @@ def announce(string):
 
 @bundleutils.command()
 @option_for(Key.CI_SERVER_HOME, default=os.path.join("target", "ci_server_home"))
+@option_for(Key.CONFIG_KEY, is_flag=False, flag_value="ALL", default="NONE")
 @option_for(Key.URL)
 @option_for(Key.CI_TYPE)
 @option_for(Key.CI_VERSION)
@@ -1177,6 +1178,7 @@ def announce(string):
 def ci_validate(
     ctx,
     ci_server_home,
+    config_key,
     url,
     ci_version,
     ci_type,
@@ -1189,20 +1191,19 @@ def ci_validate(
     url = _get(Key.URL, url, required=False)
     ci_type = _deduce_type(ci_type)
     ci_version = _deduce_version(ci_version)
-    passed_dirs = {}
-    passed_dirs[Key.VALIDATE_SOURCE_DIR] = source_dir
-    _add_default_dirs_if_necessary(url, ci_version, passed_dirs)
-    source_dir = str(_get(Key.VALIDATE_SOURCE_DIR))
-    if not os.path.exists(source_dir):
-        die(f"Source directory '{source_dir}' does not exist")
-
     jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
     server_url, username, password = jenkins_manager.get_server_details()
     logging.debug(
         f"Server URL: {server_url}, Username: {username}, Password: {password}"
     )
     _validate(
-        server_url, username, password, source_dir, ignore_warnings, external_rbac
+        config_key,
+        server_url,
+        username,
+        password,
+        source_dir,
+        ignore_warnings,
+        external_rbac,
     )
 
 
@@ -1339,7 +1340,6 @@ def ci_start(ctx, ci_server_home, url, ci_version, ci_type, ci_max_start_time):
 @option_for(Key.URL)
 @option_for(Key.CI_TYPE)
 @option_for(Key.CI_VERSION)
-@option_for(Key.CI_MAX_START_TIME, default=120, type=click.INT)
 def ci_stop(ctx, ci_server_home, url, ci_version, ci_type):
     """Stop CloudBees Server"""
     ci_server_home = _get(Key.CI_SERVER_HOME, ci_server_home)
@@ -1701,6 +1701,7 @@ def completion(ctx, shell):
 
 
 @bundleutils.command()
+@option_for(Key.CONFIG_KEY, is_flag=False, flag_value="ALL", default="NONE")
 @option_for(Key.URL)
 @option_for(Key.USERNAME)
 @option_for(Key.PASSWORD)
@@ -1708,15 +1709,32 @@ def completion(ctx, shell):
 @option_for(Key.VALIDATE_IGNORE_WARNINGS, default="False", type=click.BOOL)
 @option_for(Key.VALIDATE_EXTERNAL_RBAC, type=click.Path(file_okay=True, dir_okay=False))
 @click.pass_context
-def validate(ctx, url, username, password, source_dir, ignore_warnings, external_rbac):
+def validate(
+    ctx, config_key, url, username, password, source_dir, ignore_warnings, external_rbac
+):
     """Validate bundle in source dir against URL."""
-    _validate(url, username, password, source_dir, ignore_warnings, external_rbac)
+    _validate(
+        config_key, url, username, password, source_dir, ignore_warnings, external_rbac
+    )
 
 
-def _validate(url, username, password, source_dir, ignore_warnings, external_rbac):
+def _validate(
+    config_key, url, username, password, source_dir, ignore_warnings, external_rbac
+):
+    if not config_key in ["ALL", "NONE"]:
+        logging.getLogger().setLevel(logging.WARNING)
     username = _get(Key.USERNAME, username)
     password = _get(Key.PASSWORD, password)
-    source_dir = _get(Key.VALIDATE_SOURCE_DIR, source_dir)
+
+    if not source_dir:
+        ci_version = _deduce_version()
+        passed_dirs = {}
+        passed_dirs[Key.VALIDATE_SOURCE_DIR] = source_dir
+        _add_default_dirs_if_necessary(url, ci_version, passed_dirs)
+        source_dir = str(_get(Key.VALIDATE_SOURCE_DIR))
+    if not os.path.exists(source_dir):
+        die(f"Source directory '{source_dir}' does not exist")
+
     external_rbac = utilz.is_truthy(
         _get(Key.VALIDATE_EXTERNAL_RBAC, external_rbac, default="False")
     )
@@ -1733,6 +1751,10 @@ def _validate(url, username, password, source_dir, ignore_warnings, external_rba
     if validate_url_path not in url:
         url = utilz.join_url(url, validate_url_path)
 
+    if _print_config(config_key):
+        return
+
+    logging.info(f"Validating bundle in {source_dir} against {url}")
     # fetch the YAML from the URL
     headers = {"Content-Type": "application/zip"}
     if username and password:
@@ -1900,7 +1922,7 @@ def fetch(
 
     ignore_items = utilz.is_truthy(_get(Key.FETCH_IGNORE_ITEMS, ignore_items))
     keys_to_scalars = _get(Key.FETCH_KEYS_TO_SCALARS, keys_to_scalars)
-    use_cap = _get(Key.PLUGINS_USE_CAP, use_cap)
+    use_cap = utilz.is_truthy(_get(Key.PLUGINS_USE_CAP, use_cap))
     plugins_json_list_strategy = _get(
         Key.PLUGINS_JSON_LIST_STRATEGY, plugins_json_list_strategy
     )
@@ -3353,14 +3375,15 @@ def transform(
     """Transform using a custom transformation config."""
     if not config_key in ["ALL", "NONE"]:
         logging.getLogger().setLevel(logging.WARNING)
-    dry_run = _get(Key.DRY_RUN, dry_run)
-    strict = _get(Key.STRICT, strict)
+    dry_run = utilz.is_truthy(_get(Key.DRY_RUN, dry_run))
+    strict = utilz.is_truthy(_get(Key.STRICT, strict))
     configs_base = _get(Key.CONFIGS_BASE, configs_base)
 
     url = str(_get(Key.URL, url, required=False))
     config = _determine_transformation_config(url, config)
     merged_config = _get_merged_config(config)
     if dry_run:
+        logging.info("Dry run mode enabled. No transformations will be applied.")
         logging.info(f"Merged config:\n" + printYaml(merged_config))
         return
 
@@ -3376,7 +3399,7 @@ def transform(
 
     if _print_config(config_key):
         return
-    _transform(merged_config, source_dir, target_dir, utilz.is_truthy(dry_run))
+    _transform(merged_config, source_dir, target_dir, dry_run)
 
 
 def _get_merged_config(config):

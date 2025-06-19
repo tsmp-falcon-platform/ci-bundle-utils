@@ -366,6 +366,9 @@ class JenkinsServerManager:
 
     def start_server(self, ci_max_start_time):
         """Start the Jenkins server using the downloaded WAR file."""
+        logging.info(
+            f"Starting Jenkins server with version {self.ci_version} and type {self.ci_type}"
+        )
         if not os.path.exists(self.war_path):
             logging.info("WAR file does not exist. Getting now...")
             self.get_war()
@@ -666,6 +669,9 @@ class JenkinsServerManager:
 
     def stop_server(self):
         """Stop the Jenkins server using the PID file."""
+        logging.info(
+            f"Stopping Jenkins server with version {self.ci_version} and type {self.ci_type}"
+        )
         if os.path.exists(self.pid_file):
             with open(self.pid_file, "r", encoding="utf-8") as file:
                 pidstr = file.read().strip()
