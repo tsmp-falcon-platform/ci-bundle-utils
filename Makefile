@@ -99,6 +99,8 @@ docker/start: docker/create-volume
 		-v bundleutils-cache:/opt/bundleutils/.cache \
 		--name $(DOCKER_NAME) \
 		--entrypoint bash \
+		-p 8080:8080 \
+		-p 8081:8081 \
 		-e BUNDLEUTILS_USERNAME="$(BUNDLEUTILS_USERNAME)" \
 		-e BUNDLEUTILS_PASSWORD="$(BUNDLEUTILS_PASSWORD)" \
 		-e CASC_VALIDATION_LICENSE_KEY_B64=$(CASC_VALIDATION_LICENSE_KEY_B64) \
