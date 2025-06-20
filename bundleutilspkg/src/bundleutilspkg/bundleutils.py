@@ -48,6 +48,7 @@ plugin_json_url_path = (
 )
 controllers_url_path = "/api/json?depth=1&pretty&pretty&tree=jobs[url,online,state,endpoint,jobs[url,online,state,endpoint,jobs[url,online,state,endpoint,jobs[url,online,state,endpoint]]]]"
 validate_url_path = "/casc-bundle-mgnt/casc-bundle-validate"
+get_effective_bundle_path = "/casc-bundle/get-effective-bundle?bundle="
 empty_bundle_strategies = ["fail", "delete", "noop"]
 default_bundle_api_version = "2"
 default_keys_to_scalars = ["systemMessage", "script", "description"]
@@ -142,6 +143,7 @@ class Key(Enum):
     )
     PASSWORD = ("-p", [], "Password for basic authentication")
     URL = ("-U", [to_env("JENKINS_URL"), "JENKINS_URL"], "The URL to interact with")
+    OC_URL = ("-O", [], "The URL of the OC")
     USERNAME = ("-u", [], "Username for basic authentication")
     BUNDLE_NAME = (
         "-N",
@@ -234,6 +236,20 @@ class Key(Enum):
         1,
         True,
     )
+    GBL_URL_BASE_PATTERN = (
+        "-p",
+        [],
+        """
+                            The URL pattern to deduce the URL from inside a bundle directory
+
+                            \b
+                            Uses NAME as a placeholder, e.g.
+                            - "https://example.com/NAME"
+                            - "https://NAME.example.com"
+                            """,
+        1,
+    )
+    DEDUCED_URL = ("-p", [], "NOT USED AS AN OPTION - holder for the deduced url", 1)
     GBL_INTERACTIVE = ("-i", [], "Run in interactive mode", 1, True)
     GBL_LOG_LEVEL = ("-l", [], "The log level", 1)
     GBL_RAISE_ERRORS = ("-e", [], "Raise errors instead of printing them", 1, True)
@@ -791,9 +807,16 @@ def _determine_transformation_config(
     type=click.Path(file_okay=False, dir_okay=True),
     default=os.getcwd(),
 )
+@option_for(Key.GBL_URL_BASE_PATTERN, required=False)
 @click.pass_context
 def bundleutils(
-    ctx, log_level, raise_errors, interactive, append_version, bundles_base
+    ctx,
+    log_level,
+    raise_errors,
+    interactive,
+    append_version,
+    bundles_base,
+    url_base_pattern,
 ):
     """A tool to fetch and transform YAML documents."""
     # inject PYTHONUTF8=1 into the environment
@@ -810,6 +833,30 @@ def bundleutils(
 
     if ctx.invoked_subcommand is None:
         click.echo(ctx.get_help())
+    else:
+        _set(Key.DEDUCED_URL, "")
+        if url_base_pattern:
+            cwd = os.getcwd()
+            # if current dir contains a bundle.yaml file, set the URL base pattern
+            bundle_yaml = os.path.join(cwd, "bundle.yaml")
+            if os.path.exists(bundle_yaml):
+                base_name = os.path.basename(cwd)
+                deduced_url = url_base_pattern.replace("NAME", base_name)
+                _set(Key.DEDUCED_URL, deduced_url)
+                logging.debug(
+                    f"AUTO_URL: Using {Key.GBL_URL_BASE_PATTERN.envvar[0]} '{url_base_pattern}'."
+                )
+                logging.debug(
+                    f"AUTO_URL: Deduced URL {deduced_url} from bundle directory {base_name}."
+                )
+                # get current directory
+                if bundles_base == os.getcwd():
+                    parent_dir = os.path.dirname(cwd)
+                    logging.debug(
+                        f"AUTO_URL: Switching to {parent_dir} and setting {Key.BUNDLES_BASE.envvar[0]} accordingly."
+                    )
+                    _set(Key.BUNDLES_BASE, parent_dir)
+                    os.chdir(parent_dir)
 
 
 def yaml2dict(yamlFile):
@@ -947,7 +994,7 @@ def ci_setup(
     """
 
     ci_server_home = _get(Key.CI_SERVER_HOME, ci_server_home)
-    url = _get(Key.URL, url, required=False)
+    url = _get(Key.URL, url, default=f"{_get(Key.DEDUCED_URL)}", required=False)
     ci_type = _deduce_type(ci_type)
     ci_version = _deduce_version(ci_version)
     if not source_dir:
@@ -1176,7 +1223,11 @@ def announce(string):
 @option_for(Key.CI_VERSION)
 @option_for(Key.VALIDATE_SOURCE_DIR, type=click.Path(file_okay=False, dir_okay=True))
 @option_for(Key.VALIDATE_IGNORE_WARNINGS, default="False", type=click.BOOL)
-@option_for(Key.VALIDATE_EXTERNAL_RBAC, type=click.Path(file_okay=True, dir_okay=False))
+@option_for(
+    Key.VALIDATE_EXTERNAL_RBAC,
+    type=click.Path(file_okay=True, dir_okay=False, exists=True),
+    required=False,
+)
 @click.pass_context
 def ci_validate(
     ctx,
@@ -1191,7 +1242,7 @@ def ci_validate(
 ):
     """Validate bundle against controller started with ci-start."""
     ci_server_home = _get(Key.CI_SERVER_HOME, ci_server_home)
-    url = _get(Key.URL, url, required=False)
+    url = _get(Key.URL, url, default=f"{_get(Key.DEDUCED_URL)}", required=False)
     ci_type = _deduce_type(ci_type)
     ci_version = _deduce_version(ci_version)
     jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
@@ -1230,7 +1281,7 @@ def ci_sanitize_plugins(
 ):
     """Sanitizes plugins (needs ci-start)."""
     ci_server_home = _get(Key.CI_SERVER_HOME, ci_server_home)
-    url = _get(Key.URL, url, required=False)
+    url = _get(Key.URL, url, default=f"{_get(Key.DEDUCED_URL)}", required=False)
     ci_type = _deduce_type(ci_type)
     ci_version = _deduce_version(ci_version)
     passed_dirs = {}
@@ -1258,7 +1309,7 @@ def ci_sanitize_plugins(
     envelope_json = json.loads(envelope_json)
 
     response_text = _get_plugins_from_server(server_url, username, password)
-    data = json.loads(response_text)
+    data = json.loads(str(response_text))
 
     installed_plugins = {}
     envelope_plugins = {}
@@ -1328,7 +1379,7 @@ def ci_sanitize_plugins(
 def ci_start(ctx, ci_server_home, url, ci_version, ci_type, ci_max_start_time):
     """Start CloudBees Server"""
     ci_server_home = _get(Key.CI_SERVER_HOME, ci_server_home)
-    url = _get(Key.URL, url, required=False)
+    url = _get(Key.URL, url, default=f"{_get(Key.DEDUCED_URL)}", required=False)
     ci_type = _deduce_type(ci_type)
     ci_version = _deduce_version(ci_version)
     ci_max_start_time = _get(Key.CI_MAX_START_TIME, ci_max_start_time)
@@ -1346,7 +1397,7 @@ def ci_start(ctx, ci_server_home, url, ci_version, ci_type, ci_max_start_time):
 def ci_stop(ctx, ci_server_home, url, ci_version, ci_type):
     """Stop CloudBees Server"""
     ci_server_home = _get(Key.CI_SERVER_HOME, ci_server_home)
-    url = _get(Key.URL, url, required=False)
+    url = _get(Key.URL, url, default=f"{_get(Key.DEDUCED_URL)}", required=False)
     ci_type = _deduce_type(ci_type)
     ci_version = _deduce_version(ci_version)
 
@@ -1529,7 +1580,7 @@ def api(ctx, url, username, password, path, data_file, out_file):
     \b
     e.g. bundleutils api -P /whoAmI/api/json?pretty
     """
-    url = _get(Key.URL, url)
+    url = _get(Key.URL, url, default=f"{_get(Key.DEDUCED_URL)}")
     username = _get(Key.USERNAME, username)
     password = _get(Key.PASSWORD, password)
     path = _get(Key.API_PATH, path)
@@ -1562,7 +1613,7 @@ def controllers(ctx, url, username, password):
         die(f"The url must be an operation center url.")
     controllers_api_url = utilz.join_url(url, controllers_url_path)
     response_text = call_jenkins_api(controllers_api_url, username, password)
-    controllers = json.loads(response_text)
+    controllers = json.loads(str(response_text))
     controllers = utilz.find_controllers(controllers)
     lines = []
     for controller in controllers:
@@ -1712,12 +1763,133 @@ def completion(ctx, shell):
 
 @bundleutils.command()
 @option_for(Key.CONFIG_KEY, is_flag=False, flag_value="ALL", default="NONE")
+@option_for(Key.OC_URL, required=True)
+@option_for(Key.URL, required=True)
+@option_for(Key.USERNAME, required=True)
+@option_for(Key.PASSWORD, required=True)
+@option_for(
+    Key.VALIDATE_SOURCE_DIR,
+    type=click.Path(file_okay=False, dir_okay=True, exists=True),
+)
+@option_for(Key.VALIDATE_IGNORE_WARNINGS, default="False", type=click.BOOL)
+@option_for(
+    Key.VALIDATE_EXTERNAL_RBAC,
+    type=click.Path(file_okay=True, dir_okay=False, exists=True),
+    required=False,
+)
+@click.pass_context
+def validate_effective(
+    ctx,
+    config_key,
+    oc_url,
+    url,
+    username,
+    password,
+    source_dir,
+    ignore_warnings,
+    external_rbac,
+):
+    """
+    Generate effective bundle from OC, then validate effective bundle against URL.
+
+    \b
+    This command will:
+    - Zip all bundles from the source directory parent
+    - Post the zip to the OC to get the effective bundle
+    - Validate the effective bundle against the URL
+    """
+    oc_url = _get(Key.OC_URL, oc_url, required=True)
+    # get full path to the source directory
+    source_dir = os.path.abspath(source_dir)
+    source_dir_base = os.path.basename(source_dir)
+    source_dir_parent = os.path.dirname(source_dir)
+    source_dir_parent_base = os.path.basename(source_dir_parent)
+    source_dir_parent_parent = os.path.dirname(source_dir_parent)
+    all_bundles = _find_bundles(source_dir_parent)
+    logging.debug(
+        f"Bundles {all_bundles} found in {source_dir_parent} from {source_dir}"
+    )
+    # zip all bundles so that the zip includes source_dir_parent/bundle_name
+    temp_dir = os.path.join(
+        os.getcwd(), "target", "validate_effective", source_dir_base
+    )
+    os.makedirs(temp_dir, exist_ok=True)
+    logging.debug(f"Temporary directory created at {temp_dir}")
+    remove_files_from_dir(temp_dir, 2)
+    zip_file_path = os.path.join(temp_dir, "all-bundles.zip")
+    # start path is the source_dir_parent
+    with zipfile.ZipFile(zip_file_path, "w") as zipf:
+        # add the source_dir_parent/bundle_dir to the zip file
+        for root, _, files in os.walk(source_dir_parent):
+            for file in files:
+                file_path = os.path.join(root, file)
+                # skip if the files parent is not in all_bundles
+                if not any(bundle_dir in root for bundle_dir in all_bundles):
+                    continue
+                # add the file to the zip file with the relative path
+                relative_path = os.path.relpath(file_path, source_dir_parent_parent)
+                zipf.write(file_path, relative_path)
+    logging.info(f"Zipped all bundles to {zip_file_path}")
+    # list the files in the zip file
+    with zipfile.ZipFile(zip_file_path, "r") as zipf:
+        logging.debug("Files in the zip:")
+        for file in zipf.namelist():
+            logging.debug(f" - {file}")
+    # create a temporary directory to store the effective bundle
+    effective_bundle_dir_path = os.path.join(
+        temp_dir, f"effective-bundle-{source_dir_base}"
+    )
+    effective_bundle_zip_path = f"{effective_bundle_dir_path}.zip"
+    effective_bundle_url_path = (
+        f"{get_effective_bundle_path}{source_dir_parent_base}/{source_dir_base}"
+    )
+    try:
+        logging.info(
+            f"Requesting effective bundle from OC at {oc_url} with path {effective_bundle_url_path}"
+        )
+        call_jenkins_api(
+            utilz.join_url(oc_url, effective_bundle_url_path),
+            username,
+            password,
+            data_file=zip_file_path,
+            out_file=effective_bundle_zip_path,
+        )
+        logging.info(f"Effective bundle zip created at {effective_bundle_zip_path}")
+        # now unzip the effective bundle
+        with zipfile.ZipFile(effective_bundle_zip_path, "r") as zipf:
+            zipf.extractall(effective_bundle_dir_path)
+        logging.info(f"Effective bundle extracted to {effective_bundle_dir_path}")
+        # Now run validate on the effective bundle as normal
+        _validate(
+            config_key,
+            url,
+            username,
+            password,
+            effective_bundle_dir_path,
+            ignore_warnings,
+            external_rbac,
+        )
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 404:
+            die(
+                f"OC URL {oc_url} does not support effective bundle generation. Please check the URL."
+            )
+        else:
+            die(f"Failed to get effective bundle from OC: {e}")
+
+
+@bundleutils.command()
+@option_for(Key.CONFIG_KEY, is_flag=False, flag_value="ALL", default="NONE")
 @option_for(Key.URL)
 @option_for(Key.USERNAME)
 @option_for(Key.PASSWORD)
 @option_for(Key.VALIDATE_SOURCE_DIR, type=click.Path(file_okay=False, dir_okay=True))
 @option_for(Key.VALIDATE_IGNORE_WARNINGS, default="False", type=click.BOOL)
-@option_for(Key.VALIDATE_EXTERNAL_RBAC, type=click.Path(file_okay=True, dir_okay=False))
+@option_for(
+    Key.VALIDATE_EXTERNAL_RBAC,
+    type=click.Path(file_okay=True, dir_okay=False, exists=True),
+    required=False,
+)
 @click.pass_context
 def validate(
     ctx, config_key, url, username, password, source_dir, ignore_warnings, external_rbac
@@ -1745,9 +1917,7 @@ def _validate(
     if not os.path.exists(source_dir):
         die(f"Source directory '{source_dir}' does not exist")
 
-    external_rbac = utilz.is_truthy(
-        _get(Key.VALIDATE_EXTERNAL_RBAC, external_rbac, default="False")
-    )
+    external_rbac = _get(Key.VALIDATE_EXTERNAL_RBAC, external_rbac, required=False)
     ignore_warnings = utilz.is_truthy(
         _get(Key.VALIDATE_IGNORE_WARNINGS, ignore_warnings)
     )
@@ -1774,17 +1944,40 @@ def _validate(
 
     # create a temporary directory to store the bundle
     with tempfile.TemporaryDirectory() as temp_dir:
-        logging.debug(f"Copying bundle files to {temp_dir}")
-        for filename in os.listdir(source_dir):
-            # python native copy
-            shutil.copy2(
-                os.path.join(f"{source_dir}", filename),
-                os.path.join(temp_dir, filename),
+        logging.debug(
+            f"Copying bundle files recursively to {temp_dir} keeping structure"
+        )
+        for root, dirs, files in os.walk(source_dir):
+            # create the same directory structure in the temp_dir
+            relative_path = os.path.relpath(root, source_dir)
+            target_dir = os.path.join(temp_dir, relative_path)
+            os.makedirs(target_dir, exist_ok=True)
+            for file in files:
+                file_path = os.path.join(root, file)
+                shutil.copy2(file_path, target_dir)
+        if external_rbac:
+            logging.info(
+                f"Copying external RBAC file {external_rbac} to {temp_dir}. Will need to update the bundle.yaml."
             )
+            shutil.copy2(
+                external_rbac,
+                os.path.join(temp_dir),
+            )
+            _update_bundle(temp_dir)
         # zip and post the YAML to the URL
         with zipfile.ZipFile("bundle.zip", "w") as zip_ref:
-            for filename in os.listdir(temp_dir):
-                zip_ref.write(os.path.join(temp_dir, filename), filename)
+            # add the source_dir_parent/bundle_dir to the zip file
+            for root, _, files in os.walk(temp_dir):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    # add the file to the zip file with the relative path
+                    relative_path = os.path.relpath(file_path, temp_dir)
+                    zip_ref.write(file_path, relative_path)
+        # list the files in the zip file
+        with zipfile.ZipFile("bundle.zip", "r") as zip_ref:
+            logging.debug("Files in the zip:")
+            for file in zip_ref.namelist():
+                logging.debug(f" - {file}")
         with open("bundle.zip", "rb") as f:
             # post as binary file
             response = requests.post(url, headers=headers, data=f)
@@ -1917,11 +2110,12 @@ def fetch(
     if not config_key in ["ALL", "NONE"]:
         logging.getLogger().setLevel(logging.WARNING)
 
-    path = _get(Key.FETCH_LOCAL_PATH, path, required=False)
-    if not path:
-        url = _get(Key.URL, url)
+    url = _get(Key.URL, url, default=f"{_get(Key.DEDUCED_URL)}", required=False)
+    if url:
         username = _get(Key.USERNAME, username)
         password = _get(Key.PASSWORD, password)
+    else:
+        path = _get(Key.FETCH_LOCAL_PATH, path)
 
     if not target_dir:
         ci_version = _deduce_version()
@@ -2385,7 +2579,7 @@ def update_plugins(
     catalog_warnings_strategy,
 ):
     """Update plugins in the target directory."""
-    url = _get(Key.URL, url)
+    url = _get(Key.URL, url, default=f"{_get(Key.DEDUCED_URL)}")
     ci_version = _deduce_version()
     username = _get(Key.USERNAME, username)
     password = _get(Key.PASSWORD, password)
@@ -2481,7 +2675,7 @@ def _update_plugins(
             "No plugin JSON URL provided. Cannot determine if disabled/deleted plugins present in list."
         )
         return
-    data = json.loads(plugin_json_str)
+    data = json.loads(str(plugin_json_str))
     plugins_from_json = data.get("plugins", [])
     expected_plugins, all_bootstrap_plugins, all_deleted_or_inactive_plugins, graphs = (
         _analyze_server_plugins(
@@ -2654,12 +2848,47 @@ def _update_plugins(
                 logging.info(f"No changes detected in {plugins_file}. Skipping write.")
 
 
-def remove_files_from_dir(dir):
-    if os.path.exists(dir):
-        logging.debug(f"Removing files from directory: {dir}")
-        for filename in os.listdir(dir):
-            filename = os.path.join(dir, filename)
-            os.remove(filename)
+def _find_target_dir_upwards(target_dir: str) -> Path | None:
+    """Search upwards from target_dir to find a 'target' directory within 4 levels."""
+    path = Path(target_dir).resolve()
+    for _ in range(5):
+        candidate = path / "target"
+        if candidate.is_dir():
+            return candidate
+        path = path.parent
+    return None
+
+
+def remove_files_from_dir(dir, max_depth=1):
+    # sanity check - ensure one of the top 4 parents is called target
+    if not _find_target_dir_upwards(dir):
+        die(
+            f"Target directory '{dir}' does not have a 'target' directory in its path. Will not recursively delete."
+        )
+    # if the dir has more than max_depth sub directories, die
+    base = Path(dir).resolve()
+    if not base.is_dir():
+        die(f"{dir} is not a directory")
+    this_depth = 0
+    for path in base.rglob("*"):
+        if path.is_dir():
+            rel_depth = len(path.relative_to(base).parts)
+            this_depth = max(this_depth, rel_depth)
+    if this_depth > max_depth:
+        die(
+            f"Directory '{dir}' has {this_depth} levels, which is more than the allowed maximum of {max_depth}. Will not recursively delete."
+        )
+
+    # delete files and dirs recursively
+    for root, dirs, files in os.walk(dir, topdown=False):
+        for name in files:
+            file_path = os.path.join(root, name)
+            logging.debug(f"Removing file: {file_path}")
+            os.remove(file_path)
+        for name in dirs:
+            dir_path = os.path.join(root, name)
+            logging.debug(f"Removing directory: {dir_path}")
+            os.rmdir(dir_path)
 
 
 def _read_core_casc_export_file(url, username, password, filename="bundle.yaml"):
@@ -3375,13 +3604,13 @@ def audit(
 
     if not config_key in ["ALL", "NONE"]:
         logging.getLogger().setLevel(logging.WARNING)
-    dry_run = _get(Key.DRY_RUN, dry_run)
-    strict = _get(Key.STRICT, strict)
+    dry_run = utilz.is_truthy(_get(Key.DRY_RUN, dry_run))
+    strict = utilz.is_truthy(_get(Key.STRICT, strict))
     configs_base = _get(Key.CONFIGS_BASE, configs_base)
     hash_seed = _get(Key.AUDIT_HASH_SEED, hash_seed, required=False)
-    hash = _get(Key.AUDIT_HASH, hash)
+    hash = utilz.is_truthy(_get(Key.AUDIT_HASH, hash))
 
-    url = str(_get(Key.URL, url, required=False))
+    url = str(_get(Key.URL, url, default=f"{_get(Key.DEDUCED_URL)}", required=False))
     config = _determine_transformation_config(url, config)
     merged_config = _get_merged_config(config)
     if dry_run:
@@ -3404,7 +3633,7 @@ def audit(
     # set the is_audit flag for the bundle update later (we want to set the version later)
     os.environ[BUNDLEUTILS_AUDIT_FIXED_VERSION] = "AUDITED_BUNDLE_DO_NOT_USE"
 
-    _transform(merged_config, source_dir, target_dir, utilz.is_truthy(dry_run))
+    _transform(merged_config, source_dir, target_dir, dry_run)
 
 
 @bundleutils.command()
@@ -3431,7 +3660,7 @@ def transform(
     strict = utilz.is_truthy(_get(Key.STRICT, strict))
     configs_base = _get(Key.CONFIGS_BASE, configs_base)
 
-    url = str(_get(Key.URL, url, required=False))
+    url = str(_get(Key.URL, url, default=f"{_get(Key.DEDUCED_URL)}", required=False))
     config = _determine_transformation_config(url, config)
     merged_config = _get_merged_config(config)
     if dry_run:

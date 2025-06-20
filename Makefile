@@ -80,10 +80,14 @@ docker/build-dev: ## Build the bundleutils:dev image
 docker/build-dev:
 	@docker buildx build -t bundleutils:dev .
 
+.PHONY: docker/update-dev-files
+docker/update-dev-files: ## Update the bundleutils:dev image with local changes
+docker/update-dev-files:
+	@docker cp -a bundleutilspkg/src bundleutils:/opt/bundleutils/.app/bundleutilspkg/
+
 .PHONY: docker/update-dev
 docker/update-dev: ## Update the bundleutils:dev image with local changes
-docker/update-dev:
-	@docker cp -a bundleutilspkg/src bundleutils:/opt/bundleutils/.app/bundleutilspkg/
+docker/update-dev: docker/update-dev-files
 	@docker exec -u root bundleutils bash -c 'cd /opt/bundleutils/.app/bundleutilspkg && pip install -e ".[dev]"'
 
 .PHONY: docker/start-dev

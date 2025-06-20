@@ -61,6 +61,13 @@ Options:
                                   directory (BUNDLEUTILS_GBL_APPEND_VERSION)
   -b, --bundles-base DIRECTORY    The base directory for the bundles
                                   (BUNDLEUTILS_BUNDLES_BASE)
+  -p, --url-base-pattern TEXT     The URL pattern to deduce the URL from
+                                  inside a bundle directory
+                                  
+                                  Uses NAME as a placeholder, e.g.
+                                  - "https://example.com/NAME"
+                                  - "https://NAME.example.com"
+                                   (BUNDLEUTILS_GBL_URL_BASE_PATTERN)
   --help                          Show this message and exit.
 
 Commands:
@@ -88,6 +95,7 @@ Commands:
   update-bundle             Update the bundle.yaml file in the target...
   update-plugins            Update plugins in the target directory.
   validate                  Validate bundle in source dir against URL.
+  validate-effective        Generate effective bundle from OC, then...
   version                   Show the app version.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils api [OPTIONS]
@@ -616,6 +624,40 @@ Options:
                                   (BUNDLEUTILS_VALIDATE_EXTERNAL_RBAC)
   --help                          Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
+Usage: bundleutils validate-effective [OPTIONS]
+
+  Generate effective bundle from OC, then validate effective bundle against
+  URL.
+
+  This command will:
+  - Zip all bundles from the source directory parent
+  - Post the zip to the OC to get the effective bundle
+  - Validate the effective bundle against the URL
+
+Options:
+  -K, --config-key TEXT           Returns value if key provided (error if not
+                                  found), or k=v when used as flag
+                                  (BUNDLEUTILS_CONFIG_KEY)
+  -O, --oc-url TEXT               The URL of the OC (BUNDLEUTILS_OC_URL)
+                                  [required]
+  -U, --url TEXT                  The URL to interact with
+                                  (BUNDLEUTILS_JENKINS_URL)  [required]
+  -u, --username TEXT             Username for basic authentication
+                                  (BUNDLEUTILS_USERNAME)  [required]
+  -p, --password TEXT             Password for basic authentication
+                                  (BUNDLEUTILS_PASSWORD)  [required]
+  -s, --source-dir DIRECTORY      The source directory for the YAML documents
+                                  to validate
+                                  (BUNDLEUTILS_VALIDATE_SOURCE_DIR)
+  -w, --ignore-warnings / --no-ignore-warnings
+                                  Do not fail if warnings are found in
+                                  validation
+                                  (BUNDLEUTILS_VALIDATE_IGNORE_WARNINGS)
+  -r, --external-rbac FILE        Path to an external rbac.yaml from an
+                                  operations center bundle
+                                  (BUNDLEUTILS_VALIDATE_EXTERNAL_RBAC)
+  --help                          Show this message and exit.
+------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils version [OPTIONS]
 
   Show the app version.
@@ -688,6 +730,7 @@ Targets:
   compose/enter          Enter the bundleutils container
   docker/create-volume   Create the bundleutils-cache volume
   docker/build-dev       Build the bundleutils:dev image
+  docker/update-dev-files  Update the bundleutils:dev image with local changes
   docker/update-dev      Update the bundleutils:dev image with local changes
   docker/start-dev       Start the bundleutils:dev container
   docker/start           Start the bundleutils container
