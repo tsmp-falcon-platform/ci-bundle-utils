@@ -39,6 +39,7 @@ class JenkinsServerManager:
         self.tar_cache_dir = os.path.join(self.cache_dir, "tar", ci_type, ci_version)
         self.tar_cache_file = os.path.join(self.tar_cache_dir, "jenkins.war")
         self.whoami_url = "/whoAmI/api/json?tree=authenticated"
+        self.prefix = "/dummy-server"
         self.target_base_dir = "/tmp/ci_server_home"
         if not target_dir:
             target_dir = os.path.join(self.target_base_dir, ci_type, ci_version)
@@ -464,9 +465,10 @@ class JenkinsServerManager:
 
         java_opts = os.getenv("BUNDLEUTILS_CI_JAVA_OPTS", "")
         http_port = os.getenv("BUNDLEUTILS_HTTP_PORT", "8080")
+        url = f"http://localhost:{http_port}{self.prefix}"
         # if port is already in use, fail
         try:
-            response = requests.get(f"http://localhost:{http_port}{self.whoami_url}")
+            response = requests.get(f"{url}{self.whoami_url}")
             if response.status_code == 200:
                 self.die(
                     f"Port {http_port} is already in use. Please specify a different port using the BUNDLEUTILS_HTTP_PORT environment variable."
@@ -475,7 +477,7 @@ class JenkinsServerManager:
             pass
         # write the server URL to the jenkins_url file
         with open(self.url_file, "w", encoding="utf-8") as file:
-            file.write(f"http://localhost:{http_port}")
+            file.write(f"{url}")
         jenkins_opts = os.getenv("BUNDLEUTILS_JENKINS_OPTS", "")
         # if BUNDLEUTILS_JENKINS_OPTS contains -Dcore.casc.config.bundle, fail
         if (
@@ -504,6 +506,7 @@ class JenkinsServerManager:
                 self.war_path,
                 f"--httpPort={http_port}",
                 f"--webroot={self.target_jenkins_webroot}",
+                f"--prefix={self.prefix}",
             ]
         )
         command.extend(jenkins_opts.split())
