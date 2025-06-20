@@ -109,6 +109,8 @@ def long_opt(key):
 
 class Key(Enum):
     API_PATH = ("-P", [], "Path to the API endpoint to call", 1)
+    API_DATA_FILE = ("-d", [], "The data to post to the API endpoint", 1)
+    API_OUT_FILE = ("-o", [], "The output file to write the API response to", 1)
     AUDIT_SOURCE_DIR = (
         "-s",
         [],
@@ -948,10 +950,11 @@ def ci_setup(
     url = _get(Key.URL, url, required=False)
     ci_type = _deduce_type(ci_type)
     ci_version = _deduce_version(ci_version)
-    passed_dirs = {}
-    passed_dirs[Key.CI_SETUP_SOURCE_DIR] = source_dir
-    _add_default_dirs_if_necessary(url, ci_version, passed_dirs)
-    source_dir = str(_get(Key.CI_SETUP_SOURCE_DIR))
+    if not source_dir:
+        passed_dirs = {}
+        passed_dirs[Key.CI_SETUP_SOURCE_DIR] = source_dir
+        _add_default_dirs_if_necessary(url, ci_version, passed_dirs)
+        source_dir = str(_get(Key.CI_SETUP_SOURCE_DIR))
     if not os.path.exists(source_dir):
         die(f"Source directory '{source_dir}' does not exist")
     ci_bundle_template = _get(
@@ -1208,7 +1211,7 @@ def ci_validate(
 
 
 def _get_plugins_from_server(server_url, username, password):
-    plugin_json_url = server_url + plugin_json_url_path
+    plugin_json_url = utilz.join_url(server_url, plugin_json_url_path)
     response_text = call_jenkins_api(plugin_json_url, username, password)
     return response_text
 
@@ -1515,8 +1518,12 @@ def preflight(ctx, url, username, password):
 @option_for(Key.USERNAME)
 @option_for(Key.PASSWORD)
 @option_for(Key.API_PATH)
+@option_for(
+    Key.API_DATA_FILE, type=click.Path(exists=True, dir_okay=False), required=False
+)
+@option_for(Key.API_OUT_FILE, type=click.Path(dir_okay=False), required=False)
 @click.pass_context
-def api(ctx, url, username, password, path):
+def api(ctx, url, username, password, path, data_file, out_file):
     """
     Utility for calling the Jenkins API.
     \b
@@ -1526,11 +1533,14 @@ def api(ctx, url, username, password, path):
     username = _get(Key.USERNAME, username)
     password = _get(Key.PASSWORD, password)
     path = _get(Key.API_PATH, path)
+    data_file = str(_get(Key.API_DATA_FILE, data_file, required=False))
+    out_file = str(_get(Key.API_OUT_FILE, out_file, required=False))
 
     _preflight(url, username, password)
     url_path = utilz.join_url(url, path) if path else url
-    response_text = call_jenkins_api(url_path, username, password)
-    click.echo(response_text)
+    response = call_jenkins_api(url_path, username, password, data_file, out_file)
+    if response:
+        click.echo(response)
 
 
 @bundleutils.command()
@@ -2463,7 +2473,7 @@ def _update_plugins(
     # load the plugin JSON from the URL or path
     plugin_json_str = None
     if url:
-        plugin_json_url = url + plugin_json_url_path
+        plugin_json_url = utilz.join_url(url, plugin_json_url_path)
         logging.debug(f"Loading plugin JSON from URL: {plugin_json_url}")
         plugin_json_str = call_jenkins_api(plugin_json_url, username, password)
     else:
@@ -2654,7 +2664,7 @@ def remove_files_from_dir(dir):
 
 def _read_core_casc_export_file(url, username, password, filename="bundle.yaml"):
     # read the file from the core-casc-export directory
-    url = f"{url}/core-casc-export/{filename}"
+    url = utilz.join_url(url, f"/core-casc-export/{filename}")
     response_text = call_jenkins_api(url, username, password)
     return response_text
 
@@ -2750,7 +2760,14 @@ def preprocess_yaml_text(ctx, response_text):
     return response_text
 
 
-def call_jenkins_api(url, username, password):
+def call_jenkins_api(
+    url,
+    username,
+    password,
+    data_file: str = "",
+    out_file: str = "",
+    headers={"Accept": "application/json"},
+):
     """
     Call the Jenkins API and return the response text.
     """
@@ -2762,16 +2779,51 @@ def call_jenkins_api(url, username, password):
     logging.trace(f"Using username:` {username}")  # type: ignore
     # print last 5 characters of password
     logging.trace(f"Using password: ...{password[-1:]}")  # type: ignore
-    headers = {}
     if username and password:
         headers["Authorization"] = "Basic " + base64.b64encode(
             f"{username}:{password}".encode("utf-8")
         ).decode("utf-8")
-    response = requests.get(url, headers=headers)
-    response.raise_for_status()
-    # add the URL to the internal_cache
-    internal_cache[url] = response.text
-    return response.text
+    if out_file:
+        if out_file.endswith(".zip"):
+            headers["Accept"] = "application/zip;charset=utf-8"
+        elif out_file.endswith(".json"):
+            headers["Aceept"] = "application/json"
+        elif out_file.endswith(".yaml"):
+            headers["Aceept"] = "text/yaml"
+        else:
+            logging.warning(
+                f"Out file {out_file} does not have a recognized extension. Assuming text/plain."
+            )
+    if data_file:
+        # if file is binary, set the headers accordingly
+        if data_file.endswith(".zip"):
+            headers["Content-Type"] = "application/zip;charset=utf-8"
+        elif data_file.endswith(".json"):
+            headers["Content-Type"] = "application/json"
+        elif data_file.endswith(".yaml"):
+            headers["Content-Type"] = "text/yaml"
+        else:
+            logging.warning(
+                f"Data file {data_file} does not have a recognized extension. Assuming text/plain."
+            )
+        # read the data from the file
+        with open(data_file, "rb") as f:
+            post_data = f.read()
+        response = requests.post(url, data=post_data, headers=headers, verify=False)
+        response.raise_for_status()
+    else:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+
+    if out_file:
+        # write the response to the out_file
+        with open(out_file, "wb") as f:
+            f.write(response.content)
+        logging.info(f"Wrote response to {out_file}")
+    else:
+        # add the URL to the internal_cache
+        internal_cache[url] = response.text
+        return response.text
 
 
 def write_all_yaml_docs_from_comments(yaml_docs, target_dir):

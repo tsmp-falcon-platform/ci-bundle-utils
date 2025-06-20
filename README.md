@@ -96,13 +96,18 @@ Usage: bundleutils api [OPTIONS]
   /whoAmI/api/json?pretty
 
 Options:
-  -U, --url TEXT       The URL to interact with (BUNDLEUTILS_JENKINS_URL)
-  -u, --username TEXT  Username for basic authentication
-                       (BUNDLEUTILS_USERNAME)
-  -p, --password TEXT  Password for basic authentication
-                       (BUNDLEUTILS_PASSWORD)
-  -P, --path TEXT      Path to the API endpoint to call (BUNDLEUTILS_API_PATH)
-  --help               Show this message and exit.
+  -U, --url TEXT        The URL to interact with (BUNDLEUTILS_JENKINS_URL)
+  -u, --username TEXT   Username for basic authentication
+                        (BUNDLEUTILS_USERNAME)
+  -p, --password TEXT   Password for basic authentication
+                        (BUNDLEUTILS_PASSWORD)
+  -P, --path TEXT       Path to the API endpoint to call
+                        (BUNDLEUTILS_API_PATH)
+  -d, --data-file FILE  The data to post to the API endpoint
+                        (BUNDLEUTILS_API_DATA_FILE)
+  -o, --out-file FILE   The output file to write the API response to
+                        (BUNDLEUTILS_API_OUT_FILE)
+  --help                Show this message and exit.
 ------------------------------------------------------------------------------------------------------------------------
 Usage: bundleutils audit [OPTIONS]
 
