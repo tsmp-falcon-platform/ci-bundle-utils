@@ -735,6 +735,7 @@ def _determine_transformation_config(
     config_files = []
 
     if config == "auto":
+        config = ""
         # instance details
         ci_version = _deduce_version()
         ci_type = _deduce_type()
@@ -1642,6 +1643,7 @@ def _config(ctx, key=""):
 
     # if key disable logging
     if key:
+        # if key is not in the context
         # check if the key starts with BUNDLEUTILS_
         if not key.startswith("BUNDLEUTILS_"):
             die(f"Key '{key}' must start with 'BUNDLEUTILS_'")
@@ -2115,6 +2117,7 @@ def fetch(
         username = _get(Key.USERNAME, username)
         password = _get(Key.PASSWORD, password)
     else:
+        logging.warning("No URL provided. Checking for a local path.")
         path = _get(Key.FETCH_LOCAL_PATH, path)
 
     if not target_dir:
