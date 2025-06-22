@@ -78,7 +78,9 @@ RUN useradd -m -u 1000 bundle-user && \
 
 # Set the working directory in the container to /home/bundle-user
 WORKDIR /opt/bundleutils/work
-USER bundle-user
 
-# Run main.py when the container launches
-ENTRYPOINT [ "bundleutils"]
+COPY scripts/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["bundleutils"]

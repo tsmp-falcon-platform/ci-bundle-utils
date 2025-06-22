@@ -109,9 +109,10 @@ docker/start: docker/create-volume
 		-e BUNDLEUTILS_PASSWORD="$(BUNDLEUTILS_PASSWORD)" \
 		-e CASC_VALIDATION_LICENSE_KEY_B64=$(CASC_VALIDATION_LICENSE_KEY_B64) \
 		-e CASC_VALIDATION_LICENSE_CERT_B64=$(CASC_VALIDATION_LICENSE_CERT_B64) \
+		-e BUNDLE_UID=$(id -u) \
+		-e BUNDLE_GID=$(id -g) \
 		-v $(BUNDLES_WORKSPACE):/workspace \
 		-w /workspace \
-		-u $(id -u):$(id -g) \
 		$(DOCKER_IMAGE) \
 		-c "tail -f /dev/null"
 
