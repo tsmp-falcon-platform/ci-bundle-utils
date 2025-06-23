@@ -4,7 +4,7 @@
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 
 - [Prerequisites](#prerequisites)
-- [Minimum Required Permissions](#minimum-required-permissions)
+  - [Minimum Required Permissions](#minimum-required-permissions)
   - [Start a container](#start-a-container)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
@@ -24,7 +24,7 @@ Most tutorials require the following prerequisites.
   - `BUNDLEUTILS_USERNAME`
   - `BUNDLEUTILS_PASSWORD`
 
-## Minimum Required Permissions
+### Minimum Required Permissions
 
 The minimum set of permissions needed for the user are as follows:
 
