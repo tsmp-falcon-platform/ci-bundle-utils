@@ -51,15 +51,6 @@ We wish to manage your controllers configuration. We want to:
 > [!NOTE]
 > 1 minute...
 
-Start a container:
-
-```sh
-{
-  docker pull ghcr.io/tsmp-falcon-platform/ci-bundle-utils
-  docker run --rm -it --name bundleutils ghcr.io/tsmp-falcon-platform/ci-bundle-utils bash
-}
-```
-
 Create a test repo with a default main branch and the `.gitignore` file:
 
 ```sh
