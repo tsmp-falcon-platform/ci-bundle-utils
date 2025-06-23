@@ -19,11 +19,11 @@ The `bundleutils` is a python utility used for managing CasC bundles.
 
 Simple use-cases are:
 
-- [validating your existing CasC bundles](./docs/use-case-validating-exsting-bundles.md)
-- [fetching, transforming, and validating CasC bundles from existing servers](./docs/use-case-validating-exsting-bundles.md)
+- [validating your existing CasC bundles against existing remote server](./examples/tutorials/validating-bundles-against-existing-remote/)
+- [validating your existing CasC bundles against a separate test server](./examples/tutorials/validating-bundles-using-a-test-server/)
 - [merge multiple bundles into one](./docs/use-case-merging-bundles.md)
 
-Runtime variants explained here include [docker](./docs/setup-docker.md), [docker-compose](./docs/setup-docker-compose.md), [kubernetes](./docs/setup-kubernetes.md), [using CloudBees Jobs](./docs/setup-cloudbees-casc.md)
+Runtime variants explained here include [docker](./docs/setup-docker.md), [docker-compose](./docs/setup-docker-compose.md), [kubernetes](./docs/setup-kubernetes.md).
 
 **Since it is a container, it can be run virtually anywhere.**
 
@@ -31,8 +31,10 @@ Runtime variants explained here include [docker](./docs/setup-docker.md), [docke
 
 The following tutorials get you **up and running** and **in your own environment** in just **5 mins**.
 
-- [Auditing Challenge](./docs/5min_challenge_auditing.md)
-- Coming soon - Bundle Management Challenge
+- [Auditing Challenge](./examples/tutorials/auditing/)
+- [Validating existing CasC bundles against remote server Challenge](./examples/tutorials/validating-bundles-against-existing-remote/)
+- [Validating existing CasC bundles against test server Challenge](./examples/tutorials/validating-bundles-using-a-test-server/)
+- [Bundle Management Challenge](./examples/tutorials/bundle-management/)
 - Coming soon - Upgrade Management Challenge
 
 ## Commands and Help Pages

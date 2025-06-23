@@ -5,9 +5,10 @@ services:
     # - docker inspect ghcr.io/tsmp-falcon-platform/ci-bundle-utils | grep "org.opencontainers.image.version"
     image: ${BUNDLEUTILS_IMAGE:-ghcr.io/tsmp-falcon-platform/ci-bundle-utils}
     # run with UID and GID of the current user
-    user: "${UID:-1000}:${GID:-1000}"
     network_mode: ${NETWORK_MODE:-host}
     environment:
+      - BUNDLE_UID=${BUNDLE_UID:-$(id -u)}
+      - BUNDLE_GID=${BUNDLE_GID:-$(id -g)}
       - BUNDLEUTILS_USERNAME
       - BUNDLEUTILS_PASSWORD
       - CASC_VALIDATION_LICENSE_KEY_B64
@@ -19,7 +20,7 @@ services:
       - ${BUNDLES_WORKSPACE:-.}:/workspace
       - bundleutils-cache:/opt/bundleutils/.cache
     working_dir: ${BUNDLES_WORKSPACE:-/opt/bundleutils/work}
-    entrypoint: ["/bin/sleep", "infinity"]
+    command: ["/bin/sleep", "infinity"]
 
   # This service is used to build the image in development mode
   builder:
@@ -28,7 +29,7 @@ services:
       dockerfile: Dockerfile
     pull_policy: never
     image: bundleutils:dev
-    entrypoint: ["sh", "-c", "echo This service is used to build the image and will not be started by default"]
+    command: ["sh", "-c", "echo This service is used to build the image and will not be started by default"]
 
 volumes:
   bundleutils-cache: {}

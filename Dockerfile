@@ -24,6 +24,7 @@ ENV JAVA_HOME_11=/usr/lib/jvm/temurin-11-jdk-amd64
 
 # Install any needed packages specified in setup.py
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    gosu \
     less \
     vim \
     git \

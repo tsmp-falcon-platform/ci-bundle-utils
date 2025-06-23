@@ -30,7 +30,7 @@ The commands:
   - downloads the appropriate war file
   - creates a startup bundle using
     - the plugins from the source directory
-    - the [default validation template](./bundleutilspkg/defaults/configs/validation-template) (can be overridden)
+    - the [default validation template](../bundleutilspkg/src/bundleutilspkg/data/configs/validation-template/) (can be overridden)
 - `ci-start`
   - starts the test server
   - starting the java process

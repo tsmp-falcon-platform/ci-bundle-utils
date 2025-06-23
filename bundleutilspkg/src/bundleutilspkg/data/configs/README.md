@@ -3,6 +3,9 @@
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 
+- [Providing a config file](#providing-a-config-file)
+  - [Internal Configs](#internal-configs)
+- [Process](#process)
 - [Includes](#includes)
 - [Patches](#patches)
   - [Advanced patching (using selectors)](#advanced-patching-using-selectors)
@@ -13,6 +16,31 @@
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
 The transformation from exported bundle to a more sanitized form uses transformation instructions.
+
+## Providing a config file
+
+The transformation instruction file can be provided with either transform or audit commands.
+
+By default, the internal config file for that particular command will be used:
+
+- `bundleutils audit` will use the internal [transform.yaml](./transform.yaml)
+- `bundleutils transform` will use the internal [audit.yaml](./audit.yaml)
+
+Using a different config file by specifying the path or specifying the `BUNDLEUTILS_CONFIG` environment variable, e.g.
+
+- `bundleutils transform --config /path/to/my/auditing/config.yaml`
+- `bundleutils audit --config /path/to/my/auditing/config.yaml`
+
+### Internal Configs
+
+The tool comes with some predefined flavours of transformation. These internal config file serve as examples for your own bundles.
+
+Using a different internal files requires the `int:` prefix, e.g.
+
+- `bundleutils transform --config int:audit-split.yaml` will use the [audit-split.yaml](./audit-split.yaml)
+- `bundleutils audit --config int:transform-safe.yaml` will use the [transform-safe.yaml](./transform-safe.yaml)
+
+## Process
 
 The process is executed in the following order:
 

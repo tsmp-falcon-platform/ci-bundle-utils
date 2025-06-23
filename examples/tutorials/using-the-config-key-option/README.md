@@ -1,12 +1,12 @@
 # 5-Minute Challenge: `--config-key`
 
-Welcome to this quick hands-on challenge! In just five minutes, you'll explore how the `--config-key` option works in the `bundleutils <fetch|transform|audit>` commands and how environment variables or CLI flags affect its output.
+Welcome to this quick hands-on challenge! In just five minutes, you'll explore how the `-K / --config-key` option works in the `bundleutils <fetch|transform|audit>` commands and how environment variables or CLI flags affect its output.
 
 ---
 
 ## 🎯 Goal
 
-Learn how to query evaluated configuration keys using `--config-key` and verify how command-line arguments and environment variables impact these values.
+Learn how to query evaluated configuration keys using `-K / --config-key` and verify how command-line arguments and environment variables impact these values.
 
 ---
 
@@ -16,9 +16,7 @@ Learn how to query evaluated configuration keys using `--config-key` and verify 
 
 ---
 
-## 🕐 Step-by-step (Total time: ~5 minutes)
-
-### ✅ 1. View all evaluated configuration keys
+## ✅ 1. View all evaluated configuration keys
 
 Run:
 
@@ -44,7 +42,7 @@ BUNDLEUTILS_USERNAME=ci-admin
 
 ---
 
-### ✅ 2. Query a single key using `--config-key`
+## ✅ 2. Query a single key using `--config-key <ENV_VAR>`
 
 Run:
 
@@ -62,7 +60,7 @@ true
 
 ---
 
-### ✅ 3. Override with an environment variable
+### ✅ 3. Environment variable overrides
 
 Run:
 
@@ -71,7 +69,8 @@ BUNDLEUTILS_FETCH_IGNORE_ITEMS=false bundleutils fetch --config-key BUNDLEUTILS_
 ```
 
 🧾 **Output:**
-```
+
+```sh
 false
 ```
 
@@ -79,27 +78,29 @@ false
 
 ---
 
-### ✅ 4. Override using a CLI flag instead
+### ✅ 4. CLI overrides
 
 Run:
 
 ```sh
-bundleutils fetch --ignore-items false --config-key BUNDLEUTILS_FETCH_IGNORE_ITEMS
+bundleutils fetch --no-ignore-items --config-key BUNDLEUTILS_FETCH_IGNORE_ITEMS
 ```
 
 🧾 **Output:**
-```
+
+```sh
 false
 ```
 
 Then try:
 
 ```sh
-bundleutils fetch --ignore-items true --config-key BUNDLEUTILS_FETCH_IGNORE_ITEMS
+bundleutils fetch --ignore-items --config-key BUNDLEUTILS_FETCH_IGNORE_ITEMS
 ```
 
 🧾 **Output:**
-```
+
+```sh
 true
 ```
 
@@ -112,22 +113,24 @@ true
 Run:
 
 ```sh
-bundleutils --append-version true fetch --config-key BUNDLEUTILS_BUNDLE_NAME
+bundleutils --append-version fetch --config-key BUNDLEUTILS_BUNDLE_NAME
 ```
 
 🧾 **Output:**
-```
+
+```sh
 default-controller-2.479.3.1
 ```
 
 Now try:
 
 ```sh
-bundleutils --append-version false fetch --config-key BUNDLEUTILS_BUNDLE_NAME
+bundleutils --no-append-version fetch --config-key BUNDLEUTILS_BUNDLE_NAME
 ```
 
 🧾 **Output:**
-```
+
+```sh
 default-controller
 ```
 
@@ -144,6 +147,3 @@ The `--config-key` flag is a powerful tool to:
 - Debug why certain behaviors occur
 
 Use it to trace and verify configuration before running expensive or destructive operations.
-
----
-````

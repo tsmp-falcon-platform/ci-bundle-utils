@@ -1248,6 +1248,9 @@ def ci_validate(
     ci_version = _deduce_version(ci_version)
     jenkins_manager = JenkinsServerManager(ci_type, ci_version, ci_server_home)
     server_url, username, password = jenkins_manager.get_server_details()
+    # overwrite the URL in the context object because we are using the test-server
+    source_dir = _get_source_dir(url, source_dir)
+    _set(Key.URL, server_url)
     logging.debug(
         f"Server URL: {server_url}, Username: {username}, Password: {password}"
     )
@@ -1801,6 +1804,11 @@ def validate_effective(
     - Validate the effective bundle against the URL
     """
     oc_url = _get(Key.OC_URL, oc_url, required=True)
+    url = str(_get(Key.URL, url))
+    username = _get(Key.USERNAME, username)
+    password = _get(Key.PASSWORD, password)
+    source_dir = _get_source_dir(url, source_dir)
+
     # get full path to the source directory
     source_dir = os.path.abspath(source_dir)
     source_dir_base = os.path.basename(source_dir)
@@ -1902,14 +1910,7 @@ def validate(
     )
 
 
-def _validate(
-    config_key, url, username, password, source_dir, ignore_warnings, external_rbac
-):
-    if not config_key in ["ALL", "NONE"]:
-        logging.getLogger().setLevel(logging.WARNING)
-    username = _get(Key.USERNAME, username)
-    password = _get(Key.PASSWORD, password)
-
+def _get_source_dir(url, source_dir):
     if not source_dir:
         ci_version = _deduce_version()
         passed_dirs = {}
@@ -1918,7 +1919,19 @@ def _validate(
         source_dir = str(_get(Key.VALIDATE_SOURCE_DIR))
     if not os.path.exists(source_dir):
         die(f"Source directory '{source_dir}' does not exist")
+    return source_dir
 
+
+def _validate(
+    config_key, url, username, password, source_dir, ignore_warnings, external_rbac
+):
+    if not config_key in ["ALL", "NONE"]:
+        logging.getLogger().setLevel(logging.WARNING)
+    url = str(_get(Key.URL, url))
+    username = _get(Key.USERNAME, username)
+    password = _get(Key.PASSWORD, password)
+
+    source_dir = _get_source_dir(url, source_dir)
     external_rbac = _get(Key.VALIDATE_EXTERNAL_RBAC, external_rbac, required=False)
     ignore_warnings = utilz.is_truthy(
         _get(Key.VALIDATE_IGNORE_WARNINGS, ignore_warnings)

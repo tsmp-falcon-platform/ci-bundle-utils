@@ -35,7 +35,11 @@ repos:
       language: script
       files: bundleutilspkg/.*\.py$
       require_serial: true
-
+- repo: https://github.com/tcort/markdown-link-check
+  rev: v3.12.2 # until https://github.com/tcort/markdown-link-check/issues/457 is resolved
+  hooks:
+    - id: markdown-link-check
+      args: [--quiet]
 # ------------------------------- Python Tools ------------------------------- #
 - repo: https://github.com/astral-sh/ruff-pre-commit
   rev: v0.11.9
