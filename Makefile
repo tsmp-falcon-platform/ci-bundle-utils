@@ -15,14 +15,9 @@ setup: ## Setup virtualenv (optional PYTHON_CMD=python3.xx)
 .PHONY: install
 install: ## Install the bundleutils package
 	cd bundleutilspkg && \
-	pip install --upgrade pip && \
-	pip install "."
-
-.PHONY: install-dev
-install-dev: ## Install the bundleutils package with dev dependencies
-	cd bundleutilspkg && \
-	pip install --upgrade pip && \
-	pip install -e ".[dev]"
+	pip install --upgrade pip pip-tools && \
+	pip install -r requirements-dev.lock.txt && \
+	pip install -e "."
 
 .PHONY: test
 test: ## Run the pytest suite
@@ -33,6 +28,12 @@ test: ## Run the pytest suite
 test/%: ## Run the pytest suite tests containing 'test/<string>'
 	cd bundleutilspkg && \
 	pytest -v -k $*
+
+.PHONY: lock-files
+lock-files: ## Install the bundleutils package
+	cd bundleutilspkg && \
+	pip-compile --strip-extras --output-file=requirements.lock.txt pyproject.toml && \
+	pip-compile --extra dev pyproject.toml --strip-extras --output-file=requirements-dev.lock.txt
 
 .PHONY: pyinstaller
 pyinstaller: ## Build the bundleutils package
@@ -68,16 +69,26 @@ compose/stop: ## Stop the bundleutils container
 
 .PHONY: compose/enter
 compose/enter: ## Enter the bundleutils container
-	@docker compose exec bundleutils bash
+	@docker compose exec --user "$${BUNDLE_UID:-$$(id -u)}:$${BUNDLE_GID:-$$(id -g)}" bundleutils bash
 
 .PHONY: docker/create-volume
 docker/create-volume: ## Create the bundleutils-cache volume
-	@docker volume inspect bundleutils-cache > /dev/null 2>&1 || docker volume create bundleutils-cache
+	docker volume inspect bundleutils-cache > /dev/null 2>&1 || docker volume create bundleutils-cache
 
 .PHONY: docker/build-dev
 docker/build-dev: ## Build the bundleutils:dev image
 docker/build-dev:
-	@docker buildx build -t bundleutils:dev .
+	docker buildx build -t bundleutils:dev .
+
+.PHONY: docker/update-dev-files
+docker/update-dev-files: ## Update the bundleutils:dev image with local changes
+docker/update-dev-files:
+	@docker cp -a bundleutilspkg/src bundleutils:/opt/bundleutils/.app/bundleutilspkg/
+
+.PHONY: docker/update-dev
+docker/update-dev: ## Update the bundleutils:dev image with local changes
+docker/update-dev: docker/update-dev-files
+	docker exec -u root bundleutils bash -c 'cd /opt/bundleutils/.app/bundleutilspkg && pip install -e ".[dev]"'
 
 .PHONY: docker/start-dev
 docker/start-dev: ## Start the bundleutils:dev container
@@ -87,32 +98,34 @@ docker/start-dev: docker/remove docker/build-dev
 .PHONY: docker/start
 docker/start: ## Start the bundleutils container
 docker/start: docker/create-volume
-	@docker run \
+	docker run \
 		-d \
 		-v bundleutils-cache:/opt/bundleutils/.cache \
 		--name $(DOCKER_NAME) \
-		--entrypoint bash \
+		-p 8080:8080 \
+		-p 8081:8081 \
 		-e BUNDLEUTILS_USERNAME="$(BUNDLEUTILS_USERNAME)" \
 		-e BUNDLEUTILS_PASSWORD="$(BUNDLEUTILS_PASSWORD)" \
 		-e CASC_VALIDATION_LICENSE_KEY_B64=$(CASC_VALIDATION_LICENSE_KEY_B64) \
 		-e CASC_VALIDATION_LICENSE_CERT_B64=$(CASC_VALIDATION_LICENSE_CERT_B64) \
+		-e BUNDLE_UID=$$(id -u) \
+		-e BUNDLE_GID=$$(id -g) \
 		-v $(BUNDLES_WORKSPACE):/workspace \
 		-w /workspace \
-		-u $(id -u):$(id -g) \
 		$(DOCKER_IMAGE) \
 		-c "tail -f /dev/null"
 
 .PHONY: docker/stop
 docker/stop: ## Stop the bundleutils container
-	@docker stop $(DOCKER_NAME)
+	docker stop $(DOCKER_NAME)
 
 .PHONY: docker/enter
 docker/enter: ## Enter the bundleutils container
-	@docker exec -it $(DOCKER_NAME) bash
+	docker exec -it $(DOCKER_NAME) bash
 
 .PHONY: docker/remove
 docker/remove: ## Remove the bundleutils container
-	@docker rm -f $(DOCKER_NAME)
+	docker rm -f $(DOCKER_NAME)
 
 .PHONY: help
 help: ## Makefile Help Page

@@ -1,0 +1,63 @@
+# Remove standard stuff
+patches:
+  jenkins.yaml:
+  - op: remove
+    path: /license
+  - op: remove
+    path: /jenkins/labelAtoms
+  - op: remove
+    path: /unclassified/operationsCenterRootAction
+
+# Replace any credentials in jenkins.yaml and items.yaml
+credentials:
+  jenkins.yaml: {}
+  items.yaml: {}
+
+splits:
+  # Split every top level item in items.yaml into its own file
+  items:
+    items.yaml:
+    - target: auto
+      patterns: ['.*']
+
+  # Split the jenkins.yaml file into multiple files based on the paths
+  jcasc:
+    jenkins.yaml:
+
+    # put all the credentials config in one file
+    - target: credentials.yaml
+      paths:
+      - globalCredentialsConfiguration
+      - credentials
+
+    # put all the views config in one file
+    - target: views.yaml
+      paths:
+      - jenkins/primaryView
+      - jenkins/views
+
+    # put all the security config in one file
+    - target: security.yaml
+      paths:
+      - jenkins/authorizationStrategy
+      - jenkins/securityRealm
+      - security
+
+    # put all the casc config in one file
+    - target: casc.yaml
+      paths:
+      - cloudBeesCasCServer
+      - unclassified/bundleStorageService
+      - unclassified/bundleUpdateTiming
+      - unclassified/cascAutoControllerProvisioning
+      - unclassified/cascItemsConfiguration
+
+    # put each of the following in to their own file
+    - target: auto
+      paths:
+      - jenkins/clouds
+      - masterprovisioning
+      - support
+
+# No substitutions in this config
+substitutions: {}

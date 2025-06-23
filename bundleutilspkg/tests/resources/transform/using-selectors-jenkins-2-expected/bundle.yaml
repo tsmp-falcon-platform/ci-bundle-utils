@@ -1,4 +1,4 @@
-apiVersion: '2'
+apiVersion: 2
 id: using-selectors-jenkins-2-expected
 description: Bundle for using-selectors-jenkins-2-expected
 version: 4fdf0311-8c68-325d-c87b-5c2d2334ee7d

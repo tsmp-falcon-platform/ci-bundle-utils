@@ -30,9 +30,10 @@ trap summary EXIT
 
 GIT_ACTION="${GIT_ACTION:-commit-only}"
 mandatory_envs="BUNDLEUTILS_USERNAME BUNDLEUTILS_PASSWORD JENKINS_URL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL GIT_ACTION"
-usage_message="Usage: ./audit.sh [setup|help|<jenkins-url>]
+usage_message="Usage: ./audit.sh [setup|help|cjoc-and-online-controllers|<jenkins-url>]
   ./audit.sh setup         - Setup the bundleutils environment variables.
   ./audit.sh help          - Show this help message.
+  ./audit.sh cjoc-and-online-controllers - Audit all online controllers and the OC.
   ./audit.sh <jenkins-url> - Fetch from this URL regardless (keeping the other variables).
 
   Mandatory environment variables (configured manually or using setup):
@@ -55,6 +56,8 @@ function source_env() {
 }
 source_env
 
+mkdir -p target
+echo > target/audit.log
 if [[ "${1:-}" == "help" ]]; then
   echo -e "$usage_message"
   exit 0
@@ -74,7 +77,7 @@ elif [[ "${1:-}" == "cjoc-and-online-controllers" ]]; then
     sleep 5
   fi
   mkdir -p target
-  echo > target/audit.log
+  echo > target/audit-all.log
   for CONTROLLER in $ONLINE_CONTROLLERS; do
     CONTROLLER_NAME=$(BUNDLEUTILS_JENKINS_URL="$CONTROLLER" bundleutils extract-name-from-url)
     echo "AUDITING: Found online controller: $CONTROLLER"
@@ -92,6 +95,7 @@ elif [[ "${1:-}" == "cjoc-and-online-controllers" ]]; then
       echo "AUDITING: $CONTROLLER_NAME - Bundle fetch FAILED." | tee -a target/audit.log
       ERRORS_FOUND_ON_CONTROLLERS=1
     fi
+    cat target/audit.log >> target/audit-all.log
   done
 elif [[ "${1:-}" == "setup" ]]; then
   if [[ ! -t 0 ]]; then
@@ -189,25 +193,22 @@ function migrate_bundle() {
 export BUNDLEUTILS_PLUGINS_JSON_MERGE_STRATEGY='ALL'
 export BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY='ALL'
 
-# Determine env vars simply by the URL alone
-export BUNDLEUTILS_AUTO_ENV_USE_URL_ONLY='true'
-
 # Get bundle name from the URL
 echo "AUDITING: Running bundleutils config..."
-bundleutils config
+bundleutils audit --config-key
 
 # Get the CI version
 echo "AUDITING: Export the instance version to avoid fetching it every time..."
-BUNDLEUTILS_CI_VERSION=$(bundleutils  config --key BUNDLEUTILS_CI_VERSION)
+BUNDLEUTILS_CI_VERSION=$(bundleutils extract-version-from-url)
 export BUNDLEUTILS_CI_VERSION
 
 # If we are appending the version to the bundle name, are we migrating from a previous version?
 # Get the current final bundle directory
-BUNDLE_DIR="$(bundleutils config --key BUNDLEUTILS_AUDIT_TARGET_DIR)"
-APPEND_VERSION="$(bundleutils config --key BUNDLEUTILS_AUTO_ENV_APPEND_VERSION)"
+BUNDLE_DIR="$(bundleutils audit --config-key BUNDLEUTILS_AUDIT_TARGET_DIR)"
+APPEND_VERSION="$(bundleutils audit --config-key BUNDLEUTILS_GBL_APPEND_VERSION)"
 if [[ "$APPEND_VERSION" == "true" ]] && [[ ! -d "$BUNDLE_DIR" ]]; then
   echo "AUDITING: Bundle $BUNDLE_DIR not found. Looking for a previous version..."
-  LAST_KNOWN_VERSION="$(bundleutils config --key BUNDLEUTILS_AUTO_ENV_LAST_KNOWN_VERSION 2> /dev/null || true)"
+  LAST_KNOWN_VERSION="$(bundleutils audit --config-key BUNDLEUTILS_LAST_KNOWN_VERSION)"
   if [[ -n "$LAST_KNOWN_VERSION" ]]; then
     if [[ "$GIT_BUNDLE_PRESERVE_HISTORY" == "true" ]]; then
       migrate_bundle
@@ -231,7 +232,7 @@ bundleutils audit
 
 # list the bundle files
 echo "AUDITING: Listing bundle files..."
-BUNDLE_DIR="$(bundleutils config --key BUNDLEUTILS_AUDIT_TARGET_DIR)"
+BUNDLE_DIR="$(bundleutils audit --config-key BUNDLEUTILS_AUDIT_TARGET_DIR)"
 find "$BUNDLE_DIR"
 
 # Check if git command exists and directory is a git repository

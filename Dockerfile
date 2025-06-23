@@ -24,6 +24,7 @@ ENV JAVA_HOME_11=/usr/lib/jvm/temurin-11-jdk-amd64
 
 # Install any needed packages specified in setup.py
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    gosu \
     less \
     vim \
     git \
@@ -65,18 +66,22 @@ ADD README.md /opt/bundleutils/work/README.md
 
 # Install any needed packages specified in setup.py
 RUN cd /opt/bundleutils/.app/bundleutilspkg \
-    && pip install ".[dev]" \
+    && pip install -e . \
+    && pip install -r requirements-dev.lock.txt \
     && pyinstaller --noconfirm --clean --onedir \
 	--add-data "src/bundleutilspkg/data/configs:data/configs" \
 	--copy-metadata bundleutilspkg \
 	src/bundleutilspkg/bundleutils.py
 
 # Install any needed packages specified in setup.py
-RUN useradd -m -u 1000 bundle-user
+RUN useradd -m -u 1000 bundle-user && \
+    echo 'eval "$(_BUNDLEUTILS_COMPLETE=bash_source bundleutils)"' >> /home/bundle-user/.bashrc
 
 # Set the working directory in the container to /home/bundle-user
 WORKDIR /opt/bundleutils/work
-USER bundle-user
 
-# Run main.py when the container launches
-ENTRYPOINT [ "bundleutils"]
+COPY scripts/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["bundleutils"]

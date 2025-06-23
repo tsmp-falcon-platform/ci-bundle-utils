@@ -38,15 +38,25 @@ def _test_diff(runner, src1, src2, exit_code, text=None):
     basedir = os.path.join(testdir, "resources", "merge-bundles")
     src1 = os.path.join(basedir, src1)
     src2 = os.path.join(basedir, src2)
-    result = runner.invoke(bundleutils, ["diff", "-s", src1, "-s", src2])
+    command_args = ["diff", "-s", src1, "-s", src2]
+    # print out command and args for debugging
+    print(f"Running command: bundleutils {' '.join(command_args)}")
+    result = runner.invoke(bundleutils, command_args)
     _traceback(result)
     assert result.exit_code == exit_code
     if exit_code != 0:
+        assert text in result.output or text in result.exception.args[0], (
+            f"Expected text '{text}' not found in output or exception message."
+        )
+    if text:
         assert text in result.output
 
 
-def test_diff_file(runner):
+def test_diff_file_without_diff(runner):
     _test_diff(runner, "base/jenkins.yaml", "base/jenkins.yaml", 0)
+
+
+def test_diff_file_with_diff(runner):
     _test_diff(
         runner,
         "base/bundle.yaml",
@@ -59,6 +69,15 @@ def test_diff_file(runner):
 def test_diff_directory(runner):
     _test_diff(runner, "base", "base", 0)
     _test_diff(runner, "base", "base-expected", 1, "Differences detected")
+
+
+def _test_diff_19000(runner, command_args):
+    # print out command and args for debugging
+    print(f"Running command: bundleutils {' '.join(command_args)}")
+    result = runner.invoke(bundleutils, command_args)
+    _traceback(result)
+    assert result.exit_code != 0
+    assert '"new_value": "AUDITED_BUNDLE_DO_NOT_USE"' in result.output
 
 
 def _test_audit(testdir, test_name, runner, command_args, expected_dir):
@@ -85,15 +104,6 @@ def _test_audit(testdir, test_name, runner, command_args, expected_dir):
             assert outdata["version"] == expected_data["version"]
         else:
             assert outdata == expected_data
-
-
-def _test_diff_19000(runner, command_args):
-    # print out command and args for debugging
-    print(f"Running command: bundleutils {' '.join(command_args)}")
-    result = runner.invoke(bundleutils, command_args)
-    _traceback(result)
-    assert result.exit_code != 0
-    assert '"new_value": "AUDITED_BUNDLE_DO_NOT_USE"' in result.output
 
 
 def test_audit(request, runner):
@@ -410,6 +420,12 @@ def _test_extract_from_pattern(runner, string, pattern, expected_output, exit_co
     result = runner.invoke(bundleutils, command_args)
     _traceback(result)
     assert result.exit_code == exit_code
+    if exit_code != 0:
+        assert (
+            expected_output in result.output
+            or expected_output in result.exception.args[0]
+        )
+        return
     assert expected_output in result.output
 
 
@@ -468,3 +484,66 @@ def test_extract_from_pattern_env_var(runner, monkeypatch):
     expected_output = "controller-name"
     monkeypatch.setenv("BUNDLEUTILS_BUNDLES_PATTERN", pattern)
     _test_extract_from_pattern(runner, string, pattern, expected_output)
+
+
+def _test_extract_name_from_url(runner, string, expected_output, exit_code=0):
+    command_args = ["extract-name-from-url", "-U", string]
+    print(f"Running command: bundleutils {' '.join(command_args)}")
+    result = runner.invoke(bundleutils, command_args)
+    _traceback(result)
+    print(result.exit_code)
+    assert result.exit_code == exit_code
+    if exit_code != 0:
+        assert (
+            expected_output in result.output
+            or expected_output in result.exception.args[0]
+        )
+        return
+    assert expected_output in result.output
+
+
+def test_extract_name_from_url_valid(runner):
+    """
+    Smart extraction of the controller name from the URL.
+
+    \b
+    Extracts NAME from the following URL formats:
+    - http://a.b.c/NAME/
+    - http://a.b.c/NAME
+    - https://a.b.c/NAME/
+    - https://a.b.c/NAME
+    - http://NAME.b.c/
+    - http://NAME.b.c
+    - https://NAME.b.c/
+    - https://NAME.b.c
+    """
+    test_cases = [
+        ("http://a.b.c/NAME/", "NAME"),
+        ("http://a.b.c/NAME", "NAME"),
+        ("https://a.b.c/NAME/", "NAME"),
+        ("https://a.b.c/NAME", "NAME"),
+        ("http://NAME.b.c/", "NAME"),
+        ("http://NAME.b.c", "NAME"),
+        ("http://NAME", "NAME"),
+        ("https://NAME.b.c/", "NAME"),
+        ("https://NAME.b.c", "NAME"),
+    ]
+    for url, expected in test_cases:
+        _test_extract_name_from_url(runner, url, expected)
+
+
+def test_extract_name_from_url_invalid(runner):
+    """
+    Test cases where the URL does not contain a valid name.
+    """
+    test_cases = [
+        ("bla"),
+        ("http"),
+        ("foo://bar"),
+        ("http://"),
+        ("https://"),
+        ("http:///"),
+        ("https:///"),
+    ]
+    for url in test_cases:
+        _test_extract_name_from_url(runner, url, "Invalid URL format", exit_code=1)

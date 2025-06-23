@@ -1,0 +1,51 @@
+# This configuration can be used for testing purposes.
+# It removes credentials and authentication configuration so
+# that the resulting configuration can be used without:
+# - locking yourself out
+# - having to manage additional external credential references
+
+# Remove standard stuff
+patches:
+  jenkins.yaml:
+  - op: remove
+    path: /license
+  - op: remove
+    path: /jenkins/labelAtoms
+  - op: remove
+    path: /unclassified/operationsCenterRootAction
+
+# Replace any credentials in jenkins.yaml and items.yaml
+credentials:
+  jenkins.yaml: {}
+  items.yaml: {}
+
+# Not splitting anything
+splits:
+  items: {}
+  jcasc:
+    jenkins.yaml:
+      # Delete all other sections
+    - target: delete
+      paths:
+      # remove credentials and security sections
+      - credentials
+      - globalCredentialsConfiguration
+      - jenkins/authorizationStrategy
+      - jenkins/securityRealm
+      - security
+    rbac.yaml:
+    - target: delete
+      paths:
+      - /*
+    plugins.yaml:
+    - target: delete
+      paths:
+      - /*
+    plugin-catalog.yaml:
+    - target: delete
+      paths:
+      - /*
+
+
+# No substitutions in this config
+substitutions: {}

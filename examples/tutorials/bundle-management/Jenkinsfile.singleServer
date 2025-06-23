@@ -1,0 +1,35 @@
+// Uses Declarative syntax to run commands inside a container.
+pipeline {
+    agent {
+        kubernetes {
+            agentInjection true
+            yaml '''\
+              apiVersion: v1
+              kind: Pod
+              spec:
+                containers:
+                - name: jnlp
+                  image: ghcr.io/tsmp-falcon-platform/ci-bundle-utils
+                '''.stripIndent()
+        }
+    }
+    stages {
+        stage('Main') {
+            environment {
+                GIT_COMMITTER_NAME = 'bundleutils-bot'
+                GIT_COMMITTER_EMAIL = 'bundleutils-bot@example.org'
+                GIT_AUTHOR_NAME = 'bundleutils-bot'
+                GIT_AUTHOR_EMAIL = 'bundleutils-bot@example.org'
+                GIT_ACTION = 'push'
+            }
+            steps {
+                withCredentials([
+                    gitUsernamePassword(credentialsId: 'github-token-rw', gitToolName: 'Default'),
+                    usernamePassword(credentialsId: 'bundleutils-creds', passwordVariable: 'BUNDLEUTILS_PASSWORD', usernameVariable: 'BUNDLEUTILS_USERNAME')
+                ]){
+                    sh '/opt/bundleutils/work/examples/tutorials/bundle-management/bundle-management.sh'
+                }
+            }
+        }
+    }
+}

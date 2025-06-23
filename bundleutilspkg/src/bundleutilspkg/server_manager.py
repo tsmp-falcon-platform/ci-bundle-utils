@@ -39,6 +39,7 @@ class JenkinsServerManager:
         self.tar_cache_dir = os.path.join(self.cache_dir, "tar", ci_type, ci_version)
         self.tar_cache_file = os.path.join(self.tar_cache_dir, "jenkins.war")
         self.whoami_url = "/whoAmI/api/json?tree=authenticated"
+        self.prefix = "/dummy-server"
         self.target_base_dir = "/tmp/ci_server_home"
         if not target_dir:
             target_dir = os.path.join(self.target_base_dir, ci_type, ci_version)
@@ -67,7 +68,7 @@ class JenkinsServerManager:
         if not os.path.exists(self.target_jenkins_webroot):
             os.makedirs(self.target_jenkins_webroot)
 
-    def set_cloudbees_variables(self):
+    def set_cloudbees_variables(self) -> tuple[str, str]:
         """
         Set the CloudBees Docker image and WAR download URL based on the ci_type and ci_version.
         Env vars:
@@ -89,9 +90,7 @@ class JenkinsServerManager:
         elif self.ci_type == "oc-traditional":
             cb_war_download_url = f"{cb_downloads_url}/operations-center/rolling/war/{self.ci_version}/cloudbees-core-oc.war"
         else:
-            self.die(
-                f"BUNDLEUTILS_CI_TYPE '{self.ci_type}' not recognised", file=sys.stderr
-            )
+            self.die(f"BUNDLEUTILS_CI_TYPE '{self.ci_type}' not recognised")
 
         # check the environment variables:
         cb_docker_image_env = f"BUNDLEUTILS_CB_DOCKER_IMAGE_{self.ci_type.upper()}"
@@ -125,7 +124,7 @@ class JenkinsServerManager:
                 f"Using default cloudbees download URL. Overwrite with environment variable {cb_war_download_url_env}"
             )
 
-        return cb_docker_image, cb_war_download_url
+        return str(cb_docker_image), str(cb_war_download_url)
 
     def copy_war_from_skopeo(self, force=False):
         """
@@ -208,6 +207,7 @@ class JenkinsServerManager:
         except subprocess.CalledProcessError:
             self.die(f"Failed to pull the Docker image {self.cb_docker_image}")
 
+        container_id = None
         try:
             # Create a container without starting it
             container_id = (
@@ -367,6 +367,9 @@ class JenkinsServerManager:
 
     def start_server(self, ci_max_start_time):
         """Start the Jenkins server using the downloaded WAR file."""
+        logging.info(
+            f"Starting Jenkins server with version {self.ci_version} and type {self.ci_type}"
+        )
         if not os.path.exists(self.war_path):
             logging.info("WAR file does not exist. Getting now...")
             self.get_war()
@@ -397,7 +400,7 @@ class JenkinsServerManager:
                     f"JAVA_HOME is set to {os.environ['JAVA_HOME']} but {java} does not exist."
                 )
         else:
-            java = shutil.which("java")
+            java = str(shutil.which("java"))
 
         self.test_java_specification_version(required_java_version)
         # print the java -version output
@@ -462,9 +465,10 @@ class JenkinsServerManager:
 
         java_opts = os.getenv("BUNDLEUTILS_CI_JAVA_OPTS", "")
         http_port = os.getenv("BUNDLEUTILS_HTTP_PORT", "8080")
+        url = f"http://localhost:{http_port}{self.prefix}"
         # if port is already in use, fail
         try:
-            response = requests.get(f"http://localhost:{http_port}{self.whoami_url}")
+            response = requests.get(f"{url}{self.whoami_url}")
             if response.status_code == 200:
                 self.die(
                     f"Port {http_port} is already in use. Please specify a different port using the BUNDLEUTILS_HTTP_PORT environment variable."
@@ -473,7 +477,7 @@ class JenkinsServerManager:
             pass
         # write the server URL to the jenkins_url file
         with open(self.url_file, "w", encoding="utf-8") as file:
-            file.write(f"http://localhost:{http_port}")
+            file.write(f"{url}")
         jenkins_opts = os.getenv("BUNDLEUTILS_JENKINS_OPTS", "")
         # if BUNDLEUTILS_JENKINS_OPTS contains -Dcore.casc.config.bundle, fail
         if (
@@ -502,6 +506,7 @@ class JenkinsServerManager:
                 self.war_path,
                 f"--httpPort={http_port}",
                 f"--webroot={self.target_jenkins_webroot}",
+                f"--prefix={self.prefix}",
             ]
         )
         command.extend(jenkins_opts.split())
@@ -667,6 +672,9 @@ class JenkinsServerManager:
 
     def stop_server(self):
         """Stop the Jenkins server using the PID file."""
+        logging.info(
+            f"Stopping Jenkins server with version {self.ci_version} and type {self.ci_type}"
+        )
         if os.path.exists(self.pid_file):
             with open(self.pid_file, "r", encoding="utf-8") as file:
                 pidstr = file.read().strip()

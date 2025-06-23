@@ -1,8 +1,8 @@
-apiVersion: '2'
+apiVersion: 2
 id: child1
 parent: base
 description: Bundle for child1
-version: 60075f2b-1b6c-ba80-9f13-8eeba0e9eddf
+version: 6b40d1db-0958-0b36-1578-036542260f94
 jcasc:
 - jenkins.yaml
 - jenkins.casc.yaml

@@ -1,0 +1,22 @@
+# Remove standard stuff
+patches:
+  jenkins.yaml:
+  - op: remove
+    path: /license
+  - op: remove
+    path: /jenkins/labelAtoms
+  - op: remove
+    path: /unclassified/operationsCenterRootAction
+
+# Replace any credentials in jenkins.yaml and items.yaml
+credentials:
+  jenkins.yaml: {}
+  items.yaml: {}
+
+# Not splitting anything
+splits:
+  items: {}
+  jcasc: {}
+
+# No substitutions in this config
+substitutions: {}
