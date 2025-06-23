@@ -113,7 +113,7 @@ docker/start: docker/create-volume
 		-v $(BUNDLES_WORKSPACE):/workspace \
 		-w /workspace \
 		$(DOCKER_IMAGE) \
-		-c "tail -f /dev/null"
+		bash -c "tail -f /dev/null"
 
 .PHONY: docker/stop
 docker/stop: ## Stop the bundleutils container
@@ -121,7 +121,7 @@ docker/stop: ## Stop the bundleutils container
 
 .PHONY: docker/enter
 docker/enter: ## Enter the bundleutils container
-	docker exec -it $(DOCKER_NAME) bash
+	docker exec -it --user "$${BUNDLE_UID:-$$(id -u)}:$${BUNDLE_GID:-$$(id -g)}" $(DOCKER_NAME) bash
 
 .PHONY: docker/remove
 docker/remove: ## Remove the bundleutils container
