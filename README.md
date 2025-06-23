@@ -3,7 +3,6 @@
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 
-- [What is it?](#what-is-it)
 - [5 Minute Challenges](#5-minute-challenges)
 - [Commands and Help Pages](#commands-and-help-pages)
 - [Local Development](#local-development)
@@ -13,17 +12,13 @@
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
-## What is it?
-
 The `bundleutils` is a python utility used for managing CasC bundles.
 
-Simple use-cases are:
+Runtime variants explained here include:
 
-- [validating your existing CasC bundles against existing remote server](./examples/tutorials/validating-bundles-against-existing-remote/)
-- [validating your existing CasC bundles against a separate test server](./examples/tutorials/validating-bundles-using-a-test-server/)
-- [merge multiple bundles into one](./docs/use-case-merging-bundles.md)
-
-Runtime variants explained here include [docker](./docs/setup-docker.md), [docker-compose](./docs/setup-docker-compose.md), [kubernetes](./docs/setup-kubernetes.md).
+- [docker](./docs/setup-docker.md)
+- [docker-compose](./docs/setup-docker-compose.md)
+- [kubernetes](./docs/setup-kubernetes.md).
 
 **Since it is a container, it can be run virtually anywhere.**
 
@@ -35,6 +30,7 @@ The following tutorials get you **up and running** and **in your own environment
 - [Validating existing CasC bundles against remote server Challenge](./examples/tutorials/validating-bundles-against-existing-remote/)
 - [Validating existing CasC bundles against test server Challenge](./examples/tutorials/validating-bundles-using-a-test-server/)
 - [Bundle Management Challenge](./examples/tutorials/bundle-management/)
+- [Bundle Merging Challenge](./examples/tutorials/merging-bundles/)
 - Coming soon - Upgrade Management Challenge
 
 ## Commands and Help Pages

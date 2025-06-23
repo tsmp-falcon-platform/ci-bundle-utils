@@ -1,4 +1,22 @@
-# Validating existing bundles
+# Merging Challenge - BETA
+
+>[WARNING!] There are tests in place and this works with the majority of known configurations.
+>
+> However, it is impossible to test ALL available config snippets in ALL plugins.
+
+Due to the `WARNING` above, the merge config (instructions as to how the bundles are merged) can be extended.
+
+For more information, see the help page.
+
+```sh
+❯ bundleutils merge-bundles --help
+Usage: bundleutils merge-bundles [OPTIONS]
+
+...
+...
+
+  -m, --config FILE               An optional custom merge config file if needed (BUNDLEUTILS_MERGE_CONFIG)
+```
 
 ## Assumptions
 
@@ -7,7 +25,12 @@
 
 ## Merging Bundles
 
-See [the merge-bundles test resource](../bundleutilspkg/tests/resources/merge-bundles) for example values.
+Seen as an alternative to the operations center version of merging, but:
+
+- performing a deep merge as opposed to just adding multiple files.
+- will merge lists based on specific keys (name of cloud, etc)
+
+See [the merge-bundles test resource](../../../bundleutilspkg/tests/resources/merge-bundles) for example values.
 
 Example of merging the `base` and `child1` bundles into `/tmp/merged-bundle`:
 
