@@ -1804,7 +1804,7 @@ def validate_effective(
     - Validate the effective bundle against the URL
     """
     oc_url = _get(Key.OC_URL, oc_url, required=True)
-    url = str(_get(Key.URL, url))
+    url = _get(Key.URL, url, default=f"{_get(Key.DEDUCED_URL)}")
     username = _get(Key.USERNAME, username)
     password = _get(Key.PASSWORD, password)
     source_dir = _get_source_dir(url, source_dir)
@@ -1905,6 +1905,8 @@ def validate(
     ctx, config_key, url, username, password, source_dir, ignore_warnings, external_rbac
 ):
     """Validate bundle in source dir against URL."""
+
+    url = _get(Key.URL, url, default=f"{_get(Key.DEDUCED_URL)}")
     _validate(
         config_key, url, username, password, source_dir, ignore_warnings, external_rbac
     )
