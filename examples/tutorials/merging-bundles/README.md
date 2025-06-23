@@ -35,7 +35,7 @@ See [the merge-bundles test resource](../../../bundleutilspkg/tests/resources/me
 Example of merging the `base` and `child1` bundles into `/tmp/merged-bundle`:
 
 ```sh
-❯ bundleutils merge-bundles -b /opt/bundleutils/.app/bundleutilspkg/tests/resources/merge-bundles/base -b /opt/bundleutils/.app/bundleutilspkg/tests/resources/merge-bundles/child1 -o /tmp/merged-bundle
+bundleutils merge-bundles -b /opt/bundleutils/.app/bundleutilspkg/tests/resources/merge-bundles/base -b /opt/bundleutils/.app/bundleutilspkg/tests/resources/merge-bundles/child1 -o /tmp/merged-bundle
 ```
 
 Example output:
