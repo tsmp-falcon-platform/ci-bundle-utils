@@ -1,7 +1,7 @@
 # Merging Challenge - BETA
 
->[WARNING!] There are tests in place and this works with the majority of known configurations.
->
+> [!WARNING] There are tests in place and this works with the majority of known configurations.
+> 
 > However, it is impossible to test ALL available config snippets in ALL plugins.
 
 Due to the `WARNING` above, the merge config (instructions as to how the bundles are merged) can be extended.
