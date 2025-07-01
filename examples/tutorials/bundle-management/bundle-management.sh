@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# This script is used to audit a bundle and push changes to the remote repository.
+# This script is used to export a bundle and push changes to the remote repository.
 
 set -euo pipefail
 
@@ -8,20 +8,20 @@ if [[ "${DEBUG_SCRIPT:-}" == "true" ]]; then
 fi
 
 function summary() {
-  echo "BUNDLES: Bundle audit complete. Showing last commits if any..."
+  echo "BUNDLES: Bundle export complete. Showing last commits if any..."
   git --no-pager log -n 20 --pretty=format:"%h %ad - %s" --stat 2> /dev/null || true
 
-  # Summary of the audit
+  # Summary of the bundle-management
   if [[ -f "target/bundle-management.log" ]]; then
     echo "######################################"
-    echo "BUNDLES: Summary of the audit so far:"
+    echo "BUNDLES: Summary of the export so far:"
     echo "######################################"
     cat "target/bundle-management.log"
     echo "######################################"
   fi
   # check for ERROR_FOUND=1
   if [[ "${1:-}" == "cjoc-and-online-controllers" ]] && [[ "$ERRORS_FOUND_ON_CONTROLLERS" == "1" ]]; then
-    echo "BUNDLES: Errors found during audit. Please check the output."
+    echo "BUNDLES: Errors found during export. Please check the output."
     exit 1
   fi
 }
@@ -30,11 +30,11 @@ trap summary EXIT
 
 GIT_ACTION="${GIT_ACTION:-commit-only}"
 mandatory_envs="BUNDLEUTILS_USERNAME BUNDLEUTILS_PASSWORD JENKINS_URL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL GIT_ACTION"
-usage_message="Usage: ./audit.sh [setup|help|cjoc-and-online-controllers|<jenkins-url>]
-  ./audit.sh setup         - Setup the bundleutils environment variables.
-  ./audit.sh help          - Show this help message.
-  ./audit.sh cjoc-and-online-controllers - Audit all online controllers and the OC.
-  ./audit.sh <jenkins-url> - Fetch from this URL regardless (keeping the other variables).
+usage_message="Usage: ./bundle-management.sh [setup|help|cjoc-and-online-controllers|<jenkins-url>]
+  ./bundle-management.sh setup         - Setup the bundleutils environment variables.
+  ./bundle-management.sh help          - Show this help message.
+  ./bundle-management.sh cjoc-and-online-controllers - Audit all online controllers and the OC.
+  ./bundle-management.sh <jenkins-url> - Fetch from this URL regardless (keeping the other variables).
 
   Mandatory environment variables (configured manually or using setup):
     BUNDLEUTILS_USERNAME   - Your bundleutils username.
@@ -70,7 +70,7 @@ elif [[ "${1:-}" == "cjoc-and-online-controllers" ]]; then
   else
     echo
     echo
-    echo "BUNDLES: Auditing the following ONLINE controllers and then the OC:"
+    echo "BUNDLES: Exporting the following ONLINE controllers and then the OC:"
     echo "$ONLINE_CONTROLLERS"
     echo
     echo
