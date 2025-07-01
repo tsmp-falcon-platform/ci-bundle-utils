@@ -28,7 +28,7 @@ pipeline {
                     gitUsernamePassword(credentialsId: 'github-token-rw', gitToolName: 'Default'),
                     usernamePassword(credentialsId: 'bundleutils-creds', passwordVariable: 'BUNDLEUTILS_PASSWORD', usernameVariable: 'BUNDLEUTILS_USERNAME')
                 ]){
-                    sh '/opt/bundleutils/work/examples/tutorials/auditing/audit.sh cjoc-and-online-servers'
+                    sh '/opt/bundleutils/work/examples/tutorials/bundle-management/bundle-management.sh cjoc-and-online-servers'
                 }
             }
         }
