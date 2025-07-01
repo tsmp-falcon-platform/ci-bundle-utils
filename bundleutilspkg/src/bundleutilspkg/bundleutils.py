@@ -3546,23 +3546,25 @@ def recursive_merge(obj1, obj2):
     logging.trace(f"Obj1 ----> Key: {type(obj1)} Value: {obj1}")  # type: ignore
     logging.trace(f"Obj2 ----> Key: {type(obj2)} Value: {obj2}")  # type: ignore
 
-    if isinstance(obj2, CommentedMap):
+    if isinstance(obj2, (CommentedMap, dict)):
         for key, value in obj2.items():
             if key not in obj1 or obj1[key] is None:
-                if isinstance(value, CommentedMap):
-                    obj1[key] = {}
-                    recursive_merge(obj1[key], uncomment(value))
-                elif isinstance(value, CommentedSeq):
-                    obj1[key] = []
-                    recursive_merge(obj1[key], uncomment(value))
+                logging.trace(f"Adding new key: {key} with value: {value}")  # type: ignore
+                if isinstance(value, (CommentedMap, dict)):
+                    obj1[key] = recursive_merge({}, uncomment(value))
+                elif isinstance(value, (CommentedSeq, list)):
+                    obj1[key] = recursive_merge([], uncomment(value))
                 else:
                     obj1[key] = uncomment(value)
-    elif isinstance(obj2, CommentedSeq):
+            else:
+                logging.trace(f"Merging key: {key} with value: {value}")  # type: ignore
+                obj1[key] = recursive_merge(obj1[key], uncomment(value))
+    elif isinstance(obj2, (CommentedSeq, list)):
         for value in obj2:
             if value not in obj1:
                 obj1.append(uncomment(value))
     else:
-        logging.debug(f"Unkown type: {type(obj2)}")
+        logging.trace(f"Unkown type: {type(obj2)}")  # type: ignore
     return obj1
 
 
@@ -3730,7 +3732,7 @@ def _get_merged_config(config):
             if not os.path.exists(include_path):
                 die(f"Included config file {include_path} does not exist.")
             included_config = _get_merged_config(include_path)
-            merged_config = recursive_merge(merged_config, included_config)
+            merged_config = recursive_merge(included_config, merged_config)
     # remove the 'includes' section from the merged config
     merged_config.pop("includes", None)
     return merged_config
