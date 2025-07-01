@@ -190,8 +190,8 @@ function migrate_bundle() {
 
 # This will ensure all plugins are left in the bundle.
 # If you want to remove dependencies, etc, comment the following lines:
-export BUNDLEUTILS_PLUGINS_JSON_MERGE_STRATEGY='ALL'
-export BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY='ALL'
+# export BUNDLEUTILS_PLUGINS_JSON_MERGE_STRATEGY='ALL'
+# export BUNDLEUTILS_PLUGINS_JSON_LIST_STRATEGY='ALL'
 
 # Get bundle name from the URL
 echo "BUNDLES: Running bundleutils config..."
