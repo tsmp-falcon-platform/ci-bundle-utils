@@ -270,7 +270,7 @@ If you wish to use a custom `audit.yaml`, simply place the file in the root dire
 Example: copy and alter the file (removing the patch which deletes the labelAtoms):
 
 ```sh
-cp ../../.app/bundleutilspkg/src/bundleutilspkg/data/configs/audit.yaml .
+cp ../bundleutilspkg/src/bundleutilspkg/data/configs/audit.yaml .
 ```
 
 ```sh
@@ -280,11 +280,11 @@ vi audit.yaml
 Example Output:
 
 ```sh
-bundle-user@82b69d6e24b9:/opt/bundleutils/work/audits$ cp ../../.app/bundleutilspkg/src/bundleutilspkg/data/configs/audit.yaml .
+bundle-user@82b69d6e24b9:/opt/bundleutils/work/audits$ cp ../bundleutilspkg/src/bundleutilspkg/data/configs/audit.yaml .
 
 bundle-user@82b69d6e24b9:/opt/bundleutils/work/audits$ vi audit.yaml
 
-bundle-user@82b69d6e24b9:/opt/bundleutils/work/audits$ diff ../../.app/bundleutilspkg/src/bundleutilspkg/data/configs/audit.yaml audit.yaml
+bundle-user@82b69d6e24b9:/opt/bundleutils/work/audits$ diff ../bundleutilspkg/src/bundleutilspkg/data/configs/audit.yaml audit.yaml
 7,9d6
 <     # these labels are dynamic based on the agents available
 <   - op: remove
