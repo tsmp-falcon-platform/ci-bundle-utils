@@ -130,7 +130,7 @@ It takes 1 or 2 minutes to het the logs. If the first try is not successfully, t
 Example output:
 
 ```
-➜  k8s-intergation git:(main) ✗ ./03-readJobLogs.sh
+➜  k8s:(main) ✗ ./03-readJobLogs.sh
 📋 Verifying CronJob exists:
 NAME                SCHEDULE      TIMEZONE   SUSPEND   ACTIVE   LAST SCHEDULE   AGE
 bundleutils-audit   */2 * * * *   <none>     False     0        107s            60m
