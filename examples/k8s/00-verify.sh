@@ -53,6 +53,15 @@ fi
 
 success "'$ID_RSA' exists and appears to be a valid private key"
 
+
+sshKnownHostsoutput=$(ssh -o UserKnownHostsFile=$(pwd)/k8s-git-ssh-secret/known_hosts -i $(pwd)/k8s-git-ssh-secret/id_rsa git@github.com 2>&1) || true
+
+if echo "$sshKnownHostsoutput" | grep -q "successfully authenticated"; then
+  success "SSH known_hosts is valid and authentication succeeded."
+else
+  error "SSH known_hosts test failed or key is invalid. Output was: $sshKnownHostsoutput"
+fi
+
 echo "🔍 Checking SSH config file..."
 if [[ ! -f "$CONFIG" ]]; then
     error "'$CONFIG' not found"
