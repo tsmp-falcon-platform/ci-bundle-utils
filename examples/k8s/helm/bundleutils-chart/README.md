@@ -6,7 +6,7 @@
 To verify the Helm release without applying it to the cluster:
 
 ```bash
-helm upgrade --install cron-ci-bundleutils -f myvalues.yaml ./ --dry-run
+helm upgrade --install bundleutils-release -f myvalues.yaml ./ --dry-run
 ```
 
 ---
@@ -22,7 +22,7 @@ helm upgrade --install cron-ci-bundleutils -f myvalues.yaml ./ --dry-run
 ### Option 1: Install using a values file
 
 ```bash
-helm upgrade --install cron-ci-bundleutils -f myvalues.yaml ./
+helm upgrade --install bundleutils-release -f myvalues.yaml ./
 ```
 
 ### Option 2: Install using command-line parameters
