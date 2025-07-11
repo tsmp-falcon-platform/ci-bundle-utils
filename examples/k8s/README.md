@@ -3,23 +3,18 @@
 Instead of running `bundleutils` from within a CI controller using a Pipeline, you can run it as a native Kubernetes resource.
 This content demonstrates how to use a **Kubernetes CronJob** to execute `bundleutils`.
 
-➡️ See: [`yaml/bu-audit-k8s-crontask.yaml`](yaml/bu-audit-k8s-crontask.yaml)
+➡️ See: [cronjob.yaml](helm/bundleutils-chart/templates/cronjob.yaml)
 
 ---
 
 ## 📁 Resources Overview
 
 | Resource                                                             | Description                                    |
-| -------------------------------------------------------------------- | ---------------------------------------------- |
+|----------------------------------------------------------------------| ---------------------------------------------- |
 | [`00-verify.sh`](00-verify.sh)                                       | Verifies prerequisites and environment         |
 | [`01-createBundleUtilSecrets.sh`](01-createBundleUtilSecrets.sh)     | Creates required Kubernetes secrets            |
-| [`02-applyCronJob.sh`](02-applyCronJob.sh)                           | Applies the Kubernetes CronJob manifest        |
-| [`03-readJobLogs.sh`](03-readJobLogs.sh)                             | Retrieves logs from `CronJob → Job → Pod`      |
-| [`04-runAll.sh`](04-runAll.sh)                                       | Runs all setup scripts sequentially            |
-| [`yaml/bu-audit-k8s-crontask.yaml`](yaml/bu-audit-k8s-crontask.yaml) | CronJob definition that triggers `bundleutils` |
-| [`yaml/bu-secrets.yaml.tpl`](yaml/bu-secrets.yaml.tpl)               | Template for Kubernetes secrets                |
+| [`02-readJobLogs.sh`](02-readJobLogs.sh)                             | Retrieves logs from `CronJob → Job → Pod`      |
 | [`yaml/bu-test-pod-git-ssh.yaml`](yaml/bu-test-pod-git-ssh.yaml)     | Test pod for validating SSH Git operations     |
-| [`k8s-git-ssh-secret/config.tpl`](k8s-git-ssh-secret/config.tpl)     | SSH config template for GitHub access          |
 
 ---
 
@@ -32,128 +27,83 @@ This content demonstrates how to use a **Kubernetes CronJob** to execute `bundle
   * [https://docs.github.com/en/authentication/connecting-to-github-with-ssh](https://docs.github.com/en/authentication/connecting-to-github-with-ssh)
   * [https://stackoverflow.com/questions/3225862/multiple-github-accounts-ssh-config](https://stackoverflow.com/questions/3225862/multiple-github-accounts-ssh-config)
 * **CloudBees CI Controller** running on Kubernetes with:
-
   * Admin user ID
   * Admin API token (`JENKINS_TOKEN`)
 * Access to kubernetes
   * `export KUBECONFIG=....`
-* Docker image used: 
-  * [Dockerfile](../../Dockerfile)
-  * ghcr.io/tsmp-falcon-platform/ci-bundle-utils
-  * caternberg/bundleutils:dev3 (extension with ssh tools included) (might be removed soon)
 * Required CLI tools:
   * `yq`
   * `kubectl`
   * `git`
   * `ssh`
   * `ssh-keyscan`
+  * `helm`
 
 ---
 
 ## 🛠 Setup Instructions
 
-### 1. Prepare Secrets
-
-Copy the secret template:
-
-```bash
-cp yaml/bu-secrets.yaml.tpl yaml/bu-secrets.yaml
-```
-
-Edit the copied file and replace placeholder variables with actual values:
-
-```yaml
-BUNDLEUTILS_USERNAME: '${BUNDLEUTILS_USERNAME}'
-BUNDLEUTILS_PASSWORD: '${BUNDLEUTILS_PASSWORD}'
-BUNDLEUTILS_JENKINS_URL: '${BUNDLEUTILS_JENKINS_URL}'
-GIT_COMMITTER_NAME: '${GIT_COMMITTER_NAME}'
-GIT_AUTHOR_NAME: '${GIT_AUTHOR_NAME}'
-GIT_REPO: '${GIT_REPO}'
-GIT_COMMITTER_EMAIL: '${GIT_COMMITTER_EMAIL}'
-GIT_AUTHOR_EMAIL: '${GIT_AUTHOR_EMAIL}'
-GIT_ACTION: 'push' #commit-only
-```
-
-### 2. Set Up SSH Credentials
-
-Copy the template directory
-
-```bash
-cp -R k8s-git-ssh-secret.tpl k8s-git-ssh-secret
-mv k8s-git-ssh-secret/config.tpl k8s-git-ssh-secret/config
-```
-
-Edit `k8s-git-ssh-secret/config` and adjust the ssh config file for GitHub:
-* Replace `${GIT_COMMITTER_NAME}` with your gitHub username
-
-```
-Host github.com
-User ${GIT_COMMITTER_NAME}
-Hostname ssh.github.com
-AddKeysToAgent yes
-PreferredAuthentications publickey
-IdentitiesOnly yes
-IdentityFile /root/.ssh/id_rsa
-Port 443
-```
+### 1. Prepare SSH for GitHub
 
 Create the `known_hosts` file:
 
 ```bash
-#ssh-keyscan -H github.com 2>/dev/null | grep -v '^#' > k8s-git-ssh-secret/known_hosts
-# (Optional) Include GitHub's SSH over HTTPS fallback
-#ssh-keyscan -p 443 -H ssh.github.com >>  k8s-git-ssh-secret/known_hosts
+mkdir -p k8s-git-ssh-secret
 ssh-keyscan -p 443 -H ssh.github.com | sed 's/^#\s//g ' | tee  k8s-git-ssh-secret/known_hosts
 ssh-keyscan -H github.com | sed 's/^#\s//g ' | tee -a  k8s-git-ssh-secret/known_hosts
 
 ```
 
+Copy your SSH private key:
+
+```bash
+cp <PATH_TO_YOUR_SSH_KEY> k8s-git-ssh-secret/privateKey
+chmod 600 k8s-git-ssh-secret/provateKey
+```
+
 You can verify if the known_hosts file is valid like this: 
 
 ```bash
-ssh -o UserKnownHostsFile=$(pwd)/k8s-git-ssh-secret/known_hosts -i $(pwd)/k8s-git-ssh-secret/id_rsa git@github.com
-
+ssh -o UserKnownHostsFile=$(pwd)/k8s-git-ssh-secret/known_hosts -i $(pwd)/k8s-git-ssh-secret/provateKey git@github.com
 ```
 
-Add your SSH private key:
+Next, add your ssh config for got, similar to this
+Replace <YOUR_GIT_HUB_USER_ID> with your github account id 
 
-```bash
-cp <PATH_TO_YOUR_SSH_KEY> k8s-git-ssh-secret/id_rsa
-chmod 600 k8s-git-ssh-secret/id_rsa
+```config
+    Host github.com
+    User <YOUR_GIT_HUB_USER_ID>
+    Hostname ssh.github.com
+    AddKeysToAgent yes
+    PreferredAuthentications publickey
+    IdentitiesOnly yes
+    IdentityFile /root/.ssh/privateKey
+    Port 443
 ```
+
 
 The final structure should look like:
 
 ```
 k8s-git-ssh-secret/
 ├── config
-├── id_rsa
+├── provateKey
 └── known_hosts
 ```
 
-### 3. Verify SSH Setup
+### 2. Verify SSH Setup
 
 ```bash
 ./00-verify.sh
 ```
 
-### 4. Create Kubernetes Secrets
+### 3. Install
 
-```bash
-./01-createBundleUtilSecrets.sh <YOUR_NAMESPACE>
-```
+See [README.md](helm/bundleutils-chart/README.md)
 
----
+### 4. Watch Logs
 
-## ✅ Run the CronJob
-
-### 1. Apply the CronJob Resource
-
-```bash
-./02-applyCronJob.sh <YOUR_NAMESPACE>
-```
-
-### 2. Watch Logs
+It takes 1 or 2 minutes to het the logs. If the first try is not successfully, try again until the CronJobs triggered the first time a Job 
 
 ```bash
 ./03-readJobLogs.sh <YOUR_NAMESPACE>

@@ -3,7 +3,7 @@
 set -euo pipefail
 
 SECRET_DIR="k8s-git-ssh-secret"
-ID_RSA="$SECRET_DIR/id_rsa"
+ID_RSA="$SECRET_DIR/privateKey"
 CONFIG="$SECRET_DIR/config"
 KNOWN_HOSTS="$SECRET_DIR/known_hosts"
 GITHUB_HOST="[ssh.github.com]:443"

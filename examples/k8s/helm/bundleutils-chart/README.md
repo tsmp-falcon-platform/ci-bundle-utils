@@ -28,11 +28,11 @@ helm upgrade --install cron-ci-bundleutils -f myvalues.yaml ./
 ### Option 2: Install using command-line parameters
 
 ```bash
-# Export SSH-related content as environment variables
-SSH_KEY="./id_rsa"
+# Export SSH-related content as environment variables 
+# Adkust the path to the files
+SSH_KEY="./privateKey"
 SSH_KNOWN_HOSTS="./known_hosts"
 SSH_CONFIG="./ssh_config"
-BUNDLEUTILS_ACTION_FILE="./action.sh"  # optional: if needed as a file
 
 # Install the chart from local directory
 helm upgrade --install bundleutils-release ./bundleutils \
