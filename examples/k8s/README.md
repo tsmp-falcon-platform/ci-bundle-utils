@@ -12,7 +12,7 @@ This content demonstrates how to use a **Kubernetes CronJob** to execute `bundle
 | Resource                                                           | Description                                        |
 |--------------------------------------------------------------------|----------------------------------------------------|
 | [`00-verify.sh`](00-verify.sh)                                     | Verifies prerequisites and environment             |
-| [`01-readJobLogs.sh`](02-readJobLogs.sh)                           | Retrieves logs from `CronJob → Job → Pod`          |
+| [`01-readJobLogs.sh`](01-readJobLogs.sh)                           | Retrieves logs from `CronJob → Job → Pod`          |
 | [`Helm Chart bundleutils`](helm/bundleutils-chart/README.md)       | Helm Chart to install the `bundleutils` as CronJob |
 | [`yaml/bu-test-pod-git-ssh.yaml`](yaml/bu-test-pod-git-ssh.yaml)   | Test pod for validating SSH Git connection         |
 
