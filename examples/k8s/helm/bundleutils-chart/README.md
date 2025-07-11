@@ -35,7 +35,7 @@ SSH_KNOWN_HOSTS="./known_hosts"
 SSH_CONFIG="./config"
 
 # Install the chart from local directory
-helm upgrade --install bundleutils-release ./bundleutils \
+helm upgrade --install bundleutils-release ./ \
   --set image.repository="caternberg/bundleutils" \
   --set image.tag="dev3" \
   --set image.pullPolicy="IfNotPresent" \
