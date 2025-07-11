@@ -70,9 +70,25 @@ GIT_ACTION: 'push'  # or 'commit-only'
 
 ### 2. Set Up SSH Credentials
 
+Copy the template directory
+
 ```bash
 cp -R k8s-git-ssh-secret.tpl k8s-git-ssh-secret
 mv k8s-git-ssh-secret/config.tpl k8s-git-ssh-secret/config
+```
+
+Edit `k8s-git-ssh-secret/config` and adjust the ssh config file for GitHub:
+* Replace `${GIT_COMMITTER_NAME}` with your gitHub username
+
+```
+Host github.com
+User ${GIT_COMMITTER_NAME}
+Hostname ssh.github.com
+AddKeysToAgent yes
+PreferredAuthentications publickey
+IdentitiesOnly yes
+IdentityFile /root/.ssh/id_rsa
+Port 443
 ```
 
 Create the `known_hosts` file:
