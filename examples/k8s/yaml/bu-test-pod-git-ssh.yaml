@@ -14,10 +14,10 @@ spec:
         - -c
         - |
           set -x
-          SSH_KEY_PATH=/root/.ssh/id_rsa
-          # file ~/.ssh/id_rsa
+          SSH_KEY_PATH=/root/.ssh/privateKey
+          # file ~/.ssh/privateKey
           cat ${SSH_KEY_PATH}
-          chmod 600 ${SSH_KEY_PATH}/id_rsa
+          chmod 600 ${SSH_KEY_PATH}/privateKey
           eval `ssh-agent -s`
           ssh-add ${SSH_KEY_PATH}
           #ssh-keyscan -H github.com >> ~/.ssh/known_hosts

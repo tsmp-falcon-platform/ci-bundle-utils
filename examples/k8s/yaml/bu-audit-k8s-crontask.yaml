@@ -23,8 +23,8 @@ spec:
                   date
                   env | sort
                   set -x
-                  SSH_KEY_PATH=/root/.ssh/id_rsa        
-                  # file ~/.ssh/id_rsa
+                  SSH_KEY_PATH=/root/.ssh/privateKey        
+                  # file ~/.ssh/privateKey
                   cat ${SSH_KEY_PATH}
                   eval `ssh-agent -s`
                   ssh-add ${SSH_KEY_PATH}

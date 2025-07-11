@@ -6,7 +6,7 @@
 To verify the Helm release without applying it to the cluster:
 
 ```bash
-helm upgrade --install cronbundleutils -f myvalues.yaml ./ --dry-run
+helm upgrade --install cron-ci-bundleutils -f myvalues.yaml ./ --dry-run
 ```
 
 ---
@@ -15,7 +15,7 @@ helm upgrade --install cronbundleutils -f myvalues.yaml ./ --dry-run
 
 > **Note:** Prepare the following SSH-related files in your working directory:
 >
-> * `id_rsa` – your **private SSH key**
+> * `privateKey` – your **private SSH key**
 > * `ssh_config` – your **SSH config** file
 > * `known_hosts` – your **SSH known hosts** file
 
