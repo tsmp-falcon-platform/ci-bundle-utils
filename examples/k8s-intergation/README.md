@@ -41,6 +41,7 @@ This content demonstrates how to use a **Kubernetes CronJob** to execute `bundle
   * `kubectl`
   * `git`
   * `ssh`
+  * `ssh-keyscan`
 
 ---
 
