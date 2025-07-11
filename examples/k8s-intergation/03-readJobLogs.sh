@@ -3,7 +3,6 @@
 set -euo pipefail
 
 NAMESPACE="${1:-cbci}"
-YAML_FILE="bu-audit-k8s-crontask.yaml"
 CRONJOB_NAME="bundleutils-audit"
 SLEEP=10
 
