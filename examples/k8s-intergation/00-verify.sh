@@ -25,7 +25,7 @@ warning() {
 
 echo "🔍 Checking SSH private key..."
 if [[ -d "$SECRET_DIR" ]]; then
-  echo "✅ Directory exists: $SECRET_DIR"
+  success "Directory exists: $SECRET_DIR"
 else
   error "Directory does not exist: $SECRET_DIR"
   exit 1
@@ -46,7 +46,7 @@ chmod 600 "$ID_RSA"
 sshoutput=$(ssh -T -i k8s-git-ssh-secret/id_rsa git@github.com 2>&1) || true
 
 if echo "$sshoutput" | grep -q "successfully authenticated"; then
-  echo "✅ SSH key is valid and authentication succeeded."
+  success "SSH key is valid and authentication succeeded."
 else
   error "SSH connection test failed or key is invalid. Output was: $sshoutput"
 fi
@@ -84,7 +84,7 @@ for KEY_TYPE in ecdsa-sha2-nistp256 ssh-ed25519 ssh-rsa; do
 done
 success "'$KNOWN_HOSTS' contains valid entries for GitHub at $GITHUB_HOST"
 
-echo "🎉 All pre-checks passed."
+success "End: All pre-checks passed."
 
 
 
