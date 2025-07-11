@@ -43,7 +43,6 @@ bundleUtilsSecrets:
     BUNDLEUTILS_JENKINS_URL: http://jenkins.example.com
     JENKINS_URL: http://jenkins.example.com
     # Bundle Action to be executed by CronJob
-    BUNDLEUTILS_ACTION: |
-      /opt/bundleutils/work/examples/tutorials/auditing/audit.sh
+    BUNDLEUTILS_ACTION: "/opt/bundleutils/work/examples/tutorials/auditing/audit.sh"
 
     
