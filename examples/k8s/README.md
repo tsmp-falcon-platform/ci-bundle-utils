@@ -60,16 +60,11 @@ cp <PATH_TO_YOUR_SSH_KEY> k8s-git-ssh-secret/privateKey
 chmod 600 k8s-git-ssh-secret/provateKey
 ```
 
-You can verify if the known_hosts file is valid like this: 
-
-```bash
-ssh -o UserKnownHostsFile=$(pwd)/k8s-git-ssh-secret/known_hosts -i $(pwd)/k8s-git-ssh-secret/provateKey git@github.com
-```
-
-Next, add your ssh config for got, similar to this
+Next, add your ssh config, similar to this below
 Replace <YOUR_GIT_HUB_USER_ID> with your github account id 
 
 ```config
+cat <<EOF> k8s-git-ssh-secret/known_hosts
     Host github.com
     User <YOUR_GIT_HUB_USER_ID>
     Hostname ssh.github.com
@@ -78,8 +73,8 @@ Replace <YOUR_GIT_HUB_USER_ID> with your github account id
     IdentitiesOnly yes
     IdentityFile /root/.ssh/privateKey
     Port 443
+EOF
 ```
-
 
 The final structure should look like:
 
@@ -89,6 +84,13 @@ k8s-git-ssh-secret/
 ├── provateKey
 └── known_hosts
 ```
+
+You can verify if the known_hosts file is valid like this:
+
+```bash
+ssh -o UserKnownHostsFile=$(pwd)/k8s-git-ssh-secret/known_hosts -i $(pwd)/k8s-git-ssh-secret/provateKey git@github.com
+```
+
 
 ### 2. Verify SSH Setup
 
