@@ -44,8 +44,9 @@ fi
 
 cd $SSH_SECRET_DIR
 # workaround: K8s secret    --type=kubernetes.io/ssh-auth expects file ssh-privatekey
-#cp  id_rsa ssh-privatekey
+cp  id_rsa ssh-privatekey
 kubectl create secret generic "$SSH_SECRET_NAME" \
+  --type=kubernetes.io/ssh-auth \
   --from-file=./
 cd -
 echo "✅ SSH secret '$SSH_SECRET_NAME' created from directory '$SSH_SECRET_DIR'."

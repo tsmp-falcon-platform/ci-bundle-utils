@@ -100,7 +100,17 @@ Port 443
 Create the `known_hosts` file:
 
 ```bash
-ssh-keyscan -H github.com 2>/dev/null | grep -v '^#' > k8s-git-ssh-secret/known_hosts
+#ssh-keyscan -H github.com 2>/dev/null | grep -v '^#' > k8s-git-ssh-secret/known_hosts
+# (Optional) Include GitHub's SSH over HTTPS fallback
+#ssh-keyscan -p 443 -H ssh.github.com >>  k8s-git-ssh-secret/known_hosts
+ssh-keyscan -p 443 -H ssh.github.com | sed 's/^#\s//g ' | tee  k8s-git-ssh-secret/known_hosts
+```
+
+Alternative, run to get a valid known_host file for GitHub:
+
+```bash
+ssh -o UserKnownHostsFile=$(pwd)/k8s-git-ssh-secret/known_hosts -i $(pwd)/k8s-git-ssh-secret/id_rsa git@github.com
+
 ```
 
 Add your SSH private key:
