@@ -64,6 +64,7 @@ chmod 600 k8s-git-ssh-secret/privateKey
 Next, add your ssh config, similar to this below
 Replace <YOUR_GIT_HUB_USER_ID> with your GitHub account id 
 
+GitHub
 ```config
 cat <<EOF> k8s-git-ssh-secret/known_hosts
     Host github.com
@@ -76,6 +77,21 @@ cat <<EOF> k8s-git-ssh-secret/known_hosts
     Port 443
 EOF
 ```
+
+BitBucket (Cloud, BB Server not tested yet)
+
+```config
+cat <<EOF> k8s-git-ssh-secret/known_hosts
+    Host bitbucket.org
+    HostName bitbucket.org
+    User <YOUR_BB_USER>
+    AddKeysToAgent yes
+    PreferredAuthentications publickey
+    IdentitiesOnly yes
+    IdentityFile ~/.ssh/privateKey
+EOF
+```
+
 
 The final structure should look like:
 
