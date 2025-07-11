@@ -58,15 +58,16 @@ cp yaml/bu-secrets.yaml.tpl yaml/bu-secrets.yaml
 Edit the copied file and replace placeholder variables with actual values:
 
 ```yaml
-BUNDLEUTILS_USERNAME: '<your-username>'
-BUNDLEUTILS_PASSWORD: '<your-password>'
-BUNDLEUTILS_JENKINS_URL: 'https://<your-jenkins-url>'
-GIT_COMMITTER_NAME: '<your-name>'
-GIT_AUTHOR_NAME: '<your-name>'
-GIT_REPO: 'git@github.com:your-org/your-repo.git'
-GIT_COMMITTER_EMAIL: '<your-email>'
-GIT_AUTHOR_EMAIL: '<your-email>'
-GIT_ACTION: 'push'  # or 'commit-only'
+BUNDLEUTILS_USERNAME: '${BUNDLEUTILS_USERNAME}'
+BUNDLEUTILS_PASSWORD: '${BUNDLEUTILS_PASSWORD}'
+BUNDLEUTILS_JENKINS_URL: '${BUNDLEUTILS_JENKINS_URL}'
+GIT_COMMITTER_NAME: '${GIT_COMMITTER_NAME}''
+GIT_AUTHOR_NAME: '${GIT_AUTHOR_NAME}'
+GIT_REPO: '${GIT_REPO}'
+GIT_COMMITTER_EMAIL: '${GIT_COMMITTER_EMAIL}'
+GIT_AUTHOR_EMAIL: '${GIT_AUTHOR_EMAIL}'
+GIT_ACTION: 'push' #commit-only
+#GIT_ACTION: 'commit-only'
 ```
 
 ### 2. Set Up SSH Credentials
