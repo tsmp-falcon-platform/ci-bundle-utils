@@ -32,7 +32,7 @@ helm upgrade --install bundleutils-release -f myvalues.yaml ./
 # Adjust the path to the files if required
 SSH_KEY="./privateKey"
 SSH_KNOWN_HOSTS="./known_hosts"
-SSH_CONFIG="./ssh_config"
+SSH_CONFIG="./config"
 
 # Install the chart from local directory
 helm upgrade --install bundleutils-release ./bundleutils \
