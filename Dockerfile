@@ -31,6 +31,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     jq \
     make \
     openssh-client \
+    inotify-tools \
     skopeo \
     python3 \
     python3-venv \
