@@ -98,14 +98,14 @@ The final structure should look like:
 ```
 k8s-git-ssh-secret/
 ├── config
-├── provateKey
+├── privateKey
 └── known_hosts
 ```
 
 You can verify if the known_hosts file is valid like this:
 
 ```bash
-ssh -o UserKnownHostsFile=$(pwd)/k8s-git-ssh-secret/known_hosts -i $(pwd)/k8s-git-ssh-secret/provateKey git@github.com
+ssh -o UserKnownHostsFile=$(pwd)/k8s-git-ssh-secret/known_hosts -i $(pwd)/k8s-git-ssh-secret/privateKey git@github.com
 ```
 
 
