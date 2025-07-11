@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: git-ssh-pod
+spec:
+  containers:
+    - name: git
+      envFrom:
+        - secretRef:
+            name: bundle-utils-secrets
+      image: caternberg/bundleutils:dev3
+      command:
+        - /bin/sh
+        - -c
+        - |
+          set -x
+          SSH_KEY_PATH=/root/.ssh/id_rsa
+          # file ~/.ssh/id_rsa
+          cat ${SSH_KEY_PATH}
+          chmod 600 ${SSH_KEY_PATH}/id_rsa
+          eval `ssh-agent -s`
+          ssh-add ${SSH_KEY_PATH}
+          #ssh-keyscan -H github.com >> ~/.ssh/known_hosts
+          git config --global user.email ${GIT_COMMITTER_EMAIL}
+          git config --global user.name ${GIT_COMMITTER_NAME}
+          git clone ${GIT_REPO}
+          cd $(basename -s .git "${GIT_REPO}")    
+          echo "# Auto Update $(date)" >> README.md
+          git add .
+          git commit -m "Auto update from k8s pod"
+          git push origin main
+      volumeMounts:
+        - name: ssh-key
+          mountPath: /root/.ssh/
+          readOnly: true
+  restartPolicy: Never
+  volumes:
+    - name: ssh-key
+      secret:
+        secretName: secret-ssh-auth
+        defaultMode: 0600
