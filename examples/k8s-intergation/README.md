@@ -1,7 +1,7 @@
 # 📦 `bundleutils` Kubernetes CronJob Integration
 
 Instead of running `bundleutils` from within a CI controller using a Pipeline, you can run it as a native Kubernetes resource.
-This repository demonstrates how to use a **Kubernetes CronJob** to execute `bundleutils`.
+This content demonstrates how to use a **Kubernetes CronJob** to execute `bundleutils`.
 
 ➡️ See: [`yaml/bu-audit-k8s-crontask.yaml`](yaml/bu-audit-k8s-crontask.yaml)
 
