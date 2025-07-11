@@ -21,7 +21,16 @@ warning() {
     echo "WARNING :-| $1"
 }
 
+
+
 echo "🔍 Checking SSH private key..."
+if [[ -d "$SECRET_DIR" ]]; then
+  echo "✅ Directory exists: $SECRET_DIR"
+else
+  error "Directory does not exist: $SECRET_DIR"
+  exit 1
+fi
+
 if [[ ! -f "$ID_RSA" ]]; then
     error "'$ID_RSA' not found"
 fi
