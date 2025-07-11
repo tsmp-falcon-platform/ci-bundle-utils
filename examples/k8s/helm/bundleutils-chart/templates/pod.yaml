@@ -1,0 +1,45 @@
+{{- if .Values.testPod.enabled }}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "bundleutils.name" . }}-git-ssh-test
+  labels:
+    app.kubernetes.io/name: {{ include "bundleutils.name" . }}
+    helm.sh/chart: {{ include "bundleutils.chart" . }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  containers:
+    - name: bundleutils
+      image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+      imagePullPolicy: {{ .Values.image.pullPolicy }}
+      envFrom:
+        - secretRef:
+            name: {{ .Values.bundleUtilsSecrets.name }}
+      command:
+        - /bin/sh
+        - -c
+        - |
+          set -x
+          SSH_KEY_PATH=/root/.ssh/privateKey
+          cat ${SSH_KEY_PATH}
+          chmod 600 ${SSH_KEY_PATH}
+          git config --global user.email {{ .Values.bundleUtilsSecrets.data.GIT_COMMITTER_EMAIL }}
+          git config --global user.name {{ .Values.bundleUtilsSecrets.data.GIT_COMMITTER_NAME }}
+          git clone {{ .Values.bundleUtilsSecrets.data.GIT_REPO }}
+          cd $(basename -s .git "{{ .Values.bundleUtilsSecrets.data.GIT_REPO }}")
+          echo "# Auto Update $(date)" >> README.md
+          git add .
+          git commit -m "Auto update from k8s pod"
+          git push origin main
+      volumeMounts:
+        - name: ssh-key
+          mountPath: /root/.ssh/
+          readOnly: true
+  restartPolicy: {{ .Values.testPod.restartPolicy }}
+  volumes:
+    - name: ssh-key
+      secret:
+        secretName: {{ .Values.sshSecret.name }}
+        defaultMode: 0600
+{{- end }}

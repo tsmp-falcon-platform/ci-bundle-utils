@@ -1,0 +1,49 @@
+image:
+  repository: caternberg/bundleutils
+  tag: dev3
+  pullPolicy: IfNotPresent
+cronjob:
+  enabled: true
+  # Cron interval. Everything under 10 minutes might be too progressive
+  # For demo purpose we run every 2 minutes
+  schedule: '*/2 * * * *'
+  restartPolicy: OnFailure
+testPod:
+  enabled: true
+  restartPolicy: Never
+
+sshSecret:
+  name: secret-ssh-auth
+  # Valid ssh private key content for GitHub
+  privateKey: |
+    REPLACE_WITH_SSH_PRIVATE_KEY
+  # Valid ssh config file content or GitHub
+  config: |
+    REPLACE_WITH_SSH_CONFIG
+  # Valid ssh known_hosts file content for GitHub
+  known_hosts: |
+    REPLACE_WITH_SSH_KNOWN_HOSTS
+bundleUtilsSecrets:
+  name: bundle-utils-secrets
+  data:
+    GIT_COMMITTER_NAME: Your Name
+    GIT_AUTHOR_NAME: Your Name
+    GIT_REPO: git@github.com:org/repo.git
+    GIT_COMMITTER_EMAIL: you@example.com
+    GIT_AUTHOR_EMAIL: you@example.com
+    # Git command to be executed
+    GIT_ACTION: push
+    # CloudBees CI User Admin ID
+    BUNDLEUTILS_USERNAME: change-me
+    #BUNDLEUTILS_GBL_LOG_LEVEL: 'DEBUG'
+    BUNDLEUTILS_GBL_LOG_LEVEL: 'INFO'
+    # CloudBees CI User Admin Token
+    BUNDLEUTILS_PASSWORD: change-me
+    # CloudBees CI Controller or Operations Center URL
+    BUNDLEUTILS_JENKINS_URL: http://jenkins.example.com
+    JENKINS_URL: http://jenkins.example.com
+    # Bundle Action to be executed by CronJob
+    BUNDLEUTILS_ACTION: |
+      /opt/bundleutils/work/examples/tutorials/auditing/audit.sh
+
+    

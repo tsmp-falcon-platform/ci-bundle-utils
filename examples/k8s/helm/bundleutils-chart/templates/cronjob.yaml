@@ -1,0 +1,51 @@
+{{- if .Values.cronjob.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name:  {{ include "bundleutils.name" . }}--cron
+  labels:
+    app.kubernetes.io/name: {{ include "bundleutils.name" . }}
+    helm.sh/chart: {{ include "bundleutils.chart" . }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  schedule: "{{ .Values.cronjob.schedule }}"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: bundleutils
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              envFrom:
+                - secretRef:
+                    name: {{ .Values.bundleUtilsSecrets.name }}
+              volumeMounts:
+                - name: ssh-key
+                  mountPath: /root/.ssh/
+                  readOnly: true
+              command:
+                - /bin/sh
+                - -c
+                - |               
+                  set -ex                  
+                  date
+                  # env | sort               
+                  SSH_KEY_PATH=/root/.ssh/privateKey        
+                  # file ~/.ssh/id_rsa
+                  cat ${SSH_KEY_PATH}
+                  eval `ssh-agent -s`
+                  ssh-add ${SSH_KEY_PATH}
+                  git config --global user.email {{ .Values.bundleUtilsSecrets.data.GIT_COMMITTER_EMAIL }}
+                  git config --global user.name {{ .Values.bundleUtilsSecrets.data.GIT_COMMITTER_NAME }}
+                  git clone {{ .Values.bundleUtilsSecrets.data.GIT_REPO }}
+                  cd $(basename -s .git "{{ .Values.bundleUtilsSecrets.data.GIT_REPO }}")
+                  {{ .Values.bundleUtilsSecrets.data.BUNDLEUTILS_ACTION }}
+          restartPolicy: {{ .Values.cronjob.restartPolicy }}
+          volumes:
+            - name: ssh-key
+              secret:
+                secretName: {{ .Values.sshSecret.name }}
+                defaultMode: 0600
+{{- end }}
