@@ -2,10 +2,12 @@
 
 set -euo pipefail
 
+NAMESPACE="${1:-cbci}"
 YAML_FILE="yaml/bu-audit-k8s-crontask.yaml"
 CRONJOB_NAME="bundleutils-audit"
 
 echo "🔄 Reapplying CronJob '$CRONJOB_NAME' from $YAML_FILE..."
+kubectl config set-context --current --namespace=$NAMESPACE
 kubectl delete -f "$YAML_FILE" --ignore-not-found
 kubectl apply -f "$YAML_FILE"
 

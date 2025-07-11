@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-NAMESPACE="cbci"
+NAMESPACE="${1:-cbci}"
 BUNDLE_SECRETS="yaml/bu-secrets.yaml"
 BUNDLE_SECRET_NAME="bundle-utils-secrets"
 SSH_SECRET_DIR="k8s-git-ssh-secret"
@@ -13,11 +13,13 @@ SSH_SECRET_NAME="secret-ssh-auth"
 command -v yq >/dev/null 2>&1 || { echo "❌ 'yq' is required but not installed. Aborting."; exit 1; }
 command -v kubectl >/dev/null 2>&1 || { echo "❌ 'kubectl' is required but not installed. Aborting."; exit 1; }
 
+kubectl config set-context --current --namespace=$NAMESPACE
+
 echo "🔄 Recreating Kubernetes secret '$BUNDLE_SECRET_NAME' in namespace '$NAMESPACE'..."
-kubectl delete secret "$BUNDLE_SECRET_NAME" -n "$NAMESPACE" --ignore-not-found
+kubectl delete secret "$BUNDLE_SECRET_NAME" --ignore-not-found
 
 
-kubectl create secret generic bundle-utils-secrets -n $NAMESPACE \
+kubectl create secret generic bundle-utils-secrets \
     --from-literal=BUNDLEUTILS_USERNAME="$(yq '.BUNDLEUTILS_USERNAME' ${BUNDLE_SECRETS} )" \
     --from-literal=BUNDLEUTILS_PASSWORD="$(yq '.BUNDLEUTILS_PASSWORD' ${BUNDLE_SECRETS} )" \
     --from-literal=BUNDLEUTILS_JENKINS_URL="$(yq '.BUNDLEUTILS_JENKINS_URL' ${BUNDLE_SECRETS} )" \
@@ -33,7 +35,7 @@ kubectl create secret generic bundle-utils-secrets -n $NAMESPACE \
 echo "✅ Secret '$BUNDLE_SECRET_NAME' created successfully."
 
 echo "🔄 Recreating SSH secret '$SSH_SECRET_NAME'..."
-kubectl delete secret "$SSH_SECRET_NAME" -n "$NAMESPACE" --ignore-not-found
+kubectl delete secret "$SSH_SECRET_NAME" --ignore-not-found
 
 if [[ ! -d "$SSH_SECRET_DIR" ]]; then
   echo "❌ Directory '$SSH_SECRET_DIR' not found. Aborting."
@@ -44,8 +46,7 @@ cd $SSH_SECRET_DIR
 # workaround: K8s secret    --type=kubernetes.io/ssh-auth expects file ssh-privatekey
 #cp  id_rsa ssh-privatekey
 kubectl create secret generic "$SSH_SECRET_NAME" \
-  --from-file=./ \
-  -n "$NAMESPACE"
+  --from-file=./
 cd -
 echo "✅ SSH secret '$SSH_SECRET_NAME' created from directory '$SSH_SECRET_DIR'."
 

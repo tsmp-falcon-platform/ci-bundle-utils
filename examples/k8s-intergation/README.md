@@ -123,7 +123,7 @@ k8s-git-ssh-secret/
 ### 4. Create Kubernetes Secrets
 
 ```bash
-./01-createBundleUtilSecrets.sh
+./01-createBundleUtilSecrets.sh <YOUR_NAMESPACE>
 ```
 
 ---
@@ -133,13 +133,13 @@ k8s-git-ssh-secret/
 ### 1. Apply the CronJob Resource
 
 ```bash
-./02-applyCronJob.sh
+./02-applyCronJob.sh <YOUR_NAMESPACE>
 ```
 
 ### 2. Watch Logs
 
 ```bash
-./03-readJobLogs.sh
+./03-readJobLogs.sh <YOUR_NAMESPACE>
 ```
 
 Example output:

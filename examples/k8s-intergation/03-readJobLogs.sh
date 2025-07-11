@@ -2,9 +2,12 @@
 #!/bin/bash
 set -euo pipefail
 
+NAMESPACE="${1:-cbci}"
 YAML_FILE="bu-audit-k8s-crontask.yaml"
 CRONJOB_NAME="bundleutils-audit"
 SLEEP=10
+
+kubectl config set-context --current --namespace=$NAMESPACE
 
 echo "📋 Verifying CronJob exists:"
 kubectl get cronjob "$CRONJOB_NAME"
