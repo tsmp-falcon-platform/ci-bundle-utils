@@ -67,7 +67,7 @@ Replace <YOUR_GIT_HUB_USER_ID> with your GitHub account id
 
 GitHub
 ```config
-cat <<EOF> k8s-git-ssh-secret/known_hosts
+cat <<EOF> k8s-git-ssh-secret/config
     Host github.com
     User <YOUR_GIT_HUB_USER_ID>
     Hostname ssh.github.com
@@ -82,7 +82,7 @@ EOF
 BitBucket (Cloud, BB Server not tested yet)
 
 ```config
-cat <<EOF> k8s-git-ssh-secret/known_hosts
+cat <<EOF> k8s-git-ssh-secret/config
     Host bitbucket.org
     HostName bitbucket.org
     User <YOUR_BB_USER>
