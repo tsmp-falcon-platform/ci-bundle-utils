@@ -35,8 +35,11 @@ This content demonstrates how to use a **Kubernetes CronJob** to execute `bundle
 
   * Admin user ID
   * Admin API token (`JENKINS_TOKEN`)
+* Docker image used: 
+  * [Dockerfile](../../Dockerfile)
+  * ghcr.io/tsmp-falcon-platform/ci-bundle-utils
+  * caternberg/bundleutils:dev3 (extension with ssh tools included) (might be removed soon)
 * Required CLI tools:
-
   * `yq`
   * `kubectl`
   * `git`
