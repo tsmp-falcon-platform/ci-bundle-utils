@@ -101,6 +101,13 @@ Create the `known_hosts` file:
 
 ```bash
 ssh-keyscan -H github.com > k8s-git-ssh-secret/known_hosts
+
+```
+* review the know_hosts file and verify the hosts and keys
+* remove the `#`comments or run
+
+```bash
+ssh-keyscan -H github.com 2>/dev/null | grep -v '^#' > k8s-git-ssh-secret/known_hosts
 ```
 
 Add your SSH private key:
