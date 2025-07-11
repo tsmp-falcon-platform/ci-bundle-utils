@@ -108,7 +108,7 @@ ssh-keyscan -H github.com | sed 's/^#\s//g ' | tee -a  k8s-git-ssh-secret/known_
 
 ```
 
-Alternative, run to get a valid known_host file for GitHub:
+You can verify if the known_hosts file is valid like this: 
 
 ```bash
 ssh -o UserKnownHostsFile=$(pwd)/k8s-git-ssh-secret/known_hosts -i $(pwd)/k8s-git-ssh-secret/id_rsa git@github.com
