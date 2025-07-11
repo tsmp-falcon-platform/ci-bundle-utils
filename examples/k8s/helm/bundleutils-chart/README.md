@@ -28,8 +28,8 @@ helm upgrade --install bundleutils-release -f myvalues.yaml ./
 ### Option 2: Install using command-line parameters
 
 ```bash
-# Export SSH-related content as environment variables 
-# Adkust the path to the files
+# Export SSH-related file,path as environment variables 
+# Adjust the path to the files if required
 SSH_KEY="./privateKey"
 SSH_KNOWN_HOSTS="./known_hosts"
 SSH_CONFIG="./ssh_config"
