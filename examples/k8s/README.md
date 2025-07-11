@@ -104,6 +104,8 @@ Create the `known_hosts` file:
 # (Optional) Include GitHub's SSH over HTTPS fallback
 #ssh-keyscan -p 443 -H ssh.github.com >>  k8s-git-ssh-secret/known_hosts
 ssh-keyscan -p 443 -H ssh.github.com | sed 's/^#\s//g ' | tee  k8s-git-ssh-secret/known_hosts
+ssh-keyscan -H github.com | sed 's/^#\s//g ' | tee -a  k8s-git-ssh-secret/known_hosts
+
 ```
 
 Alternative, run to get a valid known_host file for GitHub:
