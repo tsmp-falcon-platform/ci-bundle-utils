@@ -57,11 +57,11 @@ Copy your SSH private key:
 
 ```bash
 cp <PATH_TO_YOUR_SSH_KEY> k8s-git-ssh-secret/privateKey
-chmod 600 k8s-git-ssh-secret/provateKey
+chmod 600 k8s-git-ssh-secret/privateKey
 ```
 
 Next, add your ssh config, similar to this below
-Replace <YOUR_GIT_HUB_USER_ID> with your github account id 
+Replace <YOUR_GIT_HUB_USER_ID> with your GitHub account id 
 
 ```config
 cat <<EOF> k8s-git-ssh-secret/known_hosts
