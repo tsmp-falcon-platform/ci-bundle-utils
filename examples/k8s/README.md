@@ -19,21 +19,19 @@ This document describes how to deploy and operate `bundleutils` using a **Kubern
 
 ## ⚙️ Prerequisites
 
+NOTE: This setup support GitHub SSH only (HTTPS might come later)
+
 * A dedicated **GitHub repository**
   * See [Create a GitHub Repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-new-repository) 
     * You can name it for example `bundleutils-audit` so the repo URL looks like  `git@github.com:<YOUR_GH_ORG>/bundleutils-audit.git`
-  * GitHub `https` or other Git servers/types is not implemented in this setup 
-* **SSH key-based authentication** for GitHub
-
-  * [GitHub SSH Guide](https://docs.github.com/en/authentication/connecting-to-github-with-ssh)
-  * [Using multiple GitHub accounts with SSH](https://stackoverflow.com/questions/3225862/multiple-github-accounts-ssh-config)
-* A **CloudBees CI controller** running on Kubernetes with:
-
+  * **SSH key-based authentication** for GitHub
+    * [GitHub SSH Guide](https://docs.github.com/en/authentication/connecting-to-github-with-ssh)
+    * [Using multiple GitHub accounts with SSH](https://stackoverflow.com/questions/3225862/multiple-github-accounts-ssh-config)
+* A **CloudBees CI Controller** running on Kubernetes with:
   * Admin user ID
-  * Admin API token (`JENKINS_TOKEN`)
+  * Admin API token (`JENKINS-TOKEN`)
 * Kubernetes access configured (e.g. `export KUBECONFIG=...`)
 * Required CLI tools:
-
   * `yq`, `kubectl`, `git`, `ssh`, `ssh-keyscan`, `helm`
 
 ---
@@ -42,7 +40,7 @@ This document describes how to deploy and operate `bundleutils` using a **Kubern
 
 Create the following three files:
 
-* SSH privatekey (see [GitHub SSH Guide](https://docs.github.com/en/authentication/connecting-to-github-with-ssh))
+* SSH privateKey (see [GitHub SSH Guide](https://docs.github.com/en/authentication/connecting-to-github-with-ssh))
 * SSH config
 * SSH known_hosts
 

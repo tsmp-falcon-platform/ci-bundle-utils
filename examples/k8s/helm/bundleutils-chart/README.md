@@ -109,6 +109,8 @@ helm upgrade --install bundleutils-release -f my-values-gke-dev.yaml ./bundleuti
 
 ## Use your custom audit script
 
+NOTE: This need to be tested again
+
 ```bash
 #!/bin/bash
 
