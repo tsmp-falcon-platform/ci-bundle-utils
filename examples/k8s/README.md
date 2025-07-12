@@ -123,7 +123,7 @@ k8s-git-ssh-secret is the default directory set in the script
 Alternative, if you took another location, say where
 ```bash
 
-./00-verify.sh /path/my-git-ssh-secret
+./00-verify.sh /path/my-git-ssh-secret-directory
 ```
 
 ---
