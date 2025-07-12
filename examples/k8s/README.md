@@ -41,9 +41,9 @@ This document describes how to deploy and operate `bundleutils` using a **Kubern
 
 Create the following three files:
 
-* SSH private key (GitHub)
+* SSH privatekey (see [GitHub SSH Guide](https://docs.github.com/en/authentication/connecting-to-github-with-ssh))
 * SSH config
-* SSH known\_hosts
+* SSH known_hosts
 
 ### 1. Create SSH `known_hosts` File
 
