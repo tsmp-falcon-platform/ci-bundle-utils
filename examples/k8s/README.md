@@ -220,15 +220,17 @@ AUDITING: casc-pipeline-templates-2.504.3.28227 - Git check. Committed changes.
 AUDITING: casc-pipeline-templates-2.504.3.28227 - Git check. Pushed changes.
 ######################################
 
+```
+
 ---
 
 ## 🧪 Optional: Test Git over SSH
 
+This creates a simple pod that attempts a `git clone` using the configured SSH key and verifies connectivity.
+
 ```bash
 kubectl apply -f yaml/bu-test-pod-git-ssh.yaml
 ```
-
-This creates a simple pod that attempts a `git clone` using the configured SSH key and verifies connectivity.
 
 ---
 
