@@ -219,7 +219,7 @@ AUDITING: Commit: YOUR_GIT_REPO/commit/b731d28 Audit bundle casc-pipeline-templa
 AUDITING: casc-pipeline-templates-2.504.3.28227 - Git check. Pushed changes.
 To github.com:xxx/ci-bundle-util-audit.git
    eb0b6ee..b731d28  xxx-xxx-com/casc-pipeline-templates -> xxx-xxx-com/casc-pipeline-templates
-AUDITING: Pushed to YOUR_GIT_REPO/tree/xxxxx-com/casc-pipeline-templates
+AUDITING: Pushed to YOUR_GIT_REPO/tree/xxx-xxx-com/casc-pipeline-templates
 AUDITING: Bundle audit complete. Showing last commits if any...
 b731d28 Sat Jul 12 15:42:09 2025 +0000 - Audit bundle casc-pipeline-templates-2.504.3.28227 (version: 2.504.3.28227)
  casc-pipeline-templates-2.504.3.28227/jenkins.yaml | 2 ++
