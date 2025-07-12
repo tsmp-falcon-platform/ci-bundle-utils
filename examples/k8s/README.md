@@ -137,7 +137,6 @@ NAME                SCHEDULE      TIMEZONE   SUSPEND   ACTIVE   LAST SCHEDULE   
 bundleutils-audit   */2 * * * *   <none>     False     0        107s            60m
 ⏳ Waiting for the first job to be created...
 ✅ Found job: bundleutils-audit-XXX
-Fri Jul 11 09:46:00 AM UTC 2025
 BUNDLEUTILS_CACHE_DIR=/opt/bundleutils/.cache
 BUNDLEUTILS_JENKINS_URL=https://XXXX.beescloud.com/
 BUNDLEUTILS_PASSWORD=XXXXX
@@ -146,25 +145,80 @@ BUNDLEUTILS_RELEASE_VERSION=
 BUNDLEUTILS_USERNAME=XXX
 .........
 
-7de39ff Fri Jul 4 16:12:33 2025 +0000 - Audit bundle cjoc (version: 2.492.1.3)
- cjoc/bundle.yaml  |  13 ++
- cjoc/items.yaml   | 482 ++++++++++++++++++++++++++++++++++++++++++++++++++++++
- cjoc/jenkins.yaml | 457 +++++++++++++++++++++++++++++++++++++++++++++++++++
- cjoc/plugins.yaml |  13 ++
- cjoc/rbac.yaml    | 116 +++++++++++++
- 5 files changed, 1081 insertions(+)
+DITING: GIT_AUTHOR_EMAIL=acaternberg@cloudbees.com
+AUDITING: Running gitleaks check with gitleaks version 8.26.0
+AUDITING: No GITLEAKS_CONFIG found in env.
+AUDITING: GITLEAKS_USE_EMBEDDED_CONFIG=true. Using embedded config: /opt/bundleutils/work/examples/tutorials/auditing/.gitleaks.toml
+AUDITING: Running gitleaks check on staged files...
 
-43dc637 Fri Jul 4 16:12:08 2025 +0000 - first commit
+    ○
+    │╲
+    │ ○
+    ○ ░
+    ░    gitleaks
+
+3:42PM INF 1 commits scanned.
+3:42PM INF scanned ~29 bytes (29 bytes) in 257ms
+3:42PM INF no leaks found
+AUDITING: casc-pipeline-templates-2.504.3.28227 - Gitleaks check PASSED (staged files).
+ casc-pipeline-templates-2.504.3.28227/jenkins.yaml | 2 ++
+ 1 file changed, 2 insertions(+)
+AUDITING: casc-pipeline-templates-2.504.3.28227 - Git check. Committed changes.
+[dev-sda-acaternberg-flow-training-beescloud-com/casc-pipeline-templates b731d28] Audit bundle casc-pipeline-templates-2.504.3.28227 (version: 2.504.3.28227)
+ 1 file changed, 2 insertions(+)
+AUDITING: Commit: YOUR_GIT_REPO/commit/b731d28 Audit bundle casc-pipeline-templates-2.504.3.28227 (version: 2.504.3.28227)
+AUDITING: casc-pipeline-templates-2.504.3.28227 - Git check. Pushed changes.
+To github.com:org-caternberg/ci-bundle-util-audit.git
+   eb0b6ee..b731d28  dev-sda-acaternberg-flow-training-beescloud-com/casc-pipeline-templates -> dev-sda-acaternberg-flow-training-beescloud-com/casc-pipeline-templates
+AUDITING: Pushed to YOUR_GIT_REPO/tree/dev-sda-acaternberg-flow-training-beescloud-com/casc-pipeline-templates
+AUDITING: Bundle audit complete. Showing last commits if any...
+b731d28 Sat Jul 12 15:42:09 2025 +0000 - Audit bundle casc-pipeline-templates-2.504.3.28227 (version: 2.504.3.28227)
+ casc-pipeline-templates-2.504.3.28227/jenkins.yaml | 2 ++
+ 1 file changed, 2 insertions(+)
+
+eb0b6ee Sat Jul 12 15:28:09 2025 +0000 - Audit bundle casc-pipeline-templates-2.504.3.28227 (version: 2.504.3.28227)
+ casc-pipeline-templates-2.504.3.28227/jenkins.yaml | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+1af3848 Sat Jul 12 12:28:09 2025 +0000 - Audit bundle casc-pipeline-templates-2.504.3.28227 (version: 2.504.3.28227)
+ casc-pipeline-templates-2.504.3.28227/bundle.yaml  |  13 +
+ casc-pipeline-templates-2.504.3.28227/items.yaml   | 603 +++++++++++++++++++++
+ casc-pipeline-templates-2.504.3.28227/jenkins.yaml | 329 +++++++++++
+ casc-pipeline-templates-2.504.3.28227/plugins.yaml | 152 ++++++
+ casc-pipeline-templates-2.504.3.28227/rbac.yaml    |  22 +
+ 5 files changed, 1119 insertions(+)
+
+1c65160 Sat Jul 12 12:26:05 2025 +0200 - Automated update
+ timestamp.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+2542a18 Sat Jul 12 09:56:20 2025 +0000 - Auto update from k8s pod
  README.md | 1 +
+ 1 file changed, 1 insertion(+)
+
+7b18b66 Sat Jul 12 09:52:11 2025 +0000 - Audit bundle casc-pipeline-templates (version: 2.504.3.28227)
+ casc-pipeline-templates/bundle.yaml  |  13 +
+ casc-pipeline-templates/items.yaml   | 603 +++++++++++++++++++++++++++++++++++
+ casc-pipeline-templates/jenkins.yaml | 328 +++++++++++++++++++
+ casc-pipeline-templates/plugins.yaml | 152 +++++++++
+ casc-pipeline-templates/rbac.yaml    |  22 ++
+ 5 files changed, 1118 insertions(+)
+
+b6157ca Sat Jul 12 09:50:30 2025 +0000 - Auto update from k8s pod
+ README.md | 1 +
+ 1 file changed, 1 insertion(+)
+
+8b2f1c0 Sat Jul 12 11:27:49 2025 +0200 - Automated update
+ timestamp.txt | 1 +
  1 file changed, 1 insertion(+)
 ######################################
 AUDITING: Summary of the audit so far:
 ######################################
 
-AUDITING: team-a - Gitleaks check PASSED (staged files).
-AUDITING: team-a - Git check. No changes to commit.
+AUDITING: casc-pipeline-templates-2.504.3.28227 - Gitleaks check PASSED (staged files).
+AUDITING: casc-pipeline-templates-2.504.3.28227 - Git check. Committed changes.
+AUDITING: casc-pipeline-templates-2.504.3.28227 - Git check. Pushed changes.
 ######################################
-```
 
 ---
 
