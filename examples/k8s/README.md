@@ -129,6 +129,26 @@ Alternative, if you took another location, say where
 ./00-verify.sh /path/my-git-ssh-secret-directory
 ```
 
+Example:
+```log
+
+➜  k8s git:(main) ✗ ./00-verify.sh k8s-git-ssh-secret1
+🔍 Checking SSH private key...
+❌ Directory does not exist: k8s-git-ssh-secret1
+➜  k8s git:(main) ✗ ./00-verify.sh k8s-git-ssh-secret
+🔍 Checking SSH private key...
+✅ Directory exists: k8s-git-ssh-secret
+🔍 Checking SSH privatekey file...
+🔍 Checking SSH config file...
+🔍 Checking known_hosts file...
+✅ k8s-git-ssh-secret/known_hosts exists and appears to be a valid known_hosts file
+✅ k8s-git-ssh-secret/privateKey exists and appears to be a valid private key
+✅ k8s-git-ssh-secret/config exists and appears to be a valid config
+✅ End: All pre-checks passed.
+
+```
+
+
 ---
 
 ## ⚙️ Install via Helm
