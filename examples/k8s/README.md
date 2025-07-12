@@ -177,7 +177,7 @@ The CronJob may take 1-2 minutes to run the first job. If logs are not yet avail
 ./01-readJobLogs.sh <YOUR_NAMESPACE>
 ```
 
-### Example Output (Excerpt)
+### Example Output
 
 ```
 ➜  k8s:(main) ✗ ./01-readJobLogs.sh cjoc1
