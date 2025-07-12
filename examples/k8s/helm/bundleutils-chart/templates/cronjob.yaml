@@ -31,8 +31,7 @@ spec:
                 - |
                   env |sort
                   set -x
-                  ssh -o UserKnownHostsFile=/root/.ssh/known_hosts -i /root/.ssh/privateKey git@github.com
-                
+                  ssh -o UserKnownHostsFile=/root/.ssh/known_hosts -i /root/.ssh/privateKey git@github.com                
                   ###############################################################################
                   # Sanitise: replace dots with dashes
                   ###############################################################################
@@ -51,8 +50,7 @@ spec:
                   # Clone $$GIT_REPO
                   ###############################################################################
                   # env | sort
-                  SSH_KEY_PATH=/root/.ssh/privateKey
-                  GIT_ACTION=$(echo "$GIT_ACTION" | tr -d '\n')
+                  SSH_KEY_PATH=/root/.ssh/privateKey                  
                   eval `ssh-agent -s`
                   ssh-add ${SSH_KEY_PATH}
                   git config --global user.email $GIT_COMMITTER_EMAIL
