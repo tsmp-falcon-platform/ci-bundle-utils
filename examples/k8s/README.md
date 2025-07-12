@@ -213,7 +213,7 @@ AUDITING: casc-pipeline-templates-2.504.3.28227 - Gitleaks check PASSED (staged 
  casc-pipeline-templates-2.504.3.28227/jenkins.yaml | 2 ++
  1 file changed, 2 insertions(+)
 AUDITING: casc-pipeline-templates-2.504.3.28227 - Git check. Committed changes.
-[dev-sda-acaternberg-flow-training-beescloud-com/casc-pipeline-templates b731d28] Audit bundle casc-pipeline-templates-2.504.3.28227 (version: 2.504.3.28227)
+[xxx_xxx-com/casc-pipeline-templates b731d28] Audit bundle casc-pipeline-templates-2.504.3.28227 (version: 2.504.3.28227)
  1 file changed, 2 insertions(+)
 AUDITING: Commit: YOUR_GIT_REPO/commit/b731d28 Audit bundle casc-pipeline-templates-2.504.3.28227 (version: 2.504.3.28227)
 AUDITING: casc-pipeline-templates-2.504.3.28227 - Git check. Pushed changes.
