@@ -41,7 +41,7 @@ This content demonstrates how to use a **Kubernetes CronJob** to execute `bundle
 
 ---
 
-## 🛠 Setup Instructions
+## 🛠 Prepare
 
 You need this 3 files
 
@@ -49,7 +49,7 @@ You need this 3 files
 * SSH config
 * SSH known_hosts
 
-### Create SSH `known_hosts` file
+### 1. Create SSH `known_hosts` file
 
 ```bash
 mkdir -p k8s-git-ssh-secret
@@ -58,14 +58,14 @@ ssh-keyscan -H github.com | sed 's/^#\s//g ' | tee -a  k8s-git-ssh-secret/known_
 
 ```
 
-### Copy SSH `privatekey`
+### 2. Copy SSH `privatekey`
 
 ```bash
 cp <PATH_TO_YOUR_SSH_KEY> k8s-git-ssh-secret/privateKey
 chmod 600 k8s-git-ssh-secret/privateKey
 ```
 
-### Create SSH `config` file
+### 3. Create SSH `config` file
 
 Note: Replace <YOUR_GIT_HUB_USER_ID> with your GitHub account id 
 
@@ -114,14 +114,13 @@ You can verify if the known_hosts file is valid like this:
 ssh -o UserKnownHostsFile=$(pwd)/k8s-git-ssh-secret/known_hosts -i $(pwd)/k8s-git-ssh-secret/privateKey git@github.com
 ```
 
-
-### 2. Verify SSH Setup
+### 4. Verify SSH Setup
 
 ```bash
 ./00-verify.sh
 ```
 
-## 3. Install
+## Install
 
 See [install with helm](helm/bundleutils-chart/README.md)
 
