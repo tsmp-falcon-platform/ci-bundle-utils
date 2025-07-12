@@ -42,8 +42,7 @@ spec:
           # Clone $$GIT_REPO
           ###############################################################################
           # env | sort
-          SSH_KEY_PATH=/root/.ssh/privateKey   
-          GIT_ACTION=$(echo "$GIT_ACTION" | tr -d '\n')
+          SSH_KEY_PATH=/root/.ssh/privateKey
           eval `ssh-agent -s`
           ssh-add ${SSH_KEY_PATH}
           git config --global user.email $GIT_COMMITTER_EMAIL

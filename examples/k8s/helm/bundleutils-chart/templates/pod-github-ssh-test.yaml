@@ -32,7 +32,7 @@ spec:
           cat ${SSH_CONFIG}
           echo "###### SSH_KNOWN_HOSTS"
           cat ${SSH_KNOWN_HOSTS}
-          chmod 600 ${SSH_KEY_PATH}
+          ssh -o UserKnownHostsFile=${SSH_KNOWN_HOSTS} -i $SSH_KEY git@github.com
           git config --global user.email {{ .Values.bundleUtilsSecrets.data.GIT_COMMITTER_EMAIL }}
           git config --global user.name {{ .Values.bundleUtilsSecrets.data.GIT_COMMITTER_NAME }}
           git clone {{ .Values.bundleUtilsSecrets.data.GIT_REPO }}
