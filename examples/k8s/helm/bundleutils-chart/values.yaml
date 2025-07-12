@@ -23,6 +23,9 @@ sshSecret:
   # Valid ssh known_hosts file content for GitHub
   known_hosts: |
     REPLACE_WITH_SSH_KNOWN_HOSTS
+bundleutilsAction:
+  # You can overwrite this with your own script
+  perform: "/opt/bundleutils/work/examples/tutorials/auditing/audit.sh"
 bundleUtilsSecrets:
   name: bundle-utils-secrets
   data:
@@ -36,13 +39,9 @@ bundleUtilsSecrets:
     # CloudBees CI User Admin ID
     BUNDLEUTILS_USERNAME: change-me
     #BUNDLEUTILS_GBL_LOG_LEVEL: 'DEBUG'
-    BUNDLEUTILS_GBL_LOG_LEVEL: 'INFO'
+    BUNDLEUTILS_GBL_LOG_LEVEL: INFO
     # CloudBees CI User Admin Token
     BUNDLEUTILS_PASSWORD: change-me
     # CloudBees CI Controller or Operations Center URL
     BUNDLEUTILS_JENKINS_URL: http://jenkins.example.com
     JENKINS_URL: http://jenkins.example.com
-    # Bundle Action to be executed by CronJob
-    BUNDLEUTILS_ACTION: "/opt/bundleutils/work/examples/tutorials/auditing/audit.sh"
-
-    

@@ -87,6 +87,18 @@ helm upgrade --install bundleutils-release -f myvalues.yaml ./ \
  helm uninstall bundleutils-release
 ```
 
+## Dry render
+
+Example on how to render the bundleutilsAction.perform key
+
+```bash
+ helm template ./bundleutils-chart \
+  -f my-values.yaml \
+  --set-file bundleutilsAction.perform=./gitHubPrepare.sh \
+  --debug
+```
+
+
 ### ✅ Notes
 
 * Use `--set-file` for multi-line values such as private keys, SSH configs, and scripts.
