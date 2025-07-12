@@ -137,8 +137,6 @@ Example:
 ├── 00-verify.sh
 ├── 01-readJobLogs.sh
 ├── README.md
-├── gitBranch.sh
-├── github-audit-log.png
 ├── helm
 │   ├── bundleutils-chart
 ├── k8s-git-ssh-secret
