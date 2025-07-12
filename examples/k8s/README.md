@@ -45,7 +45,7 @@ This content demonstrates how to use a **Kubernetes CronJob** to execute `bundle
 
 ### 1. Prepare SSH for GitHub
 
-Create the `known_hosts` file:
+Create the SSH `known_hosts` file:
 
 ```bash
 mkdir -p k8s-git-ssh-secret
@@ -54,16 +54,16 @@ ssh-keyscan -H github.com | sed 's/^#\s//g ' | tee -a  k8s-git-ssh-secret/known_
 
 ```
 
-Copy your SSH private key:
+Copy your SSH `privatekey`:
 
 ```bash
 cp <PATH_TO_YOUR_SSH_KEY> k8s-git-ssh-secret/privateKey
 chmod 600 k8s-git-ssh-secret/privateKey
 ```
 
-Next, add your ssh config, similar to this below
+Next, add your SSH `config`
 
-Replace <YOUR_GIT_HUB_USER_ID> with your GitHub account id 
+Note: Replace <YOUR_GIT_HUB_USER_ID> with your GitHub account id 
 
 GitHub
 ```config
@@ -79,7 +79,7 @@ cat <<EOF> k8s-git-ssh-secret/config
 EOF
 ```
 
-BitBucket (Cloud, BB Server not tested yet)
+BitBucket (tested for Cloud, BB Server not tested yet, might look a bit different)
 
 ```config
 cat <<EOF> k8s-git-ssh-secret/config
@@ -97,6 +97,7 @@ EOF
 The final structure should look like:
 
 ```
+tree k8s-git-ssh-secret
 k8s-git-ssh-secret/
 ├── config
 ├── privateKey
@@ -118,14 +119,14 @@ ssh -o UserKnownHostsFile=$(pwd)/k8s-git-ssh-secret/known_hosts -i $(pwd)/k8s-gi
 
 ### 3. Install
 
-See [README.md](helm/bundleutils-chart/README.md)
+See [install with helm](helm/bundleutils-chart/README.md)
 
 ### 4. Watch Logs
 
 It takes 1 or 2 minutes to het the logs. If the first try is not successfully, try again until the CronJobs triggered the first time a Job 
 
 ```bash
-./03-readJobLogs.sh <YOUR_NAMESPACE>
+./01-readJobLogs.sh <YOUR_NAMESPACE>
 ```
 
 Example output:
