@@ -3,7 +3,7 @@
 To perform a dry-run of the Helm release without applying it to the cluster:
 
 ```bash
-helm upgrade --install bundleutils-release -f myvalues.yaml ./ --dry-run
+helm upgrade --install bundleutils-release -f myvalues.yaml ./bundleutils-chart  --dry-run
 ```
 
 ---
@@ -20,7 +20,7 @@ helm upgrade --install bundleutils-release -f myvalues.yaml ./ --dry-run
 ## Install using a values file
 
 ```bash
-helm upgrade --install bundleutils-release -f myvalues.yaml ./
+helm upgrade --install bundleutils-release -f myvalues.yaml ./bundleutils-chart 
 ```
 
 ---
@@ -34,7 +34,7 @@ SSH_KNOWN_HOSTS="./known_hosts"
 SSH_CONFIG="./config"
 
 # Install the Helm chart
-helm upgrade --install bundleutils-release ./ \
+helm upgrade --install bundleutils-release ./bundleutils-chart  \
   --set image.repository="caternberg/bundleutils" \
   --set image.tag="dev3" \
   --set image.pullPolicy="IfNotPresent" \
@@ -71,7 +71,7 @@ SSH_KEY="./privateKey"
 SSH_KNOWN_HOSTS="./known_hosts"
 SSH_CONFIG="./config"
 
-helm upgrade --install bundleutils-release -f myvalues.yaml ./ \
+helm upgrade --install bundleutils-release -f myvalues.yaml ./bundleutils-chart  \
   --set-file sshSecret.privateKey="${SSH_KEY}" \
   --set-file sshSecret.config="${SSH_CONFIG}" \
   --set-file sshSecret.known_hosts="${SSH_KNOWN_HOSTS}" \
