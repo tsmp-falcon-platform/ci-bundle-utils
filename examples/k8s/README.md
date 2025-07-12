@@ -20,6 +20,8 @@ This document describes how to deploy and operate `bundleutils` using a **Kubern
 ## ⚙️ Prerequisites
 
 * A dedicated **GitHub repository**
+  * This setup requires GitHub `SSH` like `git@github.com:org/repo.git`
+  * GitHub `https` or other Git servers/types is not implemented in this setup 
 * **SSH key-based authentication** for GitHub
 
   * [GitHub SSH Guide](https://docs.github.com/en/authentication/connecting-to-github-with-ssh)
