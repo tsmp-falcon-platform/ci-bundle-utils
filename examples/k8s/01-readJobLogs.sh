@@ -4,7 +4,7 @@ set -euo pipefail
 
 NAMESPACE="${1:-cbci}"
 CRONJOB_NAME="bundleutils-cron"
-SLEEP=10
+SLEEP=5
 
 kubectl config set-context --current --namespace=$NAMESPACE
 

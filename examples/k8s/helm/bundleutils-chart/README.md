@@ -81,6 +81,12 @@ helm upgrade --install bundleutils-release -f myvalues.yaml ./ \
 ```
 ---
 
+### Uninstall
+
+```bash
+ helm uninstall bundleutils-release
+```
+
 ### ✅ Notes
 
 * Use `--set-file` for multi-line values such as private keys, SSH configs, and scripts.

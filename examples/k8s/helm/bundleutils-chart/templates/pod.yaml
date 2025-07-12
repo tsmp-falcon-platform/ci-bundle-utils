@@ -10,7 +10,7 @@ metadata:
     app.kubernetes.io/instance: {{ .Release.Name }}
 spec:
   containers:
-    - name: bundleutils
+    - name: bundleutils-testgitssh
       image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
       imagePullPolicy: {{ .Values.image.pullPolicy }}
       envFrom:
@@ -20,17 +20,26 @@ spec:
         - /bin/sh
         - -c
         - |
-          set -x
-          SSH_KEY_PATH=/root/.ssh/privateKey
-          cat ${SSH_KEY_PATH}
+          set -x      
+          SSH_PATH='/root/.ssh'
+          ls -la $SSH_PATH
+          SSH_KEY=$SSH_PATH/privateKey
+          SSH_CONFIG=$SSH_PATH/config
+          SSH_KNOWN_HOSTS=$SSH_PATH/known_hosts
+          echo "###### SSH_KEY"
+          cat ${SSH_KEY}
+          echo "###### SSH_CONFIG"
+          cat ${SSH_CONFIG}
+          echo "###### SSH_KNOWN_HOSTS"
+          cat ${SSH_KNOWN_HOSTS}
           chmod 600 ${SSH_KEY_PATH}
           git config --global user.email {{ .Values.bundleUtilsSecrets.data.GIT_COMMITTER_EMAIL }}
           git config --global user.name {{ .Values.bundleUtilsSecrets.data.GIT_COMMITTER_NAME }}
           git clone {{ .Values.bundleUtilsSecrets.data.GIT_REPO }}
           cd $(basename -s .git "{{ .Values.bundleUtilsSecrets.data.GIT_REPO }}")
-          echo "# Auto Update $(date)" >> README.md
+          echo "# Auto Update from Pod {{ include "bundleutils.name" . }}-git-ssh-test $(date)" >> README.md
           git add .
-          git commit -m "Auto update from k8s pod"
+          git commit -m "Auto update from Pod {{ include "bundleutils.name" . }}-git-ssh-test"
           git push origin main
       volumeMounts:
         - name: ssh-key

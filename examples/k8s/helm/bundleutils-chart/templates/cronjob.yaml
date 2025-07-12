@@ -28,19 +28,56 @@ spec:
               command:
                 - /bin/sh
                 - -c
-                - |               
-                  set -ex                  
-                  date
-                  # env | sort               
-                  SSH_KEY_PATH=/root/.ssh/privateKey        
+                - |
+                  set -x
+                  ssh -o UserKnownHostsFile=/root/.ssh/known_hosts -i /root/.ssh/privateKey git@github.com
+                  cat  /root/.ssh/known_hosts
+                  ###############################################################################
+                  # Sanitise: replace dots with dashes
+                  ###############################################################################
+                  BRANCH_NAME_CANDIDATE=$(printf '%s' "$JENKINS_URL"  | sed 's|^https://||; s|/$||; s/\./-/g')
+                  ###############################################################################
+                  # Validate with git check-ref-format
+                  ###############################################################################
+                  if git check-ref-format --branch "$BRANCH_NAME_CANDIDATE" >/dev/null 2>&1; then
+                    echo "✔  '$BRANCH_NAME_CANDIDATE' is a valid branch name."
+                    export GIT_BRANCH=$BRANCH_NAME_CANDIDATE
+                  else
+                    echo "✖  '$BRANCH_NAME_CANDIDATE' is NOT a valid branch name." >&2
+                    exit 1
+                  fi                  
+                  ###############################################################################
+                  # Clone $$GIT_REPO
+                  ###############################################################################
+                  # env | sort
+                  SSH_KEY_PATH=/root/.ssh/privateKey
+                  
                   # file ~/.ssh/id_rsa
-                  cat ${SSH_KEY_PATH}
+                  #cat ${SSH_KEY_PATH}
                   eval `ssh-agent -s`
                   ssh-add ${SSH_KEY_PATH}
-                  git config --global user.email {{ .Values.bundleUtilsSecrets.data.GIT_COMMITTER_EMAIL }}
-                  git config --global user.name {{ .Values.bundleUtilsSecrets.data.GIT_COMMITTER_NAME }}
-                  git clone {{ .Values.bundleUtilsSecrets.data.GIT_REPO }}
-                  cd $(basename -s .git "{{ .Values.bundleUtilsSecrets.data.GIT_REPO }}")
+                  git config --global user.email $GIT_COMMITTER_EMAIL
+                  git config --global user.name $GIT_COMMITTER_NAME
+                   
+                  pwd  
+                  ls -la
+                  git clone $GIT_REPO
+                  ls -la 
+                  #GIT_BRANCH="$(git branch --show-current)"                
+                  cd $(basename -s .git "$GIT_REPO")                
+                  git branch -a
+                  ###############################################################################
+                  # Ensure branch exists locally (create if necessary)
+                  ###############################################################################
+                  echo "Preparing branch $GIT_BRANCH …"
+                  git fetch origin --quiet                  
+                  if git show-ref --verify --quiet "refs/remotes/origin/$GIT_BRANCH"; then
+                    # Remote branch exists – check it out tracking origin
+                    git checkout --quiet -B "$GIT_BRANCH" "origin/$GIT_BRANCH"
+                  else
+                    # Remote branch does not exist – create new local branch
+                    git checkout --quiet -b "$GIT_BRANCH"
+                  fi         
                   {{ .Values.bundleUtilsSecrets.data.BUNDLEUTILS_ACTION }}
           restartPolicy: {{ .Values.cronjob.restartPolicy }}
           volumes:
