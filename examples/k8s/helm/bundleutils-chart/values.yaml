@@ -9,7 +9,7 @@ cronjob:
   schedule: '*/2 * * * *'
   restartPolicy: OnFailure
 testPod:
-  enabled: true
+  enabled: false
   restartPolicy: Never
 
 sshSecret:

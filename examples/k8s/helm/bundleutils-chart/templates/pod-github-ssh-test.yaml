@@ -2,7 +2,7 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: {{ include "bundleutils.name" . }}-git-ssh-test
+  name: {{ include "bundleutils.name" . }}-github-ssh-test
   labels:
     app.kubernetes.io/name: {{ include "bundleutils.name" . }}
     helm.sh/chart: {{ include "bundleutils.chart" . }}
