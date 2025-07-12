@@ -99,7 +99,7 @@ User <YOUR_BB_USER>
 AddKeysToAgent yes
 PreferredAuthentications publickey
 IdentitiesOnly yes
-IdentityFile ~/.ssh/privateKey
+IdentityFile /root/.ssh/privateKey
 EOF
 ```
 
@@ -194,7 +194,7 @@ BUNDLEUTILS_RELEASE_VERSION=
 BUNDLEUTILS_USERNAME=XXX
 .........
 
-DITING: GIT_AUTHOR_EMAIL=acaternberg@cloudbees.com
+DITING: GIT_AUTHOR_EMAIL=xxx@xxx.com
 AUDITING: Running gitleaks check with gitleaks version 8.26.0
 AUDITING: No GITLEAKS_CONFIG found in env.
 AUDITING: GITLEAKS_USE_EMBEDDED_CONFIG=true. Using embedded config: /opt/bundleutils/work/examples/tutorials/auditing/.gitleaks.toml
@@ -218,8 +218,8 @@ AUDITING: casc-pipeline-templates-2.504.3.28227 - Git check. Committed changes.
 AUDITING: Commit: YOUR_GIT_REPO/commit/b731d28 Audit bundle casc-pipeline-templates-2.504.3.28227 (version: 2.504.3.28227)
 AUDITING: casc-pipeline-templates-2.504.3.28227 - Git check. Pushed changes.
 To github.com:org-caternberg/ci-bundle-util-audit.git
-   eb0b6ee..b731d28  dev-sda-acaternberg-flow-training-beescloud-com/casc-pipeline-templates -> dev-sda-acaternberg-flow-training-beescloud-com/casc-pipeline-templates
-AUDITING: Pushed to YOUR_GIT_REPO/tree/dev-sda-acaternberg-flow-training-beescloud-com/casc-pipeline-templates
+   eb0b6ee..b731d28  xxx-xxx-com/casc-pipeline-templates -> xxx-xxx-com/casc-pipeline-templates
+AUDITING: Pushed to YOUR_GIT_REPO/tree/xxxxx-com/casc-pipeline-templates
 AUDITING: Bundle audit complete. Showing last commits if any...
 b731d28 Sat Jul 12 15:42:09 2025 +0000 - Audit bundle casc-pipeline-templates-2.504.3.28227 (version: 2.504.3.28227)
  casc-pipeline-templates-2.504.3.28227/jenkins.yaml | 2 ++
