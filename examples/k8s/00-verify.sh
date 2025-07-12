@@ -22,7 +22,7 @@ warning() {
 
 
 
-echo "🔍 Checking SSH private key..."
+echo "🔍 Checking SSH directory $SECRET_DIR..."
 if [[ -d "$SECRET_DIR" ]]; then
   success "Directory exists: $SECRET_DIR"
 else
@@ -30,15 +30,15 @@ else
   exit 1
 fi
 
-echo "🔍 Checking SSH privatekey file..."
+echo "🔍 Checking SSH privatekey file $PRIVATEKEY..."
 if [[ ! -f "$PRIVATEKEY" ]]; then
     error "'$PRIVATEKEY' not found"
 fi
-echo "🔍 Checking SSH config file..."
+echo "🔍 Checking SSH config file $CONFIG..."
 if [[ ! -f "$CONFIG" ]]; then
     error "'$CONFIG' not found"
 fi
-echo "🔍 Checking known_hosts file..."
+echo "🔍 Checking known_hosts file $KNOWN_HOSTS..."
 if [[ ! -f "$KNOWN_HOSTS" ]]; then
     error "'$KNOWN_HOSTS' not found"
 fi
