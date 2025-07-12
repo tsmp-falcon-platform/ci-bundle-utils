@@ -20,7 +20,7 @@ This document describes how to deploy and operate `bundleutils` using a **Kubern
 ## ⚙️ Prerequisites
 
 * A dedicated **GitHub repository**
-  * See [Create a GitHib Repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-new-repository) 
+  * See [Create a GitHub Repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-new-repository) 
     * You can name it for example `bundleutils-audit` so the repo URL looks like  `git@github.com:<YOUR_GH_ORG>/bundleutils-audit.git`
   * This setup requires GitHub `SSH` like `git@github.com:org/repo.git`
   * GitHub `https` or other Git servers/types is not implemented in this setup 
