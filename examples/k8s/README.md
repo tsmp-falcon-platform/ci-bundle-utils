@@ -1,20 +1,20 @@
 # 📦 `bundleutils` Kubernetes CronJob Integration
 
-Instead of running `bundleutils` from within a CI controller using a Pipeline, you can run it as a native Kubernetes resource.
-This content demonstrates how to use a **Kubernetes CronJob** to execute `bundleutils`.
+Instead of running `bundleutils` from within a CI controller pipeline, it can be executed as a native Kubernetes resource.
+This document describes how to deploy and operate `bundleutils` using a **Kubernetes CronJob**.
 
-➡️ See: [cronjob.yaml](helm/bundleutils-chart/templates/cronjob.yaml)
+🔢 See: [cronjob.yaml](helm/bundleutils-chart/templates/cronjob.yaml)
 
 ---
 
-## 📁 Resources Overview
+## 📁 Resource Overview
 
-| Resource                                                           | Description                                        |
-|--------------------------------------------------------------------|----------------------------------------------------|
-| [`00-verify.sh`](00-verify.sh)                                     | Verifies prerequisites and environment             |
-| [`01-readJobLogs.sh`](01-readJobLogs.sh)                           | Retrieves logs from `CronJob → Job → Pod`          |
-| [`Helm Chart bundleutils`](helm/bundleutils-chart/README.md)       | Helm Chart to install the `bundleutils` as CronJob |
-| [`yaml/bu-test-pod-git-ssh.yaml`](yaml/bu-test-pod-git-ssh.yaml)   | Test pod for validating SSH Git connection         |
+| Resource                                                         | Description                                     |
+| ---------------------------------------------------------------- | ----------------------------------------------- |
+| [`00-verify.sh`](00-verify.sh)                                   | Validates prerequisites and environment         |
+| [`01-readJobLogs.sh`](01-readJobLogs.sh)                         | Retrieves logs from `CronJob → Job → Pod`       |
+| [`Helm Chart bundleutils`](helm/bundleutils-chart/README.md)     | Helm Chart to deploy `bundleutils` as a CronJob |
+| [`yaml/bu-test-pod-git-ssh.yaml`](yaml/bu-test-pod-git-ssh.yaml) | Test pod to validate SSH Git connectivity       |
 
 ---
 
@@ -22,66 +22,57 @@ This content demonstrates how to use a **Kubernetes CronJob** to execute `bundle
 
 * A dedicated **GitHub repository**
 * **SSH key-based authentication** for GitHub
-  Refer to:
 
-  * [https://docs.github.com/en/authentication/connecting-to-github-with-ssh](https://docs.github.com/en/authentication/connecting-to-github-with-ssh)
-  * [https://stackoverflow.com/questions/3225862/multiple-github-accounts-ssh-config](https://stackoverflow.com/questions/3225862/multiple-github-accounts-ssh-config)
-* **CloudBees CI Controller** running on Kubernetes with:
+  * [GitHub SSH Guide](https://docs.github.com/en/authentication/connecting-to-github-with-ssh)
+  * [Using multiple GitHub accounts with SSH](https://stackoverflow.com/questions/3225862/multiple-github-accounts-ssh-config)
+* A **CloudBees CI controller** running on Kubernetes with:
+
   * Admin user ID
   * Admin API token (`JENKINS_TOKEN`)
-* Access to kubernetes
-  * `export KUBECONFIG=....`
+* Kubernetes access configured (e.g. `export KUBECONFIG=...`)
 * Required CLI tools:
-  * `yq`
-  * `kubectl`
-  * `git`
-  * `ssh`
-  * `ssh-keyscan`
-  * `helm`
+
+  * `yq`, `kubectl`, `git`, `ssh`, `ssh-keyscan`, `helm`
 
 ---
 
-## 🛠 Prepare
+## 🛠 Prepare SSH Configuration
 
-You need this 3 files
+Create the following three files:
 
-* SSH private key (GitHub SSH private key)
+* SSH private key (GitHub)
 * SSH config
-* SSH known_hosts
+* SSH known\_hosts
 
-### 1. Create SSH `known_hosts` file
-
-
+### 1. Create SSH `known_hosts` File
 
 ```bash
-# Create a directory where to store all the 3 files
+# Create a directory to hold the SSH files
 mkdir -p k8s-git-ssh-secret
-```
 
-```bash
-# keyscan for GitHub host entries
+# Populate known_hosts with GitHub entries
 ssh-keyscan -p 443 -H ssh.github.com | sed 's/^#\s//g ' | tee  k8s-git-ssh-secret/known_hosts
 ssh-keyscan -H github.com | sed 's/^#\s//g ' | tee -a  k8s-git-ssh-secret/known_hosts
-
 ```
 
-### 2. Copy SSH `privatekey`
+### 2. Copy SSH Private Key
 
 ```bash
-# f.e. cp ~/.ssh/id_rsa  k8s-git-ssh-secret/privateKey
-cp <PATH_TO_YOUR_GITHUB_PRIVATE_KEY)> k8s-git-ssh-secret/privateKey
+# Replace with your private key path
+cp <PATH_TO_YOUR_GITHUB_PRIVATE_KEY> k8s-git-ssh-secret/privateKey
 chmod 600 k8s-git-ssh-secret/privateKey
 ```
 
-### 3. Create SSH `config` file
+### 3. Create SSH `config` File
 
-Note: Replace <YOUR_GIT_HUB_USER_ID> with your GitHub account id 
+#### GitHub Example
 
-GitHub
-```config
-cat <<EOF> k8s-git-ssh-secret/config
-    Host github.com
-    User <YOUR_GIT_HUB_USER_ID>
+Replace `<YOUR_GITHUB_USER_ID>` with your actual GitHub username:
+
+```bash
+cat <<EOF > k8s-git-ssh-secret/config
+Host github.com
+    User <YOUR_GITHUB_USER_ID>
     Hostname ssh.github.com
     AddKeysToAgent yes
     PreferredAuthentications publickey
@@ -91,11 +82,11 @@ cat <<EOF> k8s-git-ssh-secret/config
 EOF
 ```
 
-BitBucket (tested for Cloud, BB Server not tested yet, might look a bit different)
+#### Bitbucket (Cloud, not yet tested on Server)
 
-```config
-cat <<EOF> k8s-git-ssh-secret/config
-    Host bitbucket.org
+```bash
+cat <<EOF > k8s-git-ssh-secret/config
+Host bitbucket.org
     HostName bitbucket.org
     User <YOUR_BB_USER>
     AddKeysToAgent yes
@@ -105,10 +96,9 @@ cat <<EOF> k8s-git-ssh-secret/config
 EOF
 ```
 
+### Verify Directory Structure
 
-The final structure should look like:
-
-```
+```bash
 tree k8s-git-ssh-secret
 k8s-git-ssh-secret/
 ├── config
@@ -116,31 +106,36 @@ k8s-git-ssh-secret/
 └── known_hosts
 ```
 
-You can verify if the known_hosts file is valid like this:
+### Verify SSH Setup
 
 ```bash
-ssh -o UserKnownHostsFile=$(pwd)/k8s-git-ssh-secret/known_hosts -i $(pwd)/k8s-git-ssh-secret/privateKey git@github.com
+ssh -o UserKnownHostsFile=$(pwd)/k8s-git-ssh-secret/known_hosts \
+    -i $(pwd)/k8s-git-ssh-secret/privateKey git@github.com
 ```
 
-### 4. Verify SSH Setup
+### 4. Run Preflight Verification
 
 ```bash
 ./00-verify.sh
 ```
 
-## ⚙️ Install
+---
 
-See [install with helm](helm/bundleutils-chart/README.md)
+## ⚙️ Install via Helm
 
-## ⏳ Watch Logs
+Refer to: [bundleutils Helm Chart README](helm/bundleutils-chart/README.md)
 
-It takes 1 or 2 minutes to het the logs. If the first try is not successfully, try again until the CronJobs triggered the first time a Job 
+---
+
+## ⏳ Retrieve Logs
+
+The CronJob may take 1-2 minutes to run the first job. If logs are not yet available, retry until the job has started.
 
 ```bash
 ./01-readJobLogs.sh <YOUR_NAMESPACE>
 ```
 
-Example output:
+### Example Output (Excerpt)
 
 ```
 ➜  k8s:(main) ✗ ./01-readJobLogs.sh cjoc1
@@ -234,21 +229,18 @@ AUDITING: casc-pipeline-templates-2.504.3.28227 - Git check. Pushed changes.
 
 ```
 
-A change diff in GitHub for this commit looks like:
+A visual diff for the commit:
 
 ![github-audit-log.png](github-audit-log.png)
 
 ---
 
-## 🧪 Optional: Test Git over SSH
+## 🥺 Optional: Test Git Connectivity via SSH
 
-This creates a simple pod that attempts a `git clone` using the configured SSH key and verifies connectivity.
+You may verify Git SSH access via a simple test pod:
 
 ```bash
 kubectl apply -f yaml/bu-test-pod-git-ssh.yaml
 ```
 
 ---
-
-
-
