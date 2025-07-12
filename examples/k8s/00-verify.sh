@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-SECRET_DIR="$(pwd)/k8s-git-ssh-secret"
+SECRET_DIR="${1:-"./k8s-git-ssh-secret"}"
 PRIVATEKEY="$SECRET_DIR/privateKey"
 CONFIG="$SECRET_DIR/config"
 KNOWN_HOSTS="$SECRET_DIR/known_hosts"

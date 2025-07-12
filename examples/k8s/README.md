@@ -112,8 +112,18 @@ k8s-git-ssh-secret/
 
 ### 5. Verify SSH Setup
 
+Verify the setup by running the [00-verify.sh](00-verify.sh) script
+
+k8s-git-ssh-secret is the default directory set in the script
 ```bash
-./00-verify.sh
+./00-verify.sh 
+
+```
+
+Alternative, if you took another location, say where
+```bash
+
+./00-verify.sh /path/my-git-ssh-secret
 ```
 
 ---
