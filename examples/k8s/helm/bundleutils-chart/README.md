@@ -1,4 +1,4 @@
-## 🛠️ Verify Deployment
+# 🛠️ Verify Deployment
 
 To perform a dry-run of the Helm release without applying it to the cluster:
 
@@ -8,7 +8,7 @@ helm upgrade --install bundleutils-release -f myvalues.yaml ./ --dry-run
 
 ---
 
-## 🚀 Chart Installation
+# 🚀 Chart Installation
 
 > **Important:** Ensure the following SSH-related files are present in your working directory:
 >
@@ -17,42 +17,7 @@ helm upgrade --install bundleutils-release -f myvalues.yaml ./ --dry-run
 > * `known_hosts` – your **SSH known hosts file**
 
 
-### Parameters
-
-Note:
-* `bundleutil` specific parameters can be added to `bundleUtilsSecrets.data` (values.yaml) according to your needs
-* This setup focus only on the mandatory parameters for `bundleutils audit`
-
-| **Helm Values Path**                                              | **Type / Example**                                  | **Default / Sample**                                      | **Description**                                   |
-|-------------------------------------------------------------------|-----------------------------------------------------|-----------------------------------------------------------|---------------------------------------------------|
-| `image.repository`                                                | `string`                                            | `caternberg/bundleutils`                                 | Container image repository                        |
-| `image.tag`                                                       | `string`                                            | `dev3`                                                    | Container image tag                               |
-| `image.pullPolicy`                                                | `Always \| IfNotPresent \| Never`                   | `IfNotPresent`                                            | Kubernetes image pull policy                     |
-| `cronjob.enabled`                                                 | `bool`                                              | `true`                                                    | Enable/disable the CronJob                       |
-| `cronjob.schedule`                                                | Cron expression (`string`)                          | `*/2 * * * *`                                             | Cron schedule (every 2 min in sample)            |
-| `cronjob.restartPolicy`                                           | `OnFailure \| Never`                                | `OnFailure`                                               | Pod restart policy for the CronJob               |
-| `testPod.enabled`                                                 | `bool`                                              | `false`                                                   | Deploy auxiliary test pod                        |
-| `testPod.restartPolicy`                                           | `Never`                                             | `Never`                                                   | Restart policy for the test pod                  |
-| `sshSecret.name`                                                  | `string`                                            | `secret-ssh-auth`                                         | Name of the SSH `Secret`                         |
-| `sshSecret.privateKey`                                            | *multi‑line string*                                 | `REPLACE_WITH_SSH_PRIVATE_KEY`                           | SSH private key (use `--set-file`)               |
-| `sshSecret.config`                                                | *multi‑line string*                                 | `REPLACE_WITH_SSH_CONFIG`                                | Custom `ssh_config` content                      |
-| `sshSecret.known_hosts`                                           | *multi‑line string*                                 | `REPLACE_WITH_SSH_KNOWN_HOSTS`                           | Pre‑approved `known_hosts` entries               |
-| `bundleutilsAction.perform`                                       | Path or script (`string`)                           | `/opt/bundleutils/work/examples/tutorials/auditing/audit.sh` | Command executed inside the CronJob              |
-| `bundleUtilsSecrets.name`                                         | `string`                                            | `bundle-utils-secrets`                                   | Name of env `Secret`                             |
-| `bundleUtilsSecrets.data.GIT_COMMITTER_NAME` / `GIT_AUTHOR_NAME`  | `string`                                            | `Your Name`                                               | Git committer / author names                     |
-| `bundleUtilsSecrets.data.GIT_REPO`                                | SSH URL (`string`)                                  | `git@github.com:org/repo.git`                            | Target Git repository                            |
-| `bundleUtilsSecrets.data.GIT_COMMITTER_EMAIL` / `GIT_AUTHOR_EMAIL`| `string`                                            | `you@example.com`                                        | Git committer / author e‑mails                   |
-| `bundleUtilsSecrets.data.GIT_ACTION`                              | `push \| commit-only \| ...`                        | `push`                                                    | Git operation executed by the job                |
-| `bundleUtilsSecrets.data.BUNDLEUTILS_USERNAME`                    | `string`                                            | `change-me`                                               | CloudBees CI admin user                          |
-| `bundleUtilsSecrets.data.BUNDLEUTILS_PASSWORD`                    | `string`                                            | `change-me`                                               | CloudBees CI admin token                         |
-| `bundleUtilsSecrets.data.BUNDLEUTILS_JENKINS_URL` / `JENKINS_URL` | URL (`string`)                                      | `http://jenkins.example.com`                             | Jenkins/OC base URL                              |
-| `bundleUtilsSecrets.data.BUNDLEUTILS_GBL_LOG_LEVEL`               | `INFO \| DEBUG \| ...`                              | `INFO`                                                    | Global log level for bundleutils                 |
-
-> **Tip**  
-> Use `--set-file` for any multi‑line values (SSH keys, configs, scripts) to keep line breaks intact during Helm rendering.
-
-
-### Option 1: Install using a values file
+## Option 1: Install using a values file
 
 ```bash
 helm upgrade --install bundleutils-release -f myvalues.yaml ./
@@ -60,7 +25,7 @@ helm upgrade --install bundleutils-release -f myvalues.yaml ./
 
 ---
 
-### Option 2: Install using CLI parameters
+## Option 2: Install using CLI parameters
 
 ```bash
 # Set paths to your SSH files
@@ -97,7 +62,7 @@ helm upgrade --install bundleutils-release ./ \
 
 ---
 
-### Option 3: Hybrid (values file + CLI overrides)
+## Option 3: Hybrid (values file + CLI overrides)
 
 ```bash
 # Set paths to your SSH files
@@ -114,7 +79,7 @@ helm upgrade --install bundleutils-release -f myvalues.yaml ./ \
 
 ---
 
-### Example 1: Use the built-in audit script
+## Example 1: Use the built-in audit script
 
 ```bash
 #!/bin/bash
@@ -140,7 +105,7 @@ helm upgrade --install bundleutils-release -f my-values-gke-dev.yaml ./bundleuti
 
 ---
 
-### Example 2: Use your custom audit script
+## Example 2: Use your custom audit script
 
 ```bash
 #!/bin/bash
@@ -166,7 +131,45 @@ helm upgrade --install bundleutils-release -f my-values-gke-dev.yaml ./bundleuti
 
 ---
 
-### 🛉 Uninstall
+## Parameters
+
+Note:
+* `bundleutil` specific parameters can be added to `bundleUtilsSecrets.data` (values.yaml) according to your needs
+* This setup focus only on the mandatory parameters for `bundleutils audit`
+
+| **Helm Values Path**                                              | **Type / Example**                                  | **Default / Sample**                                      | **Description**                                   |
+|-------------------------------------------------------------------|-----------------------------------------------------|-----------------------------------------------------------|---------------------------------------------------|
+| `image.repository`                                                | `string`                                            | `caternberg/bundleutils`                                 | Container image repository                        |
+| `image.tag`                                                       | `string`                                            | `dev3`                                                    | Container image tag                               |
+| `image.pullPolicy`                                                | `Always \| IfNotPresent \| Never`                   | `IfNotPresent`                                            | Kubernetes image pull policy                     |
+| `cronjob.enabled`                                                 | `bool`                                              | `true`                                                    | Enable/disable the CronJob                       |
+| `cronjob.schedule`                                                | Cron expression (`string`)                          | `*/2 * * * *`                                             | Cron schedule (every 2 min in sample)            |
+| `cronjob.restartPolicy`                                           | `OnFailure \| Never`                                | `OnFailure`                                               | Pod restart policy for the CronJob               |
+| `testPod.enabled`                                                 | `bool`                                              | `false`                                                   | Deploy auxiliary test pod                        |
+| `testPod.restartPolicy`                                           | `Never`                                             | `Never`                                                   | Restart policy for the test pod                  |
+| `sshSecret.name`                                                  | `string`                                            | `secret-ssh-auth`                                         | Name of the SSH `Secret`                         |
+| `sshSecret.privateKey`                                            | *multi‑line string*                                 | `REPLACE_WITH_SSH_PRIVATE_KEY`                           | SSH private key (use `--set-file`)               |
+| `sshSecret.config`                                                | *multi‑line string*                                 | `REPLACE_WITH_SSH_CONFIG`                                | Custom `ssh_config` content                      |
+| `sshSecret.known_hosts`                                           | *multi‑line string*                                 | `REPLACE_WITH_SSH_KNOWN_HOSTS`                           | Pre‑approved `known_hosts` entries               |
+| `bundleutilsAction.perform`                                       | Path or script (`string`)                           | `/opt/bundleutils/work/examples/tutorials/auditing/audit.sh` | Command executed inside the CronJob              |
+| `bundleUtilsSecrets.name`                                         | `string`                                            | `bundle-utils-secrets`                                   | Name of env `Secret`                             |
+| `bundleUtilsSecrets.data.GIT_COMMITTER_NAME` / `GIT_AUTHOR_NAME`  | `string`                                            | `Your Name`                                               | Git committer / author names                     |
+| `bundleUtilsSecrets.data.GIT_REPO`                                | SSH URL (`string`)                                  | `git@github.com:org/repo.git`                            | Target Git repository                            |
+| `bundleUtilsSecrets.data.GIT_COMMITTER_EMAIL` / `GIT_AUTHOR_EMAIL`| `string`                                            | `you@example.com`                                        | Git committer / author e‑mails                   |
+| `bundleUtilsSecrets.data.GIT_ACTION`                              | `push \| commit-only \| ...`                        | `push`                                                    | Git operation executed by the job                |
+| `bundleUtilsSecrets.data.BUNDLEUTILS_USERNAME`                    | `string`                                            | `change-me`                                               | CloudBees CI admin user                          |
+| `bundleUtilsSecrets.data.BUNDLEUTILS_PASSWORD`                    | `string`                                            | `change-me`                                               | CloudBees CI admin token                         |
+| `bundleUtilsSecrets.data.BUNDLEUTILS_JENKINS_URL` / `JENKINS_URL` | URL (`string`)                                      | `http://jenkins.example.com`                             | Jenkins/OC base URL                              |
+| `bundleUtilsSecrets.data.BUNDLEUTILS_GBL_LOG_LEVEL`               | `INFO \| DEBUG \| ...`                              | `INFO`                                                    | Global log level for bundleutils                 |
+
+> **Tip**  
+> Use `--set-file` for any multi‑line values (SSH keys, configs, scripts) to keep line breaks intact during Helm rendering.
+
+
+
+---
+
+## 🛉 Uninstall
 
 To remove the deployed Helm release:
 
@@ -176,7 +179,7 @@ helm uninstall bundleutils-release
 
 ---
 
-### 🔍 Render Templates (Dry Render)
+## 🔍 Render Templates (Dry Render)
 
 To render and inspect the final manifest output, including the `bundleutilsAction.perform` script:
 
@@ -189,7 +192,7 @@ helm template ./bundleutils-chart \
 
 ---
 
-### ✅ Notes
+## ✅ Notes
 
 * Use `--set-file` for multi-line values (e.g., private keys, SSH config, scripts).
 * `bundleutils-release` is the default release name—feel free to customize it.
