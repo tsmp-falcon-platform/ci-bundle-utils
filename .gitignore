@@ -163,3 +163,10 @@ cython_debug/
 .vscode/
 docs/presentations/*.html
 
+/examples/k8s-intergation/yaml/bu-secrets.yaml
+/examples/k8s-intergation/k8s-git-ssh-secret/config
+/examples/k8s-intergation/k8s-git-ssh-secret/known_hosts
+/examples/k8s-intergation/k8s-git-ssh-secret/id_rsa
+/examples/k8s-intergation/k8s-git-ssh-secret/ssh-privatekey
+/examples/k8s-intergation/k8s-git-ssh-secret/
+/examples/k8s/helm/bundleutils-chart/myvalues.yaml

@@ -1,0 +1,54 @@
+// Uses Declarative syntax to run commands inside a container.
+pipeline {
+    agent {
+        kubernetes {
+            agentInjection true
+            yaml '''
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+  - name: shell
+    image: ghcr.io/tsmp-falcon-platform/ci-bundle-utils
+    command:
+    - sleep
+    args:
+    - infinity
+    securityContext:
+      runAsUser: 1000
+'''
+            defaultContainer 'shell'
+            retries 2
+        }
+    }
+    stages {
+        stage('Main') {
+            environment {
+                BUNDLEUTILS_JENKINS_URL = 'CHANGE_THIS_TO_YOU_OPERATIONS_CENTRE_URL'
+                GIT_COMMITTER_NAME = 'bundleutils-bot'
+                GIT_COMMITTER_EMAIL = 'bundleutils-bot@example.org'
+                GIT_AUTHOR_NAME = 'bundleutils-bot'
+                GIT_AUTHOR_EMAIL = 'bundleutils-bot@example.org'
+                GIT_ACTION = 'push'
+                //Using github ssh protocol
+                GIT_REPO='git@github.com:YOUR_GITHUB_ORG/YOUR_DRIFT_REPO.git'
+            }
+            steps {
+                withCredentials([
+                        sshUserPrivateKey(credentialsId: 'github-user-ssh', keyFileVariable: 'CERT'),
+                        usernamePassword(credentialsId: 'bundleutils-creds', passwordVariable: 'BUNDLEUTILS_PASSWORD', usernameVariable: 'BUNDLEUTILS_USERNAME')
+                ]) {
+                    sh '''
+                            mkdir -p ~/.ssh && chmod 700 ~/.ssh &&  cp -prf $CERT ~/.ssh/id_rsa && chmod 600 ~/.ssh/id_rsa
+                            eval `ssh-agent -s` && ssh-add ~/.ssh/id_rsa && ssh-keyscan -H github.com >> ~/.ssh/known_hosts
+                            git config --global user.email $GIT_COMMITTER_EMAIL
+                            git config --global user.name $GIT_AUTHOR_NAME
+                            git clone $GIT_REPO
+                            cd $(basename -s .git "$GIT_REPO")
+                            /opt/bundleutils/work/examples/tutorials/bundle-management/bundle-management.sh cjoc-and-online-controllers
+                       '''
+                }
+            }
+        }
+    }
+}
