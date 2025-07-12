@@ -17,7 +17,7 @@ helm upgrade --install bundleutils-release -f myvalues.yaml ./ --dry-run
 > * `known_hosts` – your **SSH known hosts file**
 
 
-## Option 1: Install using a values file
+## Install using a values file
 
 ```bash
 helm upgrade --install bundleutils-release -f myvalues.yaml ./
@@ -25,7 +25,7 @@ helm upgrade --install bundleutils-release -f myvalues.yaml ./
 
 ---
 
-## Option 2: Install using CLI parameters
+## Install using CLI parameters
 
 ```bash
 # Set paths to your SSH files
@@ -63,7 +63,7 @@ helm upgrade --install bundleutils-release ./ \
 
 ---
 
-## Option 3: Hybrid (values file + CLI overrides)
+## Hybrid (values file + CLI overrides)
 
 ```bash
 # Set paths to your SSH files
@@ -81,7 +81,7 @@ helm upgrade --install bundleutils-release -f myvalues.yaml ./ \
 
 ---
 
-## Example 1: Use the built-in audit script
+## Use the built-in audit script
 
 ```bash
 #!/bin/bash
@@ -107,7 +107,7 @@ helm upgrade --install bundleutils-release -f my-values-gke-dev.yaml ./bundleuti
 
 ---
 
-## Example 2: Use your custom audit script
+## Use your custom audit script
 
 ```bash
 #!/bin/bash
