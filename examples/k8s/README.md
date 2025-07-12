@@ -45,14 +45,21 @@ This content demonstrates how to use a **Kubernetes CronJob** to execute `bundle
 
 You need this 3 files
 
-* SSH private key (gitHub)
+* SSH private key (GitHub SSH private key)
 * SSH config
 * SSH known_hosts
 
 ### 1. Create SSH `known_hosts` file
 
+
+
 ```bash
+# Create a directory where to store all the 3 files
 mkdir -p k8s-git-ssh-secret
+```
+
+```bash
+# keyscan for GitHub host entries
 ssh-keyscan -p 443 -H ssh.github.com | sed 's/^#\s//g ' | tee  k8s-git-ssh-secret/known_hosts
 ssh-keyscan -H github.com | sed 's/^#\s//g ' | tee -a  k8s-git-ssh-secret/known_hosts
 
@@ -61,7 +68,8 @@ ssh-keyscan -H github.com | sed 's/^#\s//g ' | tee -a  k8s-git-ssh-secret/known_
 ### 2. Copy SSH `privatekey`
 
 ```bash
-cp <PATH_TO_YOUR_SSH_KEY> k8s-git-ssh-secret/privateKey
+# f.e. cp ~/.ssh/id_rsa  k8s-git-ssh-secret/privateKey
+cp <PATH_TO_YOUR_GITHUB_PRIVATE_KEY)> k8s-git-ssh-secret/privateKey
 chmod 600 k8s-git-ssh-secret/privateKey
 ```
 
@@ -120,11 +128,11 @@ ssh -o UserKnownHostsFile=$(pwd)/k8s-git-ssh-secret/known_hosts -i $(pwd)/k8s-gi
 ./00-verify.sh
 ```
 
-## Install
+## ⚙️ Install
 
 See [install with helm](helm/bundleutils-chart/README.md)
 
-## Watch Logs
+## ⏳ Watch Logs
 
 It takes 1 or 2 minutes to het the logs. If the first try is not successfully, try again until the CronJobs triggered the first time a Job 
 
