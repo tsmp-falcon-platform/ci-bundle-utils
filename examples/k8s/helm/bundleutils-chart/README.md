@@ -61,6 +61,24 @@ helm upgrade --install bundleutils-release ./ \
   --set bundleUtilsSecrets.data.BUNDLEUTILS_ACTION="/opt/bundleutils/work/examples/tutorials/auditing/audit.sh"
 ```
 
+### Option 3: Mixed
+
+```bash
+helm upgrade --install bundleutils-release -f myvalues.yaml ./
+```
+
+```bash
+# Export SSH-related file,path as environment variables 
+# Adjust the path to the files if required
+SSH_KEY="./privateKey"
+SSH_KNOWN_HOSTS="./known_hosts"
+SSH_CONFIG="./config"
+helm upgrade --install bundleutils-release -f myvalues.yaml ./ \
+  --set-file sshSecret.privateKey="${SSH_KEY}" \
+  --set-file sshSecret.config="${SSH_CONFIG}" \
+  --set-file sshSecret.known_hosts="${SSH_KNOWN_HOSTS}" \
+  --set bundleUtilsSecrets.data.BUNDLEUTILS_ACTION="/opt/bundleutils/work/examples/tutorials/auditing/audit.sh"
+```
 ---
 
 ### ✅ Notes
