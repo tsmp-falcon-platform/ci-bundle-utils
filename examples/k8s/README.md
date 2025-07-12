@@ -222,6 +222,10 @@ AUDITING: casc-pipeline-templates-2.504.3.28227 - Git check. Pushed changes.
 
 ```
 
+A change diff in GitHub for this commit looks like:
+
+![github-audit-log.png](github-audit-log.png)
+
 ---
 
 ## 🧪 Optional: Test Git over SSH
