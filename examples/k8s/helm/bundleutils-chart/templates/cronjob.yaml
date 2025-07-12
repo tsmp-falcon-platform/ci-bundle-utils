@@ -2,7 +2,7 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name:  {{ include "bundleutils.name" . }}--cron
+  name:  {{ include "bundleutils.name" . }}-cron
   labels:
     app.kubernetes.io/name: {{ include "bundleutils.name" . }}
     helm.sh/chart: {{ include "bundleutils.chart" . }}
