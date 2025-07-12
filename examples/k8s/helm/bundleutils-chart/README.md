@@ -92,7 +92,7 @@ helm upgrade --install bundleutils-release ./ \
   --set bundleUtilsSecrets.data.BUNDLEUTILS_USERNAME="change-me" \
   --set bundleUtilsSecrets.data.BUNDLEUTILS_PASSWORD="change-me" \
   --set bundleUtilsSecrets.data.BUNDLEUTILS_JENKINS_URL="http://jenkins.example.com" \
-  --set bundleUtilsSecrets.data.BUNDLEUTILS_ACTION="/opt/bundleutils/work/examples/tutorials/auditing/audit.sh"
+  --set bundleutilsAction.perform="/opt/bundleutils/work/examples/tutorials/auditing/audit.sh"
 ```
 
 ---
