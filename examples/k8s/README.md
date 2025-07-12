@@ -24,12 +24,12 @@ NOTE: This setup support GitHub SSH only (HTTPS might come later)
 * A dedicated **GitHub repository**
   * See [Create a GitHub Repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-new-repository) 
     * You can name it for example `bundleutils-audit` so the repo URL looks like  `git@github.com:<YOUR_GH_ORG>/bundleutils-audit.git`
-  * **SSH key-based authentication** for GitHub
+  * See SSH key-based authentication for GitHub
     * [GitHub SSH Guide](https://docs.github.com/en/authentication/connecting-to-github-with-ssh)
     * [Using multiple GitHub accounts with SSH](https://stackoverflow.com/questions/3225862/multiple-github-accounts-ssh-config)
-* A **CloudBees CI Controller** running on Kubernetes with:
-  * Admin user ID
-  * Admin API token (`JENKINS-TOKEN`)
+* A **CloudBees CI Controller** running on **Kubernetes** with:
+  * Admin **user ID**
+  * Admin **API token** (`JENKINS-TOKEN`)
 * Kubernetes access configured (e.g. `export KUBECONFIG=...`)
 * Required CLI tools:
   * `yq`, `kubectl`, `git`, `ssh`, `ssh-keyscan`, `helm`
@@ -40,14 +40,15 @@ NOTE: This setup support GitHub SSH only (HTTPS might come later)
 
 Create the following three files:
 
-* SSH privateKey (see [GitHub SSH Guide](https://docs.github.com/en/authentication/connecting-to-github-with-ssh))
-* SSH config
-* SSH known_hosts
+* SSH `privateKey`
+* SSH `config`
+* SSH `known_hosts`
 
 ### 1. Create SSH `known_hosts` File
 
 ```bash
 # Create a directory to hold the SSH files
+
 mkdir -p k8s-git-ssh-secret
 
 # Populate known_hosts with GitHub entries
