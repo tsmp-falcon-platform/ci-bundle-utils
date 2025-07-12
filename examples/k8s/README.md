@@ -69,7 +69,9 @@ chmod 600 k8s-git-ssh-secret/privateKey
 
 #### GitHub Example
 
-Replace `<YOUR_GITHUB_USER_ID>` with your actual GitHub username:
+Notes:
+  * Replace `<YOUR_GITHUB_USER_ID>` with your actual GitHub username
+  * Dont change  `IdentityFile /root/.ssh/privateKey` path because the secrets will be mounted to this path in the Pod
 
 ```bash
 cat <<EOF > k8s-git-ssh-secret/config
