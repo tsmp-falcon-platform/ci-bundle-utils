@@ -79,13 +79,13 @@ Notes:
 ```bash
 cat <<EOF > k8s-git-ssh-secret/config
 Host github.com
-    User <YOUR_GITHUB_USER_ID>
-    Hostname ssh.github.com
-    AddKeysToAgent yes
-    PreferredAuthentications publickey
-    IdentitiesOnly yes
-    IdentityFile /root/.ssh/privateKey
-    Port 443
+User <YOUR_GITHUB_USER_ID>
+Hostname ssh.github.com
+AddKeysToAgent yes
+PreferredAuthentications publickey
+IdentitiesOnly yes
+IdentityFile /root/.ssh/privateKey
+Port 443
 EOF
 ```
 
@@ -94,12 +94,12 @@ EOF
 ```bash
 cat <<EOF > k8s-git-ssh-secret/config
 Host bitbucket.org
-    HostName bitbucket.org
-    User <YOUR_BB_USER>
-    AddKeysToAgent yes
-    PreferredAuthentications publickey
-    IdentitiesOnly yes
-    IdentityFile ~/.ssh/privateKey
+HostName bitbucket.org
+User <YOUR_BB_USER>
+AddKeysToAgent yes
+PreferredAuthentications publickey
+IdentitiesOnly yes
+IdentityFile ~/.ssh/privateKey
 EOF
 ```
 
