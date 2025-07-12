@@ -97,7 +97,7 @@ Host bitbucket.org
 EOF
 ```
 
-### Verify Directory Structure
+### 4. Verify Directory Structure
 
 ```bash
 tree k8s-git-ssh-secret
@@ -107,7 +107,7 @@ k8s-git-ssh-secret/
 └── known_hosts
 ```
 
-### Verify SSH Setup
+### 5. Verify SSH Setup
 
 ```bash
 ./00-verify.sh
