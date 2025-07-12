@@ -132,9 +132,6 @@ Alternative, if you took another location, say where
 Example:
 ```log
 
-➜  k8s git:(main) ✗ ./00-verify.sh k8s-git-ssh-secret1
-🔍 Checking SSH private key...
-❌ Directory does not exist: k8s-git-ssh-secret1
 ➜  k8s git:(main) ✗ ./00-verify.sh k8s-git-ssh-secret
 🔍 Checking SSH private key...
 ✅ Directory exists: k8s-git-ssh-secret
