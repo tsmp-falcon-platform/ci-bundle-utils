@@ -64,10 +64,6 @@ helm upgrade --install bundleutils-release ./ \
 ### Option 3: Mixed
 
 ```bash
-helm upgrade --install bundleutils-release -f myvalues.yaml ./
-```
-
-```bash
 # Export SSH-related file,path as environment variables 
 # Adjust the path to the files if required
 SSH_KEY="./privateKey"
@@ -77,8 +73,54 @@ helm upgrade --install bundleutils-release -f myvalues.yaml ./ \
   --set-file sshSecret.privateKey="${SSH_KEY}" \
   --set-file sshSecret.config="${SSH_CONFIG}" \
   --set-file sshSecret.known_hosts="${SSH_KNOWN_HOSTS}" \
-  --set bundleUtilsSecrets.data.BUNDLEUTILS_ACTION="/opt/bundleutils/work/examples/tutorials/auditing/audit.sh"
+  --set bundleutilsAction.perfom="/opt/bundleutils/work/examples/tutorials/auditing/audit.sh"
 ```
+
+* Example reference the build in audit.sh script
+
+```bash
+#! /bin/bash
+
+NAMESPACE=${1:-"cjoc1"}
+# Export SSH-related file,path as environment variables
+# Adjust the path to the files if required
+SSH_SECRETS_PATH="YOU_PATH_TO_SSH_SECRETS"
+SSH_KEY="$SSH_SECRETS_PATH/privateKey"
+SSH_KNOWN_HOSTS="$SSH_SECRETS_PATH/known_hosts"
+SSH_CONFIG="$SSH_SECRETS_PATH/config"
+# Refer to the audit script inside the bundleutis container. This script is the deafult bakes in
+BUNDLEUTILS_ACTION="/opt/bundleutils/work/examples/tutorials/auditing/audit.sh"
+
+helm upgrade --install bundleutils-release -f my-values-gke-dev.yaml ./bundleutils-chart \
+  --set-file sshSecret.privateKey="${SSH_KEY}" \
+  --set-file sshSecret.config="${SSH_CONFIG}" \
+  --set-file sshSecret.known_hosts="${SSH_KNOWN_HOSTS}" \
+  --set bundleutilsAction.perfom="/opt/bundleutils/work/examples/tutorials/auditing/audit.sh"
+  -n $NAMESPACE 
+```
+
+* Example bring your own audit script
+
+```bash
+#! /bin/bash
+
+NAMESPACE=${1:-"cjoc1"}
+# Export SSH-related file,path as environment variables
+# Adjust the path to the files if required
+SSH_SECRETS_PATH="YOU_PATH_TO_SSH_SECRETS"
+SSH_KEY="$SSH_SECRETS_PATH/privateKey"
+SSH_KNOWN_HOSTS="$SSH_SECRETS_PATH/known_hosts"
+SSH_CONFIG="$SSH_SECRETS_PATH/config"
+# Refer to the audit script local on youer mashine where you run helm from
+BUNDLEUTILS_ACTION="./yourauditscript.sh"
+helm upgrade --install bundleutils-release -f my-values-gke-dev.yaml ./bundleutils-chart \
+  --set-file sshSecret.privateKey="${SSH_KEY}" \
+  --set-file sshSecret.config="${SSH_CONFIG}" \
+  --set-file sshSecret.known_hosts="${SSH_KNOWN_HOSTS}" \
+  --set-file bundleutilsAction.perfom="${BUNDLEUTILS_ACTION}" 
+  -n $NAMESPACE 
+```
+
 ---
 
 ### Uninstall
