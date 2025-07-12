@@ -28,9 +28,11 @@ NOTE: This setup support GitHub SSH only (HTTPS might come later)
   * See SSH key-based authentication for GitHub
     * [GitHub SSH Guide](https://docs.github.com/en/authentication/connecting-to-github-with-ssh)
     * [Using multiple GitHub accounts with SSH](https://stackoverflow.com/questions/3225862/multiple-github-accounts-ssh-config)
-* A **CloudBees CI Controller** running on **Kubernetes** with:
-  * Admin **user ID**
-  * Admin **API token** (`JENKINS-TOKEN`)
+* A **CloudBees CI Controller** or **CloudBees CI Operations Center** running on **Kubernetes**
+  * You need
+    * The Controller or Operations center **URL**
+    * Admin **user ID**
+    * Admin **API token** (`JENKINS-TOKEN`)
 * Kubernetes access configured (e.g. `export KUBECONFIG=...`)
 * Required CLI tools:
   * `yq`, `kubectl`, `git`, `ssh`, `ssh-keyscan`, `helm`
