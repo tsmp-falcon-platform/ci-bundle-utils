@@ -6,17 +6,16 @@ SECRET_DIR="k8s-git-ssh-secret"
 PRIVATEKEY="$SECRET_DIR/privateKey"
 CONFIG="$SECRET_DIR/config"
 KNOWN_HOSTS="$SECRET_DIR/known_hosts"
-GITHUB_HOST="[ssh.github.com]:443"
+#GITHUB_HOST="ssh.github.com"
+GITHUB_HOST="github.com"
 
 error() {
     echo "❌ $1"
     exit 1
 }
-
 success() {
     echo "✅ $1"
 }
-
 warning() {
     echo "WARNING :-| $1"
 }
