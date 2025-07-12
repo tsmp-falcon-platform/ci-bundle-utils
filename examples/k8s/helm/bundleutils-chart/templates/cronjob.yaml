@@ -44,7 +44,7 @@ spec:
                     export GIT_BRANCH=$BRANCH_NAME_CANDIDATE
                   else
                     echo "✖  '$BRANCH_NAME_CANDIDATE' is NOT a valid branch name." >&2
-                  exit 1
+                    exit 1
                   fi
                   ###############################################################################
                   # Clone $$GIT_REPO
