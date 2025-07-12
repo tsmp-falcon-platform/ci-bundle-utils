@@ -132,6 +132,28 @@ Alternative, if you took another location, say where
 Example:
 ```log
 
+➜  k8s git:(main) ✗ tree -L 2
+.
+├── 00-verify.sh
+├── 01-readJobLogs.sh
+├── README.md
+├── gitBranch.sh
+├── github-audit-log.png
+├── helm
+│   ├── 00-install.sh
+│   ├── bundleutils-chart
+│   ├── my-values-eks-bp.yaml
+│   ├── my-values-gke-dev.yaml
+│   └── myaudit.sh
+├── k8s-git-ssh-secret
+│   ├── config
+│   ├── known_hosts
+│   └── privateKey
+└── yaml
+    ├── bu-secrets.yaml
+    └── bu-test-pod-git-ssh.yaml
+
+
 ➜  k8s git:(main) ✗ ./00-verify.sh k8s-git-ssh-secret
 🔍 Checking SSH private key...
 ✅ Directory exists: k8s-git-ssh-secret
