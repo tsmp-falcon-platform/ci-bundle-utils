@@ -22,12 +22,13 @@ This document describes how to deploy and operate `bundleutils` using a **Kubern
 NOTE: This setup support GitHub SSH only (HTTPS might come later)
 
 * A dedicated **GitHub repository**
-  * See [Create a GitHub Repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-new-repository) 
-    * You can name it for example `bundleutils-audit` 
-    * So the repo URL might look like `git@github.com:<YOUR_GH_ORG>/bundleutils-audit.git` 
-  * See SSH key-based authentication for GitHub
-    * [GitHub SSH Guide](https://docs.github.com/en/authentication/connecting-to-github-with-ssh)
-    * [Using multiple GitHub accounts with SSH](https://stackoverflow.com/questions/3225862/multiple-github-accounts-ssh-config)
+  * You need to
+    * [Create a GitHub Repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-new-repository) 
+      * You can name it for example `bundleutils-audit` 
+      * So the repo URL might look like `git@github.com:<YOUR_GH_ORG>/bundleutils-audit.git` 
+    * Enable SSH key-based authentication for GitHub
+      * [GitHub SSH Guide](https://docs.github.com/en/authentication/connecting-to-github-with-ssh)
+      * [Using multiple GitHub accounts with SSH](https://stackoverflow.com/questions/3225862/multiple-github-accounts-ssh-config)
 * A **CloudBees CI Controller** or **CloudBees CI Operations Center** running on **Kubernetes**
   * You need
     * The Controller or Operations center **URL**
