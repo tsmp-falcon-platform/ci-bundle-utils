@@ -217,7 +217,7 @@ AUDITING: casc-pipeline-templates-2.504.3.28227 - Git check. Committed changes.
  1 file changed, 2 insertions(+)
 AUDITING: Commit: YOUR_GIT_REPO/commit/b731d28 Audit bundle casc-pipeline-templates-2.504.3.28227 (version: 2.504.3.28227)
 AUDITING: casc-pipeline-templates-2.504.3.28227 - Git check. Pushed changes.
-To github.com:org-caternberg/ci-bundle-util-audit.git
+To github.com:xxx/ci-bundle-util-audit.git
    eb0b6ee..b731d28  xxx-xxx-com/casc-pipeline-templates -> xxx-xxx-com/casc-pipeline-templates
 AUDITING: Pushed to YOUR_GIT_REPO/tree/xxxxx-com/casc-pipeline-templates
 AUDITING: Bundle audit complete. Showing last commits if any...
