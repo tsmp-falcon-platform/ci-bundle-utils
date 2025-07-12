@@ -110,8 +110,18 @@ k8s-git-ssh-secret/
 ### Verify SSH Setup
 
 ```bash
-ssh -o UserKnownHostsFile=$(pwd)/k8s-git-ssh-secret/known_hosts \
-    -i $(pwd)/k8s-git-ssh-secret/privateKey git@github.com
+ssh \
+  -F "$(pwd)/k8s-git-ssh-secret/config" \
+  -o UserKnownHostsFile="$(pwd)/k8s-git-ssh-secret/known_hosts" \
+  -i "$(pwd)/k8s-git-ssh-secret/privateKey" \
+  git@github.com
+```
+
+expected outcome
+```log
+PTY allocation request failed on channel 0
+Hi XXX! You've successfully authenticated, but GitHub does not provide shell access.
+Connection to ssh.github.com closed.
 ```
 
 ### 4. Run Preflight Verification

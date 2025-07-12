@@ -45,11 +45,12 @@ fi
 
 chmod 600 "$PRIVATEKEY"
 
-sshKnownHostsoutput=$(ssh -o UserKnownHostsFile=$(pwd)/$CONFIG -i $(pwd)/$PRIVATEKEY git@github.com 2>&1) || true
+sshKnownHostsoutput=$(ssh -F "$CONFIG" -o UserKnownHostsFile="$KNOWN_HOSTS" -i "$PRIVATEKEY" git@github.com 2>&1) || true
 
 if echo "$sshKnownHostsoutput" | grep -q "successfully authenticated"; then
   success "$KNOWN_HOSTS is valid and authentication succeeded."
   success "$PRIVATEKEY exists and appears to be a valid private key"
+  success "$CONFIG exists and appears to be a valid private key"
 else
   error "SSH known_hosts test failed or key is invalid. Output was: $sshKnownHostsoutput"
 fi
