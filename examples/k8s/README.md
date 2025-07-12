@@ -1,6 +1,5 @@
 # 📦 `bundleutils` Kubernetes CronJob Integration
 
-Instead of running `bundleutils` from within a CI controller pipeline, it can be executed as a native Kubernetes resource.
 This document describes how to deploy and operate `bundleutils` using a **Kubernetes CronJob**.
 
 🔢 See: [cronjob.yaml](helm/bundleutils-chart/templates/cronjob.yaml)
