@@ -2,7 +2,25 @@
 
 This document describes how to deploy and operate `bundleutils` using a **Kubernetes CronJob**.
 
-🔢 See: [cronjob.yaml](helm/bundleutils-chart/templates/cronjob.yaml)
+🔢 See:
+Here is a more concise and structured version of your summary, retaining all relevant information:
+
+---
+
+## Components
+
+* [`cronjob.yaml`](helm/bundleutils-chart/templates/cronjob.yaml) – defines the scheduled execution.
+* [`cloneBranchAuditPush.sh`](helm/cloneBranchAuditPush.sh) – core script for auditing and Git operations.
+
+## Script Overview (`cloneBranchAuditPush.sh`)
+
+* Clones a remote CasC audit Git repository.
+* Derives a dedicated Git branch name from the Controller URL:
+
+  * Example: `https://your.ci.com/your-controller/` → `your-ci-com/your-controller`
+* Executes:
+  `/opt/bundleutils/work/examples/tutorials/auditing/audit.sh`
+* Commits and pushes CasC changes to the derived Git branch.
 
 ---
 
