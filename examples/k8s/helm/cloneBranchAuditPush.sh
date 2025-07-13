@@ -17,7 +17,6 @@
 set -eu
 
 [ "${DEBUG_SCRIPT:-false}" = "true" ] && set -x
-# SSH_DIR=/Users/acaternberg/projects/ci-bundle-utils/examples/k8s/k8s-git-ssh-secret
 SSH_DIR=/root/.ssh
 KEY_FILE="$SSH_DIR/privateKey"
 KNOWN="$SSH_DIR/known_hosts"
@@ -61,7 +60,6 @@ git config --global user.name  "$GIT_COMMITTER_NAME"
 REPO_DIR=$(basename "${GIT_REPO%.git}")
 if [ ! -d "$REPO_DIR/.git" ]; then
   git clone "$GIT_REPO" "$REPO_DIR"
-  echo "git clone "
 fi
 cd "$REPO_DIR"
 
