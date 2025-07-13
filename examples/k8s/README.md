@@ -2,11 +2,6 @@
 
 This document describes how to deploy and operate `bundleutils` using a **Kubernetes CronJob**.
 
-🔢 See:
-Here is a more concise and structured version of your summary, retaining all relevant information:
-
----
-
 ## Components
 
 * [`cronjob.yaml`](helm/bundleutils-chart/templates/cronjob.yaml) – defines the scheduled execution.
