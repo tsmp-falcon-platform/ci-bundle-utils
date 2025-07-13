@@ -1,0 +1,13 @@
+apiVersion: 2
+id: casc-pipeline-templates-2.504.3.28227
+description: |-
+  Bundle for casc-pipeline-templates-2.504.3.28227
+version: AUDITED_BUNDLE_DO_NOT_USE
+jcasc:
+- jenkins.yaml
+plugins:
+- plugins.yaml
+rbac:
+- rbac.yaml
+items:
+- items.yaml

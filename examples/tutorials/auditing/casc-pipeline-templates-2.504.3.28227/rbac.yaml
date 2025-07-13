@@ -1,0 +1,22 @@
+removeStrategy:
+  rbac: SYNC
+groups:
+- members:
+    users:
+    - admin
+    - controlleradmin
+  roles:
+  - name: administer
+    grantedAt: current
+  name: Administrators
+- members:
+    users:
+    - dev1
+  roles:
+  - name: develop
+    grantedAt: current
+  name: Developers
+- roles:
+  - name: browse
+    grantedAt: current
+  name: Browsers
