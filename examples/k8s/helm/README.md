@@ -23,6 +23,35 @@ helm upgrade --install bundleutils-release -f myvalues.yaml ./bundleutils-chart 
 helm upgrade --install bundleutils-release -f myvalues.yaml ./bundleutils-chart 
 ```
 
+NOTE: 
+* See [cloneBranchAuditPush.sh](./cloneBranchAuditPush.sh) This is the audit script executed in the CronJob
+
+```bash
+#!/bin/bash
+
+NAMESPACE=${1:-"cjoc1"}
+
+# Set SSH file paths
+SSH_SECRETS_PATH="/path/to/ssh/secrets"
+SSH_KEY="$SSH_SECRETS_PATH/privateKey"
+SSH_KNOWN_HOSTS="$SSH_SECRETS_PATH/known_hosts"
+SSH_CONFIG="$SSH_SECRETS_PATH/config"
+
+# Use your local custom audit script
+#BUNDLEUTILS_ACTION="./yourauditscript.sh"
+BUNDLEUTILS_ACTION="./cloneBranchAuditPush.sh"
+
+helm upgrade --install bundleutils-release -f myvalues.yaml ./bundleutils-chart \
+  --set-file sshSecret.privateKey="${SSH_KEY}" \
+  --set-file sshSecret.config="${SSH_CONFIG}" \
+  --set-file sshSecret.known_hosts="${SSH_KNOWN_HOSTS}" \
+  --set-file bundleutilsAction.perform="${BUNDLEUTILS_ACTION}" \
+  -n "$NAMESPACE"
+```
+
+---
+
+
 ---
 
 ## Install using CLI parameters
@@ -58,7 +87,7 @@ helm upgrade --install bundleutils-release ./bundleutils-chart  \
   --set bundleUtilsSecrets.data.BUNDLEUTILS_PASSWORD="change-me" \
   --set bundleUtilsSecrets.data.BUNDLEUTILS_JENKINS_URL="http://jenkins.example.com" \  
   --set bundleUtilsSecrets.data.JENKINS_URL="http://jenkins.example.com" \
-  --set bundleutilsAction.perform="/opt/bundleutils/work/examples/tutorials/auditing/audit.sh" \
+  --set-file bundleutilsAction.perform="/opt/bundleutils/work/examples/tutorials/auditing/audit.sh" \
   -n "$NAMESPACE"
 ```
 
@@ -98,7 +127,7 @@ SSH_CONFIG="$SSH_SECRETS_PATH/config"
 # Use the default built-in audit script
 BUNDLEUTILS_ACTION="/opt/bundleutils/work/examples/tutorials/auditing/audit.sh"
 
-helm upgrade --install bundleutils-release -f my-values-gke-dev.yaml ./bundleutils-chart \
+helm upgrade --install bundleutils-release -f myvalues.yaml  ./bundleutils-chart \
   --set-file sshSecret.privateKey="${SSH_KEY}" \
   --set-file sshSecret.config="${SSH_CONFIG}" \
   --set-file sshSecret.known_hosts="${SSH_KNOWN_HOSTS}" \
@@ -108,33 +137,6 @@ helm upgrade --install bundleutils-release -f my-values-gke-dev.yaml ./bundleuti
 
 ---
 
-## Use your custom audit script
-
-NOTE: This need to be tested again
-
-```bash
-#!/bin/bash
-
-NAMESPACE=${1:-"cjoc1"}
-
-# Set SSH file paths
-SSH_SECRETS_PATH="/path/to/ssh/secrets"
-SSH_KEY="$SSH_SECRETS_PATH/privateKey"
-SSH_KNOWN_HOSTS="$SSH_SECRETS_PATH/known_hosts"
-SSH_CONFIG="$SSH_SECRETS_PATH/config"
-
-# Use your local custom audit script
-BUNDLEUTILS_ACTION="./yourauditscript.sh"
-
-helm upgrade --install bundleutils-release -f my-values-gke-dev.yaml ./bundleutils-chart \
-  --set-file sshSecret.privateKey="${SSH_KEY}" \
-  --set-file sshSecret.config="${SSH_CONFIG}" \
-  --set-file sshSecret.known_hosts="${SSH_KNOWN_HOSTS}" \
-  --set-file bundleutilsAction.perform="${BUNDLEUTILS_ACTION}" \
-  -n "$NAMESPACE"
-```
-
----
 
 ## Parameters
 
@@ -190,7 +192,7 @@ To render and inspect the final manifest output, including the `bundleutilsActio
 
 ```bash
 helm template ./bundleutils-chart \
-  -f my-values.yaml \
+  -f myvalues.yaml  \
   --set-file bundleutilsAction.perform=./gitHubPrepare.sh \
   --debug
 ```

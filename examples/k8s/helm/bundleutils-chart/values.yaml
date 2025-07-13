@@ -25,7 +25,8 @@ sshSecret:
     REPLACE_WITH_SSH_KNOWN_HOSTS
 bundleutilsAction:
   # You can overwrite this with your own script
-  perform: "/opt/bundleutils/work/examples/tutorials/auditing/audit.sh"
+  perform: |
+    /opt/bundleutils/work/examples/tutorials/auditing/audit.sh
 bundleUtilsSecrets:
   name: bundle-utils-secrets
   data:
