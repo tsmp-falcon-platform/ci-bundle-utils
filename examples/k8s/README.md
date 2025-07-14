@@ -5,7 +5,7 @@ This document describes how to deploy and operate `bundleutils` using a **Kubern
 ## Components
 
 * [`cronjob.yaml`](helm/bundleutils-chart/templates/cronjob.yaml) – defines the scheduled execution.
-* [`cloneBranchAuditPush.sh`](helm/cloneBranchAuditPush.sh) – core script for auditing and Git operations.
+* [00-cloneBranchAuditPush.sh](helm/00-cloneBranchAuditPush.sh) – core script for auditing and Git operations.
 
 ## Script Overview (`cloneBranchAuditPush.sh`)
 
