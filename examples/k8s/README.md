@@ -178,7 +178,7 @@ Example:
 
 ## ⚙️ Install via Helm
 
-Refer to: [bundleutils Helm Chart README](helm/README.md)
+Refer to: [bundleutils Helm Chart README](helm/bundleutils-chart/README.md)
 
 ---
 
