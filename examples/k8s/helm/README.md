@@ -24,7 +24,7 @@ helm upgrade --install bundleutils-release -f myvalues.yaml ./bundleutils-chart
 ```
 
 NOTE: 
-* See [cloneBranchAuditPush.sh](./cloneBranchAuditPush.sh) This is the audit script executed in the CronJob
+* See [01-cloneBranchAuditPush.sh](01-cloneBranchAuditPush.sh) This is the audit script executed in the CronJob
 
 ```bash
 #!/bin/bash
