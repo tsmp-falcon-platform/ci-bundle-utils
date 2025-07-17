@@ -6,7 +6,7 @@ cronjob:
   enabled: true
   # Cron interval. Everything under 10 minutes might be too progressive
   # For demo purpose we run every 2 minutes
-  schedule: '*/2 * * * *'
+  schedule: '*/5 * * * *'
   restartPolicy: OnFailure
 testPod:
   enabled: false
