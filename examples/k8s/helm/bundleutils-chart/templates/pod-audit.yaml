@@ -2,7 +2,7 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: {{ include "bundleutils.name" . }}-git-ssh-test-audit
+  name: {{ .Release.Name }}-git-ssh-test-audit
   labels:
     app.kubernetes.io/name: {{ include "bundleutils.name" . }}
     helm.sh/chart: {{ include "bundleutils.chart" . }}
@@ -15,7 +15,7 @@ spec:
       imagePullPolicy: {{ .Values.image.pullPolicy }}
       envFrom:
         - secretRef:
-            name: {{ .Values.bundleUtilsSecrets.name }}
+            name: {{ .Values.bundleUtilsSecrets.name }}-{{ .Release.Name }}
       command:
         - /bin/sh
         - -c
@@ -29,6 +29,6 @@ spec:
   volumes:
     - name: ssh-key
       secret:
-        secretName: {{ .Values.sshSecret.name }}
+        secretName: {{ .Values.sshSecret.name }}-{{ .Release.Name }}
         defaultMode: 0600
 {{- end }}

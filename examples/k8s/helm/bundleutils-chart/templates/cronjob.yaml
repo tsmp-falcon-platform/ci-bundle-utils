@@ -2,7 +2,7 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name:  {{ include "bundleutils.name" . }}-cron
+  name:  {{ .Release.Name }}-cronjob
   labels:
     app.kubernetes.io/name: {{ include "bundleutils.name" . }}
     helm.sh/chart: {{ include "bundleutils.chart" . }}
@@ -20,7 +20,7 @@ spec:
               imagePullPolicy: {{ .Values.image.pullPolicy }}
               envFrom:
                 - secretRef:
-                    name: {{ .Values.bundleUtilsSecrets.name }}
+                    name: {{ .Values.bundleUtilsSecrets.name }}-{{ .Release.Name }}
               volumeMounts:
                 - name: ssh-key
                   mountPath: /root/.ssh/
@@ -34,6 +34,6 @@ spec:
           volumes:
             - name: ssh-key
               secret:
-                secretName: {{ .Values.sshSecret.name }}
+                secretName: {{ .Values.sshSecret.name }}-{{ .Release.Name }}
                 defaultMode: 0600
 {{- end }}

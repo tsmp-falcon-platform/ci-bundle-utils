@@ -37,16 +37,29 @@ SSH_KEY="$SSH_SECRETS_PATH/privateKey"
 SSH_KNOWN_HOSTS="$SSH_SECRETS_PATH/known_hosts"
 SSH_CONFIG="$SSH_SECRETS_PATH/config"
 
-# Use your local custom audit script
-#BUNDLEUTILS_ACTION="./yourauditscript.sh"
-BUNDLEUTILS_ACTION="./cloneBranchAuditPush.sh"
+# AUDIT
+BUNDLEUTILS_ACTION="./01-cloneBranchAuditPush.sh"
+GIT_REPO="git@github.com:<YOUR_GH_ORG>/<YOUR_AUDIT_REPO>.git"
 
-helm upgrade --install bundleutils-release -f myvalues.yaml ./bundleutils-chart \
+helm upgrade --install bundleutils-audit -f myvalues.yaml ./bundleutils-chart \
+  --set bundleUtilsSecrets.data.GIT_REPO="${GIT_REPO}" \
   --set-file sshSecret.privateKey="${SSH_KEY}" \
   --set-file sshSecret.config="${SSH_CONFIG}" \
   --set-file sshSecret.known_hosts="${SSH_KNOWN_HOSTS}" \
   --set-file bundleutilsAction.perform="${BUNDLEUTILS_ACTION}" \
   -n "$NAMESPACE"
+
+# BUNDLE MANAGEMENT
+BUNDLEUTILS_ACTION="./01-cloneBranchBundleManagementPush.sh"
+GIT_REPO="git@github.com:<YOUR_GH_ORG>/<YOUR_BUNDLE_MANAGEMENT_REPO>.git"
+
+helm upgrade --install bundleutils-audit -f myvalues.yaml ./bundleutils-chart \
+--set bundleUtilsSecrets.data.GIT_REPO="${GIT_REPO}" \
+--set-file sshSecret.privateKey="${SSH_KEY}" \
+--set-file sshSecret.config="${SSH_CONFIG}" \
+--set-file sshSecret.known_hosts="${SSH_KNOWN_HOSTS}" \
+--set-file bundleutilsAction.perform="${BUNDLEUTILS_ACTION}" \
+-n "$NAMESPACE"
 ```
 
 ---
