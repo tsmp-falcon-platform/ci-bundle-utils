@@ -1,0 +1,39 @@
+{{- if .Values.cronjob.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name:  {{ .Release.Name }}-cronjob
+  labels:
+    app.kubernetes.io/name: {{ include "bundleutils.name" . }}
+    helm.sh/chart: {{ include "bundleutils.chart" . }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  schedule: "{{ .Values.cronjob.schedule }}"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: bundleutils
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              envFrom:
+                - secretRef:
+                    name: {{ .Values.bundleUtilsSecrets.name }}-{{ .Release.Name }}
+              volumeMounts:
+                - name: ssh-key
+                  mountPath: /root/.ssh/
+                  readOnly: true
+              command:
+                - /bin/sh
+                - -c
+                - |
+  {{ .Values.bundleutilsAction.perform | nindent 18 }}
+          restartPolicy: {{ .Values.cronjob.restartPolicy }}
+          volumes:
+            - name: ssh-key
+              secret:
+                secretName: {{ .Values.sshSecret.name }}-{{ .Release.Name }}
+                defaultMode: 0600
+{{- end }}

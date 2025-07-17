@@ -1,0 +1,55 @@
+// Uses Declarative syntax to run commands inside a container.
+pipeline {
+    agent {
+        kubernetes {
+            agentInjection true
+            yaml '''
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+  - name: shell
+    image: caternberg/bundleutils:dev3
+    command:
+    - sleep
+    args:
+    - infinity
+    securityContext:
+      runAsUser: 1000
+'''
+            defaultContainer 'shell'
+            retries 2
+        }
+    }
+    stages {
+        stage('Main') {
+            environment {
+                //BUNDLEUTILS_JENKINS_URL = 'CHANGE_THIS_TO_YOU_OPERATIONS_CENTRE_URL'
+                BUNDLEUTILS_JENKINS_URL='https://cjoc.acaternberg.aws.ps.beescloud.com'
+                //JENKINS_URL=https://team-a.acaternberg.aws.ps.beescloud.com/
+                GIT_COMMITTER_NAME='cccaternberg'
+                GIT_AUTHOR_NAME='cccaternberg'
+                GIT_REPO='git@github.com:org-caternberg/ci-bundle-util-audit.git'
+                GIT_COMMITTER_EMAIL='acaternberg@cloudbees.com'
+                GIT_AUTHOR_EMAIL='acaternberg@cloudbees.com'
+                GIT_ACTION='push' //commit-only
+            }
+            steps {
+              withCredentials([
+                    sshUserPrivateKey(credentialsId: 'github-user-ssh', keyFileVariable: 'CERT'),
+                    usernamePassword(credentialsId: 'bundleutils-creds', passwordVariable: 'BUNDLEUTILS_PASSWORD', usernameVariable: 'BUNDLEUTILS_USERNAME')
+              ]) {
+                       sh '''
+                            mkdir -p ~/.ssh && chmod 700 ~/.ssh &&  cp -prf $CERT ~/.ssh/id_rsa && chmod 600 ~/.ssh/id_rsa
+                            eval `ssh-agent -s` && ssh-add ~/.ssh/id_rsa && ssh-keyscan -H github.com >> ~/.ssh/known_hosts
+                            git config --global user.email $GIT_COMMITTER_EMAIL
+                            git config --global user.name $GIT_COMMITTER_NAME
+                            git clone $GIT_REPO
+                            cd $(basename -s .git "$GIT_REPO")
+                            /opt/bundleutils/work/examples/tutorials/auditing/audit.sh
+                       '''
+            }
+        }
+      }
+    }
+}

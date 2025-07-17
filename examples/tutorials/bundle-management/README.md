@@ -29,6 +29,7 @@ This tutorial will explain how to have your bundles managed in 5 mins.
   - [Pipeline Job](#pipeline-job)
   - [Pipeline Job - All Online Controllers](#pipeline-job---all-online-controllers)
   - [Operation Center](#operation-center)
+  - [Git over SSH](#git-over-ssh)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -829,3 +830,17 @@ There are various methods, such as:
   - Add the `BUNDLEUTILS_JENKINS_URL=<operations-center-url>` environment variable instead of using the controllers own `JENKINS_URL`
 
 Once created, run the job.
+
+### Git over SSH
+
+Sometimes, by policy, it is required to use the git SSH protocol rather than HTTPS.
+This [Pipeline](Jenkinsfile.allServersGitSSHPush) shows, how git push over SSH can be utilised.
+
+The Pipeline requires additional settings:
+
+* environment variables:
+```
+GIT_ACTION = 'push'
+GIT_REPO = '<YOUR_GITHUB_SSH_REPO_URL>'
+```
+* Jenkins SSH Credentials (GitHub SSH private key)

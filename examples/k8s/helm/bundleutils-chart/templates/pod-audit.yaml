@@ -1,0 +1,34 @@
+{{- if .Values.testPod.enabled }}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ .Release.Name }}-git-ssh-test-audit
+  labels:
+    app.kubernetes.io/name: {{ include "bundleutils.name" . }}
+    helm.sh/chart: {{ include "bundleutils.chart" . }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  containers:
+    - name: bundleutils-testgitssh
+      image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+      imagePullPolicy: {{ .Values.image.pullPolicy }}
+      envFrom:
+        - secretRef:
+            name: {{ .Values.bundleUtilsSecrets.name }}-{{ .Release.Name }}
+      command:
+        - /bin/sh
+        - -c
+        - |
+{{ .Values.bundleutilsAction.perform | indent 10 }}
+      volumeMounts:
+        - name: ssh-key
+          mountPath: /root/.ssh/
+          readOnly: true
+  restartPolicy: {{ .Values.testPod.restartPolicy }}
+  volumes:
+    - name: ssh-key
+      secret:
+        secretName: {{ .Values.sshSecret.name }}-{{ .Release.Name }}
+        defaultMode: 0600
+{{- end }}
