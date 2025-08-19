@@ -33,7 +33,7 @@ jobs:
         python-version: ["3.12"]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0  # Get full commit history and tags
           ref: ${{ github.event.inputs.tag_name }}
